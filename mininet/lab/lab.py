@@ -1,9 +1,104 @@
 #!/usr/bin/env python3
 from mininet.net import Mininet
-from mininet.node import OVSSwitch
+from mininet.node import OVSSwitch, Host
 from mininet.nodelib import NAT
 from mininet.cli import CLI
 from mininet.log import setLogLevel
+
+import time 
+import threading
+import subprocess
+from dataclasses import dataclass 
+from typing import Dict, Tuple, List
+
+@dataclass
+class DHCPSession:
+    mac: str
+    ip: str
+    first_seen: float
+    last_seen: float
+    expiry: int
+    iface: str
+    hostname: str
+
+@dataclass
+class DHCPLease:
+    time: int
+    mac: str
+    ip: str
+    hostname: str
+    client_id: str # Might be a MAC or * if not sent
+
+def parse_dhcp_leases(lines: str) -> List[DHCPLease]:
+    leases: List[DHCPLease] = []
+    for line_no, line in enumerate(lines.splitlines()):
+        parts = line.split()
+        if len(parts) < 5:
+            raise ValueError(f"Invalid DHCP lease line: {line_no + 1}")
+        lease = DHCPLease(
+            time=int(parts[0]),
+            mac=parts[1],
+            ip=parts[2],
+            hostname=parts[3],
+            client_id=parts[4]
+        )
+        leases.append(lease)
+    return leases
+
+def start_lease_poll_watcher(bng: Host, leasefile="/tmp/dnsmasq-bng.leases", interval=1.0, iface: str="bng-eth0"):
+    sessions: Dict[Tuple[str, str], DHCPSession] = {}
+    watcher_options = {
+        "stop": False,
+    }
+
+    def loop():
+        while not watcher_options["stop"]:
+            raw = bng.cmd(f"cat {leasefile} 2>/dev/null || true")
+            if not raw:
+                print("DHCP lease file not found or empty, waiting...")
+                time.sleep(interval)
+                continue
+
+            now = time.time()
+            leases = parse_dhcp_leases(raw)
+
+            # Current is our single source of truth for active leases
+            # We keep the sessions synchronized with it
+            current = {(l.mac,iface): l for l in leases}
+            
+            for key, l in current.items():
+                if key not in sessions:
+                    sessions[key] = DHCPSession(
+                        mac=l.mac,
+                        ip=l.ip,
+                        first_seen=now,
+                        last_seen=now,
+                        expiry=l.time,
+                        iface=iface,
+                        hostname=l.hostname,
+                    )
+                    print(f"DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
+                else:
+                    s = sessions[key]
+                    s.last_seen = now
+                    if s.ip != l.ip or s.expiry != l.time:
+                        old_ip, old_expiry = s.ip, s.expiry
+                        s.ip, s.expiry, s.hostname = l.ip, l.time, l.hostname
+                        print(f"DHCP SESSION RENEW mac={l.mac} old_ip={old_ip} new_ip={s.ip} old_expiry={old_expiry} new_expiry={s.expiry} iface={iface} hostname={l.hostname}")
+
+            ended = [key for key in sessions.keys() if key not in current]
+            for key in ended:
+                s = sessions.pop(key)
+                dur = int(now - s.first_seen)
+                print(f"DHCP SESSION END mac={s.mac} ip={s.ip} iface={s.iface} hostname={s.hostname} duration={dur}s")
+
+            time.sleep(interval)
+
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
+
+    return watcher_options, sessions
+
 
 
 def run():
@@ -56,7 +151,15 @@ def run():
         '> /tmp/dnsmasq-bng.log 2>&1 & '
     )
 
+    # Starting our DHCP Lease to Sessions watcher
+    watcher_opts, sessions = start_lease_poll_watcher(bng, iface="bng-eth0")
+    time.sleep(0.2)
+
     CLI(net)
+
+    # Stopping watcher thread
+    watcher_opts["stop"] = True
+
     bng.cmd('kill $(cat /tmp/dnsmasq-bng.pid) 2>/dev/null || true')
     net.stop()
 
