@@ -10,6 +10,8 @@ import threading
 import subprocess
 from dataclasses import dataclass 
 from typing import Dict, Tuple, List
+import shlex
+
 
 @dataclass
 class DHCPSession:
@@ -29,6 +31,60 @@ class DHCPLease:
     hostname: str
     client_id: str # Might be a MAC or * if not sent
 
+
+# RADIUS Accounting
+__RADIUS_SECRET = "testing123"
+
+def rad_acct_send_from_bng(
+    bng: Host,
+    packet: str,
+    server_ip: str,
+    port: int = 1813,
+    secret: str = __RADIUS_SECRET,
+    timeout: int = 1,
+):
+    pkt_q = shlex.quote(packet)
+    secret_q = shlex.quote(secret)
+    cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} acct {secret_q}"
+    return bng.cmd(cmd)
+
+def acct_session_id(mac: str, ip: str, first_seen: float) -> str:
+    return f"{mac.lower()}-{ip}-{int(first_seen)}"
+
+def build_acct_start(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0") -> str:
+    now = int(time.time())
+    return "\n".join([
+        "Acct-Status-Type = Start",
+        f'User-Name = "mac:{s.mac.lower()}"',
+        f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
+        f"Framed-IP-Address = {s.ip}",
+        f'Calling-Station-Id = "{s.mac.lower()}"',
+        f"NAS-IP-Address = {nas_ip}",
+        f'NAS-Port-Id = "{nas_port_id}"',
+        "NAS-Port-Type = Ethernet",
+        f"Event-Timestamp = {now}",
+        "",
+    ])
+
+def build_acct_stop(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0", cause="User-Request") -> str:
+    now = int(time.time())
+    duration = max(0, int(time.time() - s.first_seen))
+    return "\n".join([
+        "Acct-Status-Type = Stop",
+        f'User-Name = "mac:{s.mac.lower()}"',
+        f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
+        f"Framed-IP-Address = {s.ip}",
+        f'Calling-Station-Id = "{s.mac.lower()}"',
+        f"NAS-IP-Address = {nas_ip}",
+        f'NAS-Port-Id = "{nas_port_id}"',
+        "NAS-Port-Type = Ethernet",
+        f"Acct-Session-Time = {duration}",
+        f'Acct-Terminate-Cause = "{cause}"',
+        f"Event-Timestamp = {now}",
+        "",
+    ])
+
+
 def parse_dhcp_leases(lines: str) -> List[DHCPLease]:
     leases: List[DHCPLease] = []
     for line_no, line in enumerate(lines.splitlines()):
@@ -45,7 +101,16 @@ def parse_dhcp_leases(lines: str) -> List[DHCPLease]:
         leases.append(lease)
     return leases
 
-def start_lease_poll_watcher(bng: Host, leasefile="/tmp/dnsmasq-bng.leases", interval=1.0, iface: str="bng-eth0"):
+def start_lease_poll_watcher(
+    bng: Host,
+    leasefile="/tmp/dnsmasq-bng.leases",
+    interval=1.0,
+    iface: str="bng-eth0",
+    radius_server_ip: str ="192.0.2.2",
+    radius_secret: str = __RADIUS_SECRET,
+    nas_ip: str="192.0.2.1",
+    nas_port_id: str="bng-eth0",
+):
     sessions: Dict[Tuple[str, str], DHCPSession] = {}
     watcher_options = {
         "stop": False,
@@ -54,13 +119,11 @@ def start_lease_poll_watcher(bng: Host, leasefile="/tmp/dnsmasq-bng.leases", int
     def loop():
         while not watcher_options["stop"]:
             raw = bng.cmd(f"cat {leasefile} 2>/dev/null || true")
-            if not raw:
-                print("DHCP lease file not found or empty, waiting...")
-                time.sleep(interval)
-                continue
-
             now = time.time()
-            leases = parse_dhcp_leases(raw)
+            leases: List[DHCPLease] = []
+
+            if raw:
+                leases = parse_dhcp_leases(raw)
 
             # Current is our single source of truth for active leases
             # We keep the sessions synchronized with it
@@ -78,6 +141,14 @@ def start_lease_poll_watcher(bng: Host, leasefile="/tmp/dnsmasq-bng.leases", int
                         hostname=l.hostname,
                     )
                     print(f"DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
+
+                    # RADIUS Accounting Start
+                    try:
+                        pkt = build_acct_start(sessions[key], nas_ip=nas_ip, nas_port_id=nas_port_id)
+                        rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                        print(f"RADIUS Acct-Start sent for mac={l.mac} ip={l.ip}")
+                    except Exception as e:
+                        print(f"RADIUS Acct-Start failed for mac={l.mac} ip={l.ip}: {e}")
                 else:
                     s = sessions[key]
                     s.last_seen = now
@@ -86,11 +157,45 @@ def start_lease_poll_watcher(bng: Host, leasefile="/tmp/dnsmasq-bng.leases", int
                         s.ip, s.expiry, s.hostname = l.ip, l.time, l.hostname
                         print(f"DHCP SESSION RENEW mac={l.mac} old_ip={old_ip} new_ip={s.ip} old_expiry={old_expiry} new_expiry={s.expiry} iface={iface} hostname={l.hostname}")
 
+                        if old_ip != s.ip:
+                            old_session = DHCPSession(
+                                mac=s.mac,
+                                ip=old_ip,
+                                first_seen=s.first_seen,
+                                last_seen=s.last_seen,
+                                expiry=old_expiry,
+                                iface=s.iface,
+                                hostname=s.hostname,
+                            )
+
+                            try:
+                                pkt = build_acct_stop(old_session, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="Lost-Service")
+                                rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                                print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
+                            except Exception as e:
+                                print(f"RADIUS Acct-Stop failed for mac={s.mac} old_ip={old_ip}: {e}")
+
+                            try:
+                                pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+                                rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                                print(f"RADIUS Acct-Start sent for mac={s.mac} new_ip={s.ip}")
+                            except Exception as e:
+                                print(f"RADIUS Acct-Start failed for mac={s.mac} new_ip={s.ip}: {e}")
+
             ended = [key for key in sessions.keys() if key not in current]
             for key in ended:
                 s = sessions.pop(key)
                 dur = int(now - s.first_seen)
                 print(f"DHCP SESSION END mac={s.mac} ip={s.ip} iface={s.iface} hostname={s.hostname} duration={dur}s")
+
+                # RADIUS Accounting Stop
+                try:
+                    pkt = build_acct_stop(s, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="User-Request")
+                    rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                    print(f"RADIUS Acct-Stop sent for mac={s.mac} ip={s.ip}")
+                except Exception as e:
+                    print(f"RADIUS Acct-Stop failed for mac={s.mac} ip={s.ip}: {e}")
+
 
             time.sleep(interval)
 
