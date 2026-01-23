@@ -13,8 +13,8 @@ def run():
     s1 = net.addSwitch('s1', failMode='standalone')  # access
     s2 = net.addSwitch('s2', failMode='standalone')  # upstream
 
-    h1 = net.addHost('h1', ip='10.0.0.10/24', defaultRoute='via 10.0.0.1')
-    h2 = net.addHost('h2', ip='10.0.0.11/24', defaultRoute='via 10.0.0.1')
+    h1 = net.addHost('h1', ip=None)
+    h2 = net.addHost('h2', ip=None)
     net.addLink(h1, s1)
     net.addLink(h2, s1)
 
@@ -41,7 +41,23 @@ def run():
     nat.configDefault()
     nat.cmd('ip route replace 10.0.0.0/24 via 192.0.2.1 dev nat-eth0')
 
+    bng.cmd('rm -f /tmp/dnsmasq-bng.pid /tmp/dnsmasq-bng.leases')
+    bng.cmd(
+        'dnsmasq '
+        '--port=0 ' # Disabled DNS 
+        '--interface=bng-eth0 '
+        '--dhcp-authoritative '
+        '--dhcp-range=10.0.0.10,10.0.0.200,255.255.255.0,12h '
+        '--dhcp-option=option:router,10.0.0.1 '
+        '--dhcp-option=option:dns-server,1.1.1.1,8.8.8.8 '
+        '--dhcp-leasefile=/tmp/dnsmasq-bng.leases '
+        '--pid-file=/tmp/dnsmasq-bng.pid '
+        '--log-dhcp '
+        '> /tmp/dnsmasq-bng.log 2>&1 & '
+    )
+
     CLI(net)
+    bng.cmd('kill $(cat /tmp/dnsmasq-bng.pid) 2>/dev/null || true')
     net.stop()
 
 
