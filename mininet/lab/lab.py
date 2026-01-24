@@ -31,8 +31,8 @@ class DHCPSession:
 
     base_up_bytes: int = 0
     base_down_bytes: int = 0
-    base_up_packets: int = 0
-    base_down_packets: int = 0
+    base_up_pkts: int = 0
+    base_down_pkts: int = 0
 
 @dataclass
 class DHCPLease:
@@ -77,9 +77,22 @@ def build_acct_start(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0")
         "",
     ])
 
-def build_acct_stop(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0", cause="User-Request") -> str:
+def build_acct_stop(
+    s: "DHCPSession",
+    input_bytes: int,
+    output_bytes: int,
+    input_pkts: int,
+    output_pkts: int,
+    nas_ip: str = "192.0.2.1",
+    nas_port_id: str = "bng-eth0",
+    cause: str = "User-Request",
+) -> str:
     now = int(time.time())
     duration = max(0, int(time.time() - s.first_seen))
+
+    in_gw, in_oct = split_bytes_to_gigawords_octets(input_bytes)
+    out_gw, out_oct = split_bytes_to_gigawords_octets(output_bytes)
+
     return "\n".join([
         "Acct-Status-Type = Stop",
         f'User-Name = "mac:{s.mac.lower()}"',
@@ -92,12 +105,35 @@ def build_acct_stop(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0", 
         f"Acct-Session-Time = {duration}",
         f'Acct-Terminate-Cause = "{cause}"',
         f"Event-Timestamp = {now}",
+
+        # Bytes (64-bit via octets+gigawords)
+        f"Acct-Input-Octets = {in_oct}",
+        f"Acct-Input-Gigawords = {in_gw}",
+        f"Acct-Output-Octets = {out_oct}",
+        f"Acct-Output-Gigawords = {out_gw}",
+
+        # Packets (32-bit best-effort; no standard gigawords field)
+        f"Acct-Input-Packets = {max(0, int(input_pkts))}",
+        f"Acct-Output-Packets = {max(0, int(output_pkts))}",
         "",
     ])
 
-def build_acct_interim(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0") -> str:
+
+def build_acct_interim(
+    s: "DHCPSession",
+    input_bytes: int,
+    output_bytes: int,
+    input_pkts: int,
+    output_pkts: int,
+    nas_ip: str = "192.0.2.1",
+    nas_port_id: str = "bng-eth0",
+) -> str:
     now = int(time.time())
     session_time = max(0, int(time.time() - s.first_seen))
+
+    in_gw, in_oct = split_bytes_to_gigawords_octets(input_bytes)
+    out_gw, out_oct = split_bytes_to_gigawords_octets(output_bytes)
+
     return "\n".join([
         "Acct-Status-Type = Interim-Update",
         f'User-Name = "mac:{s.mac.lower()}"',
@@ -109,6 +145,16 @@ def build_acct_interim(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0
         "NAS-Port-Type = Ethernet",
         f"Acct-Session-Time = {session_time}",
         f"Event-Timestamp = {now}",
+
+        # Bytes (64-bit via octets+gigawords)
+        f"Acct-Input-Octets = {in_oct}",
+        f"Acct-Input-Gigawords = {in_gw}",
+        f"Acct-Output-Octets = {out_oct}",
+        f"Acct-Output-Gigawords = {out_gw}",
+
+        # Packets (32-bit best-effort)
+        f"Acct-Input-Packets = {max(0, int(input_pkts))}",
+        f"Acct-Output-Packets = {max(0, int(output_pkts))}",
         "",
     ])
 
@@ -172,6 +218,36 @@ def nft_delete_rule_by_handle(bng: Host, handle: int):
     bng.cmd(f"nft delete rule inet bngacct sess handle {handle} 2>/dev/null || true")
 
 
+def nft_get_counter_by_handle(nftables_json, handle: int) -> Tuple[int, int] | None:
+    for item in nftables_json.get("nftables", []):
+        rule = item.get("rule")
+        if not rule:
+            continue
+
+        if rule.get("table") != "bngacct" or rule.get("chain") != "sess":
+            continue
+
+        if rule.get("handle") != handle:
+            continue
+
+        expr = rule.get("expr", [])
+        for e in expr:
+            counter = e.get("counter", None)
+            if counter:
+                return counter.get("bytes", 0), counter.get("packets", 0)
+
+    return None
+
+def split_bytes_to_gigawords_octets(total_bytes: int) -> Tuple[int, int]:
+    # The RADIUS protocol uses 32-bit counters for octets, so counters > 4.29 GB will reset to 0 without splitting
+    if total_bytes < 0:
+        total_bytes = 0
+
+    gigawords = total_bytes >> 32
+    remaining_octets = total_bytes & 0xFFFFFFFF
+
+    return gigawords, remaining_octets
+
 def parse_dhcp_leases(lines: str) -> List[DHCPLease]:
     leases: List[DHCPLease] = []
     for line_no, line in enumerate(lines.splitlines()):
@@ -221,30 +297,44 @@ def start_lease_poll_watcher(
                 # Create new session
                 if key not in sessions:
                     # Creating nftables rules
-                    up_handle, down_handle = nft_add_subscriber_rules(bng, ip=l.ip, mac=l.mac, sub_if=iface)
-
-                    sessions[key] = DHCPSession(
-                        mac=l.mac,
-                        ip=l.ip,
-                        first_seen=now,
-                        last_seen=now,
-                        expiry=l.time,
-                        iface=iface,
-                        hostname=l.hostname,
-                        last_interim=now,
-
-                        nft_up_handle=up_handle,
-                        nft_down_handle=down_handle,
-                    )
-                    print(f"DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
-
-                    # RADIUS Accounting Start
                     try:
-                        pkt = build_acct_start(sessions[key], nas_ip=nas_ip, nas_port_id=nas_port_id)
-                        rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
-                        print(f"RADIUS Acct-Start sent for mac={l.mac} ip={l.ip}")
+
+                        up_handle, down_handle = nft_add_subscriber_rules(bng, ip=l.ip, mac=l.mac, sub_if=iface)
+
+                        nftables_snapshot = nft_list_chain_rules(bng)
+                        base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
+                        base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
+
+                        sessions[key] = DHCPSession(
+                            mac=l.mac,
+                            ip=l.ip,
+                            first_seen=now,
+                            last_seen=now,
+                            expiry=l.time,
+                            iface=iface,
+                            hostname=l.hostname,
+                            last_interim=now,
+
+                            nft_up_handle=up_handle,
+                            nft_down_handle=down_handle,
+
+                            base_up_bytes=base_up_bytes,
+                            base_down_bytes=base_down_bytes,
+                            base_up_pkts=base_up_pkts,
+                            base_down_pkts=base_down_pkts,
+                        )
+
+                        print(f"DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
+
+                        # RADIUS Accounting Start
+                        try:
+                            pkt = build_acct_start(sessions[key], nas_ip=nas_ip, nas_port_id=nas_port_id)
+                            rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                            print(f"RADIUS Acct-Start sent for mac={l.mac} ip={l.ip}")
+                        except Exception as e:
+                            print(f"RADIUS Acct-Start failed for mac={l.mac} ip={l.ip}: {e}")
                     except Exception as e:
-                        print(f"RADIUS Acct-Start failed for mac={l.mac} ip={l.ip}: {e}")
+                        print(f"Failed to create DHCP session for mac={l.mac} ip={l.ip}: {e}")
                 else:
                     s = sessions[key]
                     s.last_seen = now
@@ -265,8 +355,37 @@ def start_lease_poll_watcher(
                                 last_interim=s.last_interim,
                             )
 
+                            # Calculation of usage for old IP before sending Acct-Stop
+                            nftables_snapshot = nft_list_chain_rules(bng)
+                            up_bytes, up_pkts = 0, 0
+                            down_bytes, down_pkts = 0, 0
+
+                            if s.nft_up_handle is not None:
+                                up_bytes, up_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_up_handle) or (0,0)
+                            if s.nft_down_handle is not None:
+                                down_bytes, down_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_down_handle) or (0,0)
+
+                            total_in_octets = max(0, up_bytes - s.base_up_bytes)
+                            total_out_octets = max(0, down_bytes - s.base_down_bytes)
+                            total_in_pkts = max(0, up_pkts - s.base_up_pkts)
+                            total_out_pkts = max(0, down_pkts - s.base_down_pkts)
+
                             try:
-                                pkt = build_acct_stop(old_session, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="Lost-Service")
+                                pkt = build_acct_stop(old_session, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="Lost-Service",
+                                    input_bytes=total_in_octets,
+                                    output_bytes=total_out_octets,
+                                    input_pkts=total_in_pkts,
+                                    output_pkts=total_out_pkts,
+                                )
+
+                                # Delete nftables rules 
+                                if s.nft_up_handle is not None:
+                                    nft_delete_rule_by_handle(bng, s.nft_up_handle)
+                                    s.nft_up_handle = None
+                                if s.nft_down_handle is not None:
+                                    nft_delete_rule_by_handle(bng, s.nft_down_handle)
+                                    s.nft_down_handle = None
+
                                 rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
                                 print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
                             except Exception as e:
@@ -274,6 +393,21 @@ def start_lease_poll_watcher(
 
                             try:
                                 pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+
+                                up_handle, down_handle = nft_add_subscriber_rules(bng, ip=l.ip, mac=l.mac, sub_if=iface)
+
+                                nftables_snapshot = nft_list_chain_rules(bng)
+                                base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
+                                base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
+
+                                s.nft_up_handle = up_handle
+                                s.nft_down_handle = down_handle
+
+                                s.base_up_bytes = base_up_bytes
+                                s.base_down_bytes = base_down_bytes
+                                s.base_up_pkts = base_up_pkts
+                                s.base_down_pkts = base_down_pkts
+
                                 rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
                                 s.last_interim = now
                                 print(f"RADIUS Acct-Start sent for mac={s.mac} new_ip={s.ip}")
@@ -288,7 +422,26 @@ def start_lease_poll_watcher(
 
                 # RADIUS Accounting Stop
                 try:
-                    pkt = build_acct_stop(s, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="User-Request")
+                    nftables_snapshot = nft_list_chain_rules(bng)
+                    up_bytes, up_pkts = 0, 0
+                    down_bytes, down_pkts = 0, 0
+
+                    if s.nft_up_handle is not None:
+                        up_bytes, up_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_up_handle) or (0,0)
+                    if s.nft_down_handle is not None:
+                        down_bytes, down_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_down_handle) or (0,0)
+
+                    total_in_octets = max(0, up_bytes - s.base_up_bytes)
+                    total_out_octets = max(0, down_bytes - s.base_down_bytes)
+                    total_in_pkts = max(0, up_pkts - s.base_up_pkts)
+                    total_out_pkts = max(0, down_pkts - s.base_down_pkts)
+
+                    pkt = build_acct_stop(s, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="User-Request", 
+                        input_bytes=total_in_octets,
+                        output_bytes=total_out_octets,
+                        input_pkts=total_in_pkts,
+                        output_pkts=total_out_pkts,
+                    )
                     rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
 
                     # Delete nftables rules 
@@ -301,10 +454,33 @@ def start_lease_poll_watcher(
                 except Exception as e:
                     print(f"RADIUS Acct-Stop failed for mac={s.mac} ip={s.ip}: {e}")
 
+            # Interim-Update processing
+            nftables_snapshot = nft_list_chain_rules(bng)
             for key, s in sessions.items():
                 if ( now - s.last_interim ) >= last_interim_interval:
                     try:
-                        pkt = build_acct_interim(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+
+                        up_bytes, up_pkts = 0, 0
+                        down_bytes, down_pkts = 0, 0
+
+                        if s.nft_up_handle is not None:
+                            up_bytes, up_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_up_handle) or (0,0)
+                        if s.nft_down_handle is not None:
+                            down_bytes, down_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_down_handle) or (0,0)
+
+                        # in_octers as BNG is recieving from subscriber on upload i.e base_up_bytes/pkts
+                        # out_octets as BNG is sending to subscriber on download i.e base_down_bytes/pkts
+                        total_in_octets = max(0, up_bytes - s.base_up_bytes)
+                        total_out_octets = max(0, down_bytes - s.base_down_bytes)
+                        total_in_pkts = max(0, up_pkts - s.base_up_pkts)
+                        total_out_pkts = max(0, down_pkts - s.base_down_pkts)
+
+                        pkt = build_acct_interim(s, nas_ip=nas_ip, nas_port_id=nas_port_id, 
+                            input_bytes=total_in_octets,
+                            output_bytes=total_out_octets,
+                            input_pkts=total_in_pkts,
+                            output_pkts=total_out_pkts,
+                        )
                         rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
                         s.last_interim = now
                         print(f"RADIUS Acct-Interim sent for mac={s.mac} ip={s.ip}")
