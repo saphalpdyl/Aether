@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Dict, Tuple, List
 import shlex
 
+import json
 
 @dataclass
 class DHCPSession:
@@ -22,6 +23,16 @@ class DHCPSession:
     expiry: int
     iface: str
     hostname: str
+    last_interim: float # For Interim-Update tracking
+
+    # nftables related data
+    nft_up_handle: int | None = None
+    nft_down_handle: int | None = None
+
+    base_up_bytes: int = 0
+    base_down_bytes: int = 0
+    base_up_packets: int = 0
+    base_down_packets: int = 0
 
 @dataclass
 class DHCPLease:
@@ -84,6 +95,82 @@ def build_acct_stop(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0", 
         "",
     ])
 
+def build_acct_interim(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0") -> str:
+    now = int(time.time())
+    session_time = max(0, int(time.time() - s.first_seen))
+    return "\n".join([
+        "Acct-Status-Type = Interim-Update",
+        f'User-Name = "mac:{s.mac.lower()}"',
+        f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
+        f"Framed-IP-Address = {s.ip}",
+        f'Calling-Station-Id = "{s.mac.lower()}"',
+        f"NAS-IP-Address = {nas_ip}",
+        f'NAS-Port-Id = "{nas_port_id}"',
+        "NAS-Port-Type = Ethernet",
+        f"Acct-Session-Time = {session_time}",
+        f"Event-Timestamp = {now}",
+        "",
+    ])
+
+# nftables helpers
+def nft_list_chain_rules(bng: Host):
+    out = bng.cmd("nft -j list chain inet bngacct sess")
+
+    if not out or not out.strip():
+        return {}
+
+    return json.loads(out)
+
+def nft_find_rule_handle(nft_json: dict, comment_match: str):
+    for item in nft_json.get("nftables", []):
+        rule = item.get("rule")
+        if not rule:
+            continue
+
+        # Check for correct table and chain
+        if rule.get("table") != "bngacct" or rule.get("chain") != "sess":
+            continue
+
+        comment = rule.get("comment", None);
+        if comment == comment_match:
+            return rule.get("handle", None)
+
+    return None
+
+def nft_add_subscriber_rules(
+    bng: Host,
+    ip: str,
+    mac: str,
+    sub_if: str = "bng-eth0", # if = interface
+    # NOTE: We have bng-eth0 as the default iface because we want to measure on subscriber facing interface 
+    #   We could have measured on bng-eth1 ( upstream facing ) but that would not capture traffic that is dropped by BNG itself
+):
+    mac_l = mac.lower()
+
+    # Upload counter rule
+    bng.cmd(
+        f"nft \'add rule inet bngacct sess iif \"{sub_if}\" ip saddr {ip} counter "
+        f"comment \"sub;mac={mac_l};dir=up;ip={ip}\"\'"
+    )
+
+    # Download counter rule
+    bng.cmd(
+        f"nft \'add rule inet bngacct sess oif \"{sub_if}\" ip daddr {ip} counter "
+        f"comment \"sub;mac={mac_l};dir=down;ip={ip}\"\'"
+    )
+
+    nftables_data = nft_list_chain_rules(bng)
+    up_rule_handle = nft_find_rule_handle(nftables_data, f"sub;mac={mac_l};dir=up;ip={ip}")
+    down_rule_handle = nft_find_rule_handle(nftables_data, f"sub;mac={mac_l};dir=down;ip={ip}")
+
+    if up_rule_handle is None or down_rule_handle is None:
+        raise RuntimeError("Failed to add nftables rules for subscriber")
+
+    return up_rule_handle, down_rule_handle
+
+def nft_delete_rule_by_handle(bng: Host, handle: int):
+    bng.cmd(f"nft delete rule inet bngacct sess handle {handle} 2>/dev/null || true")
+
 
 def parse_dhcp_leases(lines: str) -> List[DHCPLease]:
     leases: List[DHCPLease] = []
@@ -110,6 +197,7 @@ def start_lease_poll_watcher(
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
     nas_port_id: str="bng-eth0",
+    last_interim_interval: int = 30,
 ):
     sessions: Dict[Tuple[str, str], DHCPSession] = {}
     watcher_options = {
@@ -122,7 +210,7 @@ def start_lease_poll_watcher(
             now = time.time()
             leases: List[DHCPLease] = []
 
-            if raw:
+            if raw and raw.strip():
                 leases = parse_dhcp_leases(raw)
 
             # Current is our single source of truth for active leases
@@ -130,7 +218,11 @@ def start_lease_poll_watcher(
             current = {(l.mac,iface): l for l in leases}
             
             for key, l in current.items():
+                # Create new session
                 if key not in sessions:
+                    # Creating nftables rules
+                    up_handle, down_handle = nft_add_subscriber_rules(bng, ip=l.ip, mac=l.mac, sub_if=iface)
+
                     sessions[key] = DHCPSession(
                         mac=l.mac,
                         ip=l.ip,
@@ -139,6 +231,10 @@ def start_lease_poll_watcher(
                         expiry=l.time,
                         iface=iface,
                         hostname=l.hostname,
+                        last_interim=now,
+
+                        nft_up_handle=up_handle,
+                        nft_down_handle=down_handle,
                     )
                     print(f"DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
 
@@ -166,6 +262,7 @@ def start_lease_poll_watcher(
                                 expiry=old_expiry,
                                 iface=s.iface,
                                 hostname=s.hostname,
+                                last_interim=s.last_interim,
                             )
 
                             try:
@@ -178,6 +275,7 @@ def start_lease_poll_watcher(
                             try:
                                 pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
                                 rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                                s.last_interim = now
                                 print(f"RADIUS Acct-Start sent for mac={s.mac} new_ip={s.ip}")
                             except Exception as e:
                                 print(f"RADIUS Acct-Start failed for mac={s.mac} new_ip={s.ip}: {e}")
@@ -192,10 +290,26 @@ def start_lease_poll_watcher(
                 try:
                     pkt = build_acct_stop(s, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="User-Request")
                     rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+
+                    # Delete nftables rules 
+                    if s.nft_up_handle is not None:
+                        nft_delete_rule_by_handle(bng, s.nft_up_handle)
+                    if s.nft_down_handle is not None:
+                        nft_delete_rule_by_handle(bng, s.nft_down_handle)
+
                     print(f"RADIUS Acct-Stop sent for mac={s.mac} ip={s.ip}")
                 except Exception as e:
                     print(f"RADIUS Acct-Stop failed for mac={s.mac} ip={s.ip}: {e}")
 
+            for key, s in sessions.items():
+                if ( now - s.last_interim ) >= last_interim_interval:
+                    try:
+                        pkt = build_acct_interim(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+                        rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                        s.last_interim = now
+                        print(f"RADIUS Acct-Interim sent for mac={s.mac} ip={s.ip}")
+                    except Exception as e:
+                        print(f"RADIUS Acct-Interim failed for mac={s.mac} ip={s.ip}: {e}")
 
             time.sleep(interval)
 
@@ -236,6 +350,14 @@ def run():
     bng.cmd('ip addr add 192.0.2.1/24 dev bng-eth1')
     bng.cmd('ip route replace default via 192.0.2.2 dev bng-eth1')
     bng.cmd('sysctl -w net.ipv4.ip_forward=1')
+
+    # Settings up nftables for BNG 
+    bng.cmd("nft add table inet bngacct 2>/dev/null || true") # Creating a table called bngacct
+
+    # Creating a chain in table 'bngacct' called 'sess'
+    # The chain hooks into the 'forward' hook with policy 'accept' meaning packets are allowed by default 
+    #   since we are only counting packets/bytes here and not enforcing any filtering
+    bng.cmd("nft 'add chain inet bngacct sess {type filter hook forward priority 0; policy accept;}' 2>/dev/null || true") 
 
     # Root-namespace NAT (known-good baseline)
     nat.configDefault()
