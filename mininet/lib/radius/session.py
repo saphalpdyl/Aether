@@ -1,0 +1,21 @@
+from dataclasses import dataclass 
+
+@dataclass
+class DHCPSession:
+    mac: str
+    ip: str
+    first_seen: float
+    last_seen: float
+    expiry: int
+    iface: str
+    hostname: str
+    last_interim: float # For Interim-Update tracking
+
+    # nftables related data
+    nft_up_handle: int | None = None
+    nft_down_handle: int | None = None
+
+    base_up_bytes: int = 0
+    base_down_bytes: int = 0
+    base_up_pkts: int = 0
+    base_down_pkts: int = 0
