@@ -265,9 +265,8 @@ def dhcp_interim_update_loop(
         start = time.time()
         try:
             with sessions_lock:
-                sessions_copy = sessions.copy()
+                radius_handle_interim_updates(bng, sessions)
 
-            radius_handle_interim_updates(bng, sessions_copy)
         except Exception as e:
             print(f"DHCP Interim-Update thread error: {e}")
 
@@ -349,7 +348,7 @@ def run():
     radius_interim_stop_event = threading.Event()
     radius_interim_thread = threading.Thread(
         target=dhcp_interim_update_loop,
-        args=(bng, sessions, sessions_lock, radius_interim_stop_event, 10),
+        args=(bng, sessions, sessions_lock, radius_interim_stop_event, 30),
         daemon=False
     )
     radius_interim_thread.start()
