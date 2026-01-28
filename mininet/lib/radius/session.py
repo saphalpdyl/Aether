@@ -1,3 +1,4 @@
+from typing import Literal
 from dataclasses import dataclass 
 
 @dataclass
@@ -23,4 +24,7 @@ class DHCPSession:
     # None if no data yet
     last_up_bytes: int | None = None
     last_down_bytes: int | None = None
-    last_traffic_seen: float | None = None
+    last_traffic_seen_ts: float | None = None
+    last_idle_ts: float | None = None
+
+    status: Literal["ACTIVE", "IDLE", "EXPIRED"] = "ACTIVE"

@@ -1,3 +1,8 @@
 DHCP_LEASE_FILE_DIR_PATH = "/tmp/dnsmasq"
 DHCP_LEASE_FILE_PATH = DHCP_LEASE_FILE_DIR_PATH + "/dnsmasq-bng.leases"
 DHCP_GRACE_SECONDS = 10
+
+MARK_DISCONNECT_GRACE_SECONDS = 10
+MARK_IDLE_GRACE_SECONDS = 20
+IDLE_GRACE_AFTER_CONNECT = 40 # To check for idle after initial connect where they may be no traffic for a bit i.e when s.last_traffic_seen is None
+ENABLE_IDLE_DISCONNECT = False
