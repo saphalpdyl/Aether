@@ -19,3 +19,8 @@ class DHCPSession:
     base_down_bytes: int = 0
     base_up_pkts: int = 0
     base_down_pkts: int = 0
+
+    # None if no data yet
+    last_up_bytes: int | None = None
+    last_down_bytes: int | None = None
+    last_traffic_seen: float | None = None

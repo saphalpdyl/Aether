@@ -223,7 +223,12 @@ def radius_handle_interim_updates(
         nas_ip: str="192.0.2.1",
         nas_port_id: str="bng-eth0"):
     now = time.time()
-    nftables_snapshot = nft_list_chain_rules(bng)
+    try:
+        nftables_snapshot = nft_list_chain_rules(bng)
+    except Exception as e:
+        print(f"Failed to get nftables snapshot for Interim-Update: {e}")
+        return
+
     for key, s in sessions.items():
         try:
 
@@ -264,6 +269,7 @@ def dhcp_interim_update_loop(
     while not stop_event.is_set():
         start = time.time()
         try:
+            # IMport deepcopy
             with sessions_lock:
                 radius_handle_interim_updates(bng, sessions)
 
@@ -317,10 +323,10 @@ def run():
     nat.configDefault()
     nat.cmd('ip route replace 10.0.0.0/24 via 192.0.2.1 dev nat-eth0')
 
-    bng.cmd(f'rm -f /tmp/dnsmasq-bng.pid {DHCP_LEASE_FILE_DIR_PATH} 2>/dev/null || true')
+    bng.cmd(f'rm -f /tmp/dnsmasq-bng.pid 2>/dev/null || true')
 
     # Create the DHCP lease file directory
-    bng.cmd('mkdir -p ' + os.path.dirname(DHCP_LEASE_FILE_DIR_PATH))
+    bng.cmd('mkdir -p ' + DHCP_LEASE_FILE_DIR_PATH)
     bng.cmd(
         'dnsmasq '
         '--port=0 ' # Disabled DNS 
@@ -336,8 +342,7 @@ def run():
     )
 
     # Starting our DHCP Lease to Sessions watcher
-    # watcher_opts, sessions = start_lease_poll_watcher(bng, iface="bng-eth0")
-    # time.sleep(0.2)
+    time.sleep(0.2)
     dhcp_handler_func, sessions, sessions_lock = dhcp_lease_handler(bng, iface="bng-eth0")
 
     dhcp_observer = Observer()
@@ -356,7 +361,6 @@ def run():
     CLI(net)
 
     # Stopping watcher thread
-    # watcher_opts["stop"] = True
     radius_interim_stop_event.set()
     radius_interim_thread.join()
     dhcp_observer.stop()
