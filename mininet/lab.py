@@ -10,7 +10,7 @@ import threading
 from queue import Queue
 from watchdog.observers import Observer
 
-from lib.constants import DHCP_LEASE_FILE_PATH, DHCP_LEASE_FILE_DIR_PATH
+from lib.constants import DHCP_LEASE_FILE_PATH, DHCP_LEASE_FILE_DIR_PATH, DHCP_LEASE_EXPIRY_SECONDS
 from lib.services.bng import bng_event_loop
 from lib.services.lease_watcher import LeaseObserver
 
@@ -67,7 +67,7 @@ def run():
         '--port=0 ' # Disabled DNS 
         '--interface=bng-eth0 '
         '--dhcp-authoritative '
-        '--dhcp-range=10.0.0.10,10.0.0.200,255.255.255.0,3m '
+        f'--dhcp-range=10.0.0.10,10.0.0.200,255.255.255.0,{DHCP_LEASE_EXPIRY_SECONDS}s '
         '--dhcp-option=option:router,10.0.0.1 '
         '--dhcp-option=option:dns-server,1.1.1.1,8.8.8.8 '
         f'--dhcp-leasefile={DHCP_LEASE_FILE_PATH} '

@@ -2,6 +2,7 @@ import time
 import threading
 from queue import Queue, Empty
 from typing import Dict, Tuple, List
+from dataclasses import dataclass
 
 from mininet.node import Host
 
@@ -11,8 +12,17 @@ from lib.nftables.helpers import nft_add_subscriber_rules, nft_delete_rule_by_ha
 from lib.radius.packet_builders import build_acct_start, build_acct_stop, rad_acct_send_from_bng
 from lib.radius.session import DHCPSession
 from lib.secrets import __RADIUS_SECRET
-from lib.constants import DHCP_LEASE_FILE_PATH, MARK_DISCONNECT_GRACE_SECONDS, ENABLE_IDLE_DISCONNECT
+from lib.constants import DHCP_LEASE_EXPIRY_SECONDS, DHCP_LEASE_FILE_PATH, MARK_DISCONNECT_GRACE_SECONDS, ENABLE_IDLE_DISCONNECT, TOMBSTONE_TTL_SECONDS
 from lib.radius.handlers import radius_handle_interim_updates
+
+
+@dataclass
+class Tombstone:
+    ip_at_stop: str
+    lease_expiry_at_stop: float
+    stopped_at: float
+    reason: str
+    missing_seen: bool = False
 
 
 def terminate_session(
@@ -73,7 +83,7 @@ def dhcp_lease_handler(
     nas_port_id: str="bng-eth0",
 ):
     sessions: Dict[Tuple[str,str], DHCPSession] = {}
-    disconnected_sessions: Dict[Tuple[str,str], DHCPSession] = {}
+    tombstones: Dict[Tuple[str,str], Tombstone] = {}
 
     def handler():
         raw = bng.cmd(f"cat {leasefile} 2>/dev/null || true")
@@ -90,10 +100,19 @@ def dhcp_lease_handler(
                 return
 
         current = {(l.mac,iface): l for l in leases}
-        
+        now_mono = time.monotonic()
+
+        for key, t in list(tombstones.items()):
+            if now_mono - t.stopped_at >= TOMBSTONE_TTL_SECONDS:
+                tombstones.pop(key, None)
+
         for key, l in current.items():
-            if key in disconnected_sessions:
-                continue
+            tombstone = tombstones.get(key)
+            if tombstone is not None:
+                lease_changed = l.time > tombstone.lease_expiry_at_stop
+                if not lease_changed:
+                    continue
+                tombstones.pop(key, None)
 
             if key not in sessions:
                 try:
@@ -218,7 +237,7 @@ def dhcp_lease_handler(
                             print(f"RADIUS Acct-Start failed for mac={s.mac} new_ip={s.ip}: {e}")
 
 
-        ended = [key for key in sessions.keys() if (key not in current and key not in disconnected_sessions)]
+        ended = [key for key in sessions.keys() if key not in current]
         nftables_snapshot = None
         if ended:
             try:
@@ -244,7 +263,9 @@ def dhcp_lease_handler(
             ):
                 print(f"RADIUS Acct-Stop sent for mac={s.mac} ip={s.ip}")
 
-    return handler, sessions, disconnected_sessions
+        # Tombstones only clear on renewal (expiry moved forward) or TTL expiry.
+
+    return handler, sessions, tombstones
 
 
 def bng_event_loop(
@@ -258,7 +279,7 @@ def bng_event_loop(
     nas_ip: str="192.0.2.1",
     nas_port_id: str="bng-eth0",
 ):
-    dhcp_handler, sessions, disconnected_sessions = dhcp_lease_handler(bng, iface=iface)
+    dhcp_handler, sessions, tombstones = dhcp_lease_handler(bng, iface=iface)
     next_interim = time.time() + interim_interval
     next_disconnection_check = time.time() + 5
 
@@ -320,7 +341,14 @@ def bng_event_loop(
                                 nas_port_id=nas_port_id,
                                 nftables_snapshot=nftables_snapshot,
                             )
-                            disconnected_sessions[key] = sessions.pop(key)
+                            tombstones[key] = Tombstone(
+                                ip_at_stop=s.ip,
+                                lease_expiry_at_stop=s.expiry,
+                                stopped_at=time.monotonic(),
+                                reason="Idle-Timeout",
+                                missing_seen=False,
+                            )
+                            sessions.pop(key)
             except Exception as e:
                 print(f"BNG thread Disconnection check error: {e}")
 
