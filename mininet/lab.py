@@ -67,7 +67,7 @@ def run():
         '--port=0 ' # Disabled DNS 
         '--interface=bng-eth0 '
         '--dhcp-authoritative '
-        '--dhcp-range=10.0.0.10,10.0.0.200,255.255.255.0,12h '
+        '--dhcp-range=10.0.0.10,10.0.0.200,255.255.255.0,3m '
         '--dhcp-option=option:router,10.0.0.1 '
         '--dhcp-option=option:dns-server,1.1.1.1,8.8.8.8 '
         f'--dhcp-leasefile={DHCP_LEASE_FILE_PATH} '
