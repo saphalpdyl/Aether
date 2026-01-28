@@ -83,7 +83,7 @@ def dhcp_lease_handler(
     nas_port_id: str="bng-eth0",
 ):
     sessions: Dict[Tuple[str,str], DHCPSession] = {}
-    tombstones: Dict[Tuple[str,str], Tombstone] = {}
+    tombstones: Dict[Tuple[str,str], Tombstone] = {} # NOTE: Used only when ENABLE_IDLE_DISCONNECT = True
 
     def handler():
         raw = bng.cmd(f"cat {leasefile} 2>/dev/null || true")
