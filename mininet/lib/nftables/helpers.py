@@ -82,3 +82,11 @@ def nft_get_counter_by_handle(nftables_json, handle: int) -> Tuple[int, int] | N
                 return counter.get("bytes", 0), counter.get("packets", 0)
 
     return None
+
+def nft_allow_mac(bng: Host, mac: str):
+    m = mac.lower()
+    bng.cmd(f"nft add element inet aether_auth authed_macs {{ {m} }}")
+
+def nft_remove_mac(bng: Host, mac: str):
+    m = mac.lower()
+    bng.cmd(f"nft delete element inet aether_auth authed_macs {{ {m} }}")

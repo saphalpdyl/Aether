@@ -23,6 +23,19 @@ def rad_acct_send_from_bng(
     cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} acct {secret_q}"
     return bng.cmd(cmd)
 
+def rad_auth_send_from_bng(
+    bng: Host,
+    packet: str,
+    server_ip: str,
+    port: int = 1812,
+    secret: str = __RADIUS_SECRET,
+    timeout: int = 1,
+):
+    pkt_q = shlex.quote(packet)
+    secret_q = shlex.quote(secret)
+    cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} auth {secret_q}"
+    return bng.cmd(cmd)
+
 def acct_session_id(mac: str, ip: str, first_seen: float) -> str:
     return f"{mac.lower()}-{ip}-{int(first_seen)}"
 
@@ -124,7 +137,7 @@ def build_acct_interim(
 
 def build_access_request(
     s: DHCPSession,
-    user_password: str = "aether",
+    user_password: str = "testing123",
     nas_ip: str = "192.0.2.1",
     nas_port_id: str = "bng-eth0",
 ) -> str:

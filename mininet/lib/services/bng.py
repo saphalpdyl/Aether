@@ -8,8 +8,8 @@ from mininet.node import Host
 
 from lib.dhcp.lease import DHCPLease
 from lib.dhcp.utils import parse_dhcp_leases
-from lib.nftables.helpers import nft_add_subscriber_rules, nft_delete_rule_by_handle, nft_get_counter_by_handle, nft_list_chain_rules
-from lib.radius.packet_builders import build_acct_start, build_acct_stop, rad_acct_send_from_bng
+from lib.nftables.helpers import nft_add_subscriber_rules, nft_allow_mac, nft_delete_rule_by_handle, nft_get_counter_by_handle, nft_list_chain_rules, nft_remove_mac
+from lib.radius.packet_builders import build_access_request, build_acct_start, build_acct_stop, rad_acct_send_from_bng, rad_auth_send_from_bng
 from lib.radius.session import DHCPSession
 from lib.secrets import __RADIUS_SECRET
 from lib.constants import DHCP_LEASE_EXPIRY_SECONDS, DHCP_LEASE_FILE_PATH, MARK_DISCONNECT_GRACE_SECONDS, ENABLE_IDLE_DISCONNECT, TOMBSTONE_TTL_SECONDS
@@ -53,13 +53,17 @@ def terminate_session(
         total_in_pkts = max(0, up_pkts - s.base_up_pkts)
         total_out_pkts = max(0, down_pkts - s.base_down_pkts)
 
-        pkt = build_acct_stop(s, nas_ip=nas_ip, nas_port_id=nas_port_id, cause=cause, 
-            input_bytes=total_in_octets,
-            output_bytes=total_out_octets,
-            input_pkts=total_in_pkts,
-            output_pkts=total_out_pkts,
-        )
-        rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+        if s.auth_state == "AUTHORIZED":
+            pkt = build_acct_stop(s, nas_ip=nas_ip, nas_port_id=nas_port_id, cause=cause, 
+                input_bytes=total_in_octets,
+                output_bytes=total_out_octets,
+                input_pkts=total_in_pkts,
+                output_pkts=total_out_pkts,
+            )
+            rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+
+        # Remove rulesets allowing traffic 
+        nft_remove_mac(bng, s.mac)
 
         if delete_rules:
             if s.nft_up_handle is not None:
@@ -144,11 +148,34 @@ def dhcp_lease_handler(
                     print(f"DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
 
                     try:
-                        pkt = build_acct_start(sessions[key], nas_ip=nas_ip, nas_port_id=nas_port_id)
-                        rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
-                        print(f"RADIUS Acct-Start sent for mac={l.mac} ip={l.ip}")
+                        # Try authorize first
+                        # IMPORTANT: Move this responsibility to the OSS  
+                        #   so that BNG can be stateless and scaled horizontally
+                        #   Furthermore, use a hookable DHCP server that calls to the OSS
+                        access_request_pkt = build_access_request(sessions[key], nas_ip=nas_ip, nas_port_id=nas_port_id)
+                        access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
+
+                        import re
+                        if access_request_response:
+                            if re.search(r'Access-Reject', access_request_response):
+                                print(f"RADIUS Access-Reject received for mac={l.mac} ip={l.ip}")
+
+                                sessions[key].auth_state = "REJECTED"
+                            elif re.search(r'Access-Accept', access_request_response):
+                                print(f"RADIUS Access-Accept received for mac={l.mac} ip={l.ip}")
+                                # Add allow policy in nftables
+                                sessions[key].auth_state = "AUTHORIZED"
+                                nft_allow_mac(bng, l.mac)
+
+                                acct_start_pkt = build_acct_start(sessions[key], nas_ip=nas_ip, nas_port_id=nas_port_id)
+                                rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+                                print(f"RADIUS Acct-Start sent for mac={l.mac} ip={l.ip}")
+                        else:
+                            raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
                     except Exception as e:
                         print(f"RADIUS Acct-Start failed for mac={l.mac} ip={l.ip}: {e}")
+
+                    
                 except Exception as e:
                     print(f"Failed to create DHCP session for mac={l.mac} ip={l.ip}: {e}")
             else:
@@ -194,7 +221,7 @@ def dhcp_lease_handler(
                         total_out_pkts = max(0, down_pkts - s.base_down_pkts)
 
                         try:
-                            pkt = build_acct_stop(old_session, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="Lost-Service",
+                            acct_start_pkt = build_acct_stop(old_session, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="Lost-Service",
                                 input_bytes=total_in_octets,
                                 output_bytes=total_out_octets,
                                 input_pkts=total_in_pkts,
@@ -208,13 +235,13 @@ def dhcp_lease_handler(
                                 nft_delete_rule_by_handle(bng, s.nft_down_handle)
                                 s.nft_down_handle = None
 
-                            rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                            rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
                             print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
                         except Exception as e:
                             print(f"RADIUS Acct-Stop failed for mac={s.mac} old_ip={old_ip}: {e}")
 
                         try:
-                            pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+                            acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
 
                             up_handle, down_handle = nft_add_subscriber_rules(bng, ip=l.ip, mac=l.mac, sub_if=iface)
 
@@ -230,7 +257,7 @@ def dhcp_lease_handler(
                             s.base_up_pkts = base_up_pkts
                             s.base_down_pkts = base_down_pkts
 
-                            rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+                            rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
                             s.last_interim = now
                             print(f"RADIUS Acct-Start sent for mac={s.mac} new_ip={s.ip}")
                         except Exception as e:

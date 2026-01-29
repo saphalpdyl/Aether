@@ -28,4 +28,4 @@ class DHCPSession:
     last_idle_ts: float | None = None
 
     status: Literal["ACTIVE", "IDLE", "EXPIRED"] = "ACTIVE"
-    auth_state: Literal["PENDING_AUTH", "AUTHENTICATED", "REJECTED"] = "PENDING_AUTH"
+    auth_state: Literal["PENDING_AUTH", "AUTHORIZED", "REJECTED"] = "PENDING_AUTH"
