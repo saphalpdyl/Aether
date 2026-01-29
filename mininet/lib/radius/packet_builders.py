@@ -1,3 +1,5 @@
+# COMMENT: All packet builders AI-generated because I didn't want to bother myself
+
 import time
 import shlex
 
@@ -117,5 +119,32 @@ def build_acct_interim(
         # Packets (32-bit best-effort)
         f"Acct-Input-Packets = {max(0, int(input_pkts))}",
         f"Acct-Output-Packets = {max(0, int(output_pkts))}",
+        "",
+    ])
+
+def build_access_request(
+    s: DHCPSession,
+    user_password: str = "aether",
+    nas_ip: str = "192.0.2.1",
+    nas_port_id: str = "bng-eth0",
+) -> str:
+    """
+    Returns a radclient-compatible Access-Request attribute list.
+    Use with: radclient -x <radius_ip> auth <secret>
+    """
+    now = int(time.time())
+    mac = s.mac.lower()
+
+    return "\n".join([
+        # RADIUS auth type implied by radclient 'auth' (Access-Request)
+        f'User-Name = "mac:{mac}"',
+        f'User-Password = "{user_password}"',          # lab-simple PAP
+        f'Calling-Station-Id = "{mac}"',               # who is calling (subscriber MAC)
+        f'Called-Station-Id = "{nas_port_id}"',        # optional; can be iface or BNG id
+        f"Framed-IP-Address = {s.ip}",                 # IP the subscriber got via DHCP
+        f"NAS-IP-Address = {nas_ip}",
+        f'NAS-Port-Id = "{nas_port_id}"',
+        "NAS-Port-Type = Ethernet",
+        f"Event-Timestamp = {now}",
         "",
     ])
