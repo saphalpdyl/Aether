@@ -21,8 +21,8 @@ def run():
     s1 = net.addSwitch('s1', failMode='standalone')  # access
     s2 = net.addSwitch('s2', failMode='standalone')  # upstream
 
-    h1 = net.addHost('h1', ip=None)
-    h2 = net.addHost('h2', ip=None)
+    h1 = net.addHost('h1', ip=None, mac='00:00:00:00:00:01')
+    h2 = net.addHost('h2', ip=None, mac='00:00:00:00:00:02')
     net.addLink(h1, s1)
     net.addLink(h2, s1)
 
@@ -45,13 +45,36 @@ def run():
     bng.cmd('ip route replace default via 192.0.2.2 dev bng-eth1')
     bng.cmd('sysctl -w net.ipv4.ip_forward=1')
 
-    # Settings up nftables for BNG 
-    bng.cmd("nft add table inet bngacct 2>/dev/null || true") # Creating a table called bngacct
+    # Setting up nftables for BNG 
+
+    bng.cmd("nft delete table inet aether_auth 2>/dev/null || true")
+    bng.cmd("nft delete table inet bngacct 2>/dev/null || true")
+
+    bng.cmd("nft add table inet aether_auth 2>/dev/null || true")
+    bng.cmd("nft add table inet bngacct 2>/dev/null || true")
+
+    bng.cmd("nft 'add set inet aether_auth authed_macs { type ether_addr; }' 2>/dev/null || true")
+
+    bng.cmd("nft 'add chain inet aether_auth forward { type filter hook forward priority -10; policy drop; }' 2>/dev/null || true")
+
+    bng.cmd("nft 'add rule inet aether_auth forward ct state established,related accept' 2>/dev/null || true")
+
+
+    bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth0\" ether saddr @authed_macs accept' 2>/dev/null || true")
+
+    # Reject rule for non-authenticated MACs
+    # For TCP traffic
+    bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth0\" ct state new tcp reject with tcp reset'")
+    # For non-TCP traffic
+    bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth0\" ct state new reject with icmpx type admin-prohibited'")
 
     # Creating a chain in table 'bngacct' called 'sess'
     # The chain hooks into the 'forward' hook with policy 'accept' meaning packets are allowed by default 
     #   since we are only counting packets/bytes here and not enforcing any filtering
-    bng.cmd("nft 'add chain inet bngacct sess {type filter hook forward priority 0; policy accept;}' 2>/dev/null || true") 
+    bng.cmd("nft 'add chain inet bngacct sess { type filter hook forward priority 0; policy accept; }' 2>/dev/null || true")
+
+    # Allow h1 for now ( TESTING ONLY )
+    # bng.cmd("nft add element inet aether_auth authed_macs { 00:00:00:00:00:01 } 2>/dev/null || true")
 
     # Root-namespace NAT (known-good baseline)
     nat.configDefault()
