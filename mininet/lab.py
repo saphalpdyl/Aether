@@ -33,6 +33,9 @@ def run():
     nat = net.addHost('nat', cls=NAT, ip='192.0.2.2/24', inNamespace=False)
     net.addLink(nat, s2)  # nat-eth0 on upstream segment
 
+    kea = net.addHost('kea')
+    net.addLink(kea, s2)  # kea-eth0 on upstream segment
+
     net.start()
 
     # Deterministic BNG config
@@ -79,6 +82,16 @@ def run():
     # Root-namespace NAT (known-good baseline)
     nat.configDefault()
     nat.cmd('ip route replace 10.0.0.0/24 via 192.0.2.1 dev nat-eth0')
+
+    # KEA DHCPv4 server host
+    kea.cmd('ip addr flush dev kea-eth0')
+    kea.cmd('ip link set kea-eth0 up')
+    kea.cmd('ip addr add 192.0.2.3/24 dev kea-eth0')
+    kea.cmd('ip route replace default via 192.0.2.1 dev kea-eth0')
+    kea.cmd('mkdir -p /tmp/kea')
+    kea.cmd('chmod 777 /tmp/kea')
+    kea.cmd('rm -f /tmp/kea/logger_lockfile 2>/dev/null || true')
+    kea.cmd('KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf > /tmp/kea-dhcp4.log 2>&1 &')
 
     bng.cmd(f'rm -f /tmp/dnsmasq-bng.pid 2>/dev/null || true')
     bng.cmd(f'rm -f {DHCP_LEASE_FILE_PATH} 2>/dev/null || true')
@@ -134,6 +147,8 @@ def run():
     dhcp_observer.join()
 
     bng.cmd('kill $(cat /tmp/dnsmasq-bng.pid) 2>/dev/null || true')
+    kea.cmd('pkill -f "kea-dhcp4 -c /etc/kea/kea-dhcp4.conf" 2>/dev/null || true')
+    # Also remove the config file to avoid confusion on next run
     net.stop()
 
 
