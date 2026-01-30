@@ -1,18 +1,42 @@
 #!/usr/bin/env python3
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+import json
+import threading
+from queue import Queue
+
 from mininet.net import Mininet
 from mininet.node import OVSSwitch
 from mininet.nodelib import NAT
 from mininet.cli import CLI
 from mininet.log import setLogLevel
 
-import time 
-import threading
-from queue import Queue
-from watchdog.observers import Observer
-
-from lib.constants import DHCP_LEASE_FILE_PATH, DHCP_LEASE_FILE_DIR_PATH, DHCP_LEASE_EXPIRY_SECONDS
+from lib.constants import DHCP_LEASE_FILE_DIR_PATH
 from lib.services.bng import bng_event_loop
-from lib.services.lease_watcher import LeaseObserver
+
+
+def ovs_port_map(sw: OVSSwitch):
+    out = sw.cmd(f"ovs-ofctl show {sw.name}")
+    ports = {}
+    for line in out.splitlines():
+        m = re.search(r"\s*(\d+)\(([^)]+)\):", line)
+        if m:
+            ports[m.group(2)] = int(m.group(1))
+    return ports
+
+
+def ovs_install_dhcp_punt(sw: OVSSwitch, access_ports: list[str]):
+    ports = ovs_port_map(sw)
+    sw.cmd(f"ovs-ofctl del-flows {sw.name}")
+    for p in access_ports:
+        if p in ports:
+            sw.cmd(
+                f'ovs-ofctl add-flow {sw.name} "priority=100,in_port={ports[p]},udp,tp_src=68,tp_dst=67,actions=drop"'
+            )
+    sw.cmd(f'ovs-ofctl add-flow {sw.name} "priority=1,actions=NORMAL"')
 
 def run():
     net = Mininet(controller=None, switch=OVSSwitch)
@@ -38,6 +62,9 @@ def run():
 
     net.start()
 
+    # OLT-style DHCP punt for access ports
+    ovs_install_dhcp_punt(s1, ["s1-eth1", "s1-eth2"])
+
     # Deterministic BNG config
     bng.cmd('ip addr flush dev bng-eth0')
     bng.cmd('ip addr flush dev bng-eth1')
@@ -61,6 +88,8 @@ def run():
     bng.cmd("nft 'add chain inet aether_auth forward { type filter hook forward priority -10; policy drop; }' 2>/dev/null || true")
 
     bng.cmd("nft 'add rule inet aether_auth forward ct state established,related accept' 2>/dev/null || true")
+    bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth0\" udp sport 68 udp dport 67 accept' 2>/dev/null || true")
+    bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth1\" udp sport 67 udp dport 68 accept' 2>/dev/null || true")
 
 
     bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth0\" ether saddr @authed_macs accept' 2>/dev/null || true")
@@ -93,39 +122,35 @@ def run():
     kea.cmd('rm -f /tmp/kea/logger_lockfile 2>/dev/null || true')
     kea.cmd('KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf > /tmp/kea-dhcp4.log 2>&1 &')
 
-    bng.cmd(f'rm -f /tmp/dnsmasq-bng.pid 2>/dev/null || true')
-    bng.cmd(f'rm -f {DHCP_LEASE_FILE_PATH} 2>/dev/null || true')
-
-    # Create the DHCP lease file directory
     bng.cmd('mkdir -p ' + DHCP_LEASE_FILE_DIR_PATH)
-    bng.cmd(
-        'dnsmasq '
-        '--port=0 ' # Disabled DNS 
-        '--interface=bng-eth0 '
-        '--dhcp-authoritative '
-        f'--dhcp-range=10.0.0.10,10.0.0.200,255.255.255.0,{DHCP_LEASE_EXPIRY_SECONDS}s '
-        '--dhcp-option=option:router,10.0.0.1 '
-        '--dhcp-option=option:dns-server,1.1.1.1,8.8.8.8 '
-        f'--dhcp-leasefile={DHCP_LEASE_FILE_PATH} '
-        '--pid-file=/tmp/dnsmasq-bng.pid '
-        '--log-dhcp '
-        '> /tmp/dnsmasq-bng.log 2>&1 & '
+    bng.cmd('pkill -f "dhcrelay " 2>/dev/null || true')
+    bng.cmd('command -v dhcrelay >/dev/null && dhcrelay -q -i bng-eth0 -i bng-eth1 192.0.2.3 > /tmp/dhcrelay.log 2>&1 &')
+
+    # OLT processor runs in root namespace
+    bng_mac = bng.cmd("cat /sys/class/net/bng-eth0/address").strip()
+    s1_uplink_mac = s1.cmd("cat /sys/class/net/s1-eth3/address").strip()
+    olt_path = str(Path(__file__).resolve().parent / "olt_processor.py")
+    olt_proc = subprocess.Popen(
+        [
+            sys.executable,
+            olt_path,
+            "--access",
+            "s1-eth1",
+            "--access",
+            "s1-eth2",
+            "--uplink",
+            "s1-eth3",
+            "--remote-id",
+            "OLT-1",
+            "--dst-mac",
+            bng_mac,
+            "--src-mac",
+            s1_uplink_mac,
+        ]
     )
 
-    # Starting our DHCP Lease to Sessions watcher
-    time.sleep(0.2)
-    bng_event_queue: Queue = Queue(maxsize=1)
+    bng_event_queue: Queue = Queue(maxsize=100)
     bng_stop_event = threading.Event()
-
-    def notify_bng_thread():
-        try:
-            bng_event_queue.put_nowait("lease_changed")
-        except Exception:
-            pass
-
-    dhcp_observer = Observer()
-    dhcp_observer.schedule(LeaseObserver(notify_bng_thread), path=DHCP_LEASE_FILE_DIR_PATH, recursive=False)
-    dhcp_observer.start()
 
     bng_thread = threading.Thread(
         target=bng_event_loop,
@@ -134,19 +159,46 @@ def run():
     )
     bng_thread.start()
 
+    sniffer_path = str(Path(__file__).resolve().parent / "bng_dhcp_sniffer.py")
+    sniffer_proc = bng.popen(
+        [sys.executable, sniffer_path, "--iface", "bng-eth0", "--json"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    def sniffer_reader():
+        if not sniffer_proc.stdout:
+            return
+        for line in sniffer_proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+                bng_event_queue.put(event)
+            except Exception:
+                continue
+
+    sniffer_thread = threading.Thread(target=sniffer_reader, daemon=True)
+    sniffer_thread.start()
+
     CLI(net)
 
-    # Stopping watcher thread
-    bng_stop_event.set()
     try:
-        bng_event_queue.put_nowait("stop")
+        olt_proc.terminate()
+        olt_proc.wait(timeout=2)
     except Exception:
-        pass
+        olt_proc.kill()
+    if sniffer_proc:
+        try:
+            sniffer_proc.terminate()
+            sniffer_proc.wait(timeout=2)
+        except Exception:
+            sniffer_proc.kill()
+    bng_stop_event.set()
     bng_thread.join()
-    dhcp_observer.stop()
-    dhcp_observer.join()
-
-    bng.cmd('kill $(cat /tmp/dnsmasq-bng.pid) 2>/dev/null || true')
+    bng.cmd('pkill -f "dhcrelay " 2>/dev/null || true')
     kea.cmd('pkill -f "kea-dhcp4 -c /etc/kea/kea-dhcp4.conf" 2>/dev/null || true')
     # Also remove the config file to avoid confusion on next run
     net.stop()

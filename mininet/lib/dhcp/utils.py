@@ -31,3 +31,11 @@ def parse_dhcp_leases(lines: str) -> Tuple[List[DHCPLease], bool, str | None]:
         return [], False, str(e)
 
     return leases, True, None
+
+def format_mac(raw_mac: str, delimiter: str = ":") -> str:
+    clean_mac = "".join(c for c in raw_mac if c.isalnum())
+    
+    if len(clean_mac) != 12:
+        raise ValueError("Invalid MAC address length")
+
+    return delimiter.join(clean_mac[i:i+2] for i in range(0, 12, 2)).lower()

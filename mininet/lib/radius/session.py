@@ -3,14 +3,14 @@ from dataclasses import dataclass
 
 @dataclass
 class DHCPSession:
-    mac: str
-    ip: str
+    mac: str | None
+    ip: str | None
     first_seen: float
     last_seen: float
-    expiry: int
+    expiry: int | None
     iface: str
-    hostname: str
-    last_interim: float # For Interim-Update tracking
+    hostname: str | None
+    last_interim: float | None # For Interim-Update tracking
 
     # nftables related data
     nft_up_handle: int | None = None
@@ -27,5 +27,7 @@ class DHCPSession:
     last_traffic_seen_ts: float | None = None
     last_idle_ts: float | None = None
 
-    status: Literal["ACTIVE", "IDLE", "EXPIRED"] = "ACTIVE"
+    status: Literal["ACTIVE", "IDLE", "EXPIRED", "PENDING"] = "PENDING"
     auth_state: Literal["PENDING_AUTH", "AUTHORIZED", "REJECTED"] = "PENDING_AUTH"
+
+    dhcp_nak_count: int = 0

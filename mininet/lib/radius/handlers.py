@@ -11,7 +11,7 @@ from lib.constants import IDLE_GRACE_AFTER_CONNECT, MARK_IDLE_GRACE_SECONDS
 
 def radius_handle_interim_updates(
         bng: Host, 
-        sessions: Dict[Tuple[str,str], DHCPSession],
+        sessions: Dict[Tuple[str,str,str], DHCPSession],
         radius_server_ip: str ="192.0.2.2",
         radius_secret: str = __RADIUS_SECRET,
         nas_ip: str="192.0.2.1",
@@ -26,6 +26,9 @@ def radius_handle_interim_updates(
     for key, s in sessions.items():
         try:
             if s.status == "EXPIRED":
+                continue
+
+            if s.auth_state != "AUTHORIZED":
                 continue
 
             up_bytes, up_pkts = 0, 0
