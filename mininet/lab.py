@@ -120,20 +120,20 @@ def run():
     kea.cmd('mkdir -p /tmp/kea')
     kea.cmd('chmod 777 /tmp/kea')
     kea.cmd('rm -f /tmp/kea/logger_lockfile 2>/dev/null || true')
+    kea.cmd('mkdir -p /run/kea')
+    kea.cmd('chmod 777 /run/kea')
     kea.cmd('KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf > /tmp/kea-dhcp4.log 2>&1 &')
 
     bng.cmd('mkdir -p ' + DHCP_LEASE_FILE_DIR_PATH)
-    bng.cmd('pkill -f "dhcrelay " 2>/dev/null || true')
-    bng.cmd('command -v dhcrelay >/dev/null && dhcrelay -q -i bng-eth0 -i bng-eth1 192.0.2.3 > /tmp/dhcrelay.log 2>&1 &')
 
     # OLT processor runs in root namespace
     bng_mac = bng.cmd("cat /sys/class/net/bng-eth0/address").strip()
     s1_uplink_mac = s1.cmd("cat /sys/class/net/s1-eth3/address").strip()
-    olt_path = str(Path(__file__).resolve().parent / "olt_processor.py")
-    olt_proc = subprocess.Popen(
+    relay_switch_path = str(Path(__file__).resolve().parent / "relay_switch.py")
+    relay_switch_proc = subprocess.Popen(
         [
             sys.executable,
-            olt_path,
+            relay_switch_path,
             "--access",
             "s1-eth1",
             "--access",
@@ -160,8 +160,32 @@ def run():
     bng_thread.start()
 
     sniffer_path = str(Path(__file__).resolve().parent / "bng_dhcp_sniffer.py")
+    kea_mac = kea.cmd("cat /sys/class/net/kea-eth0/address").strip()
+    bng_uplink_mac = bng.cmd("cat /sys/class/net/bng-eth1/address").strip()
     sniffer_proc = bng.popen(
-        [sys.executable, sniffer_path, "--iface", "bng-eth0", "--json"],
+        [
+            sys.executable,
+            sniffer_path,
+            "--client-if",
+            "bng-eth0",
+            "--uplink-if",
+            "bng-eth1",
+            "--server-ip",
+            "192.0.2.3",
+            "--giaddr",
+            "10.0.0.1",
+            "--relay-id",
+            "192.0.2.1",
+            "--src-ip",
+            "192.0.2.1",
+            "--src-mac",
+            bng_uplink_mac,
+            "--dst-mac",
+            kea_mac,
+            "--log",
+            "/tmp/bng_dhcp_relay.log",
+            "--json",
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -186,10 +210,10 @@ def run():
     CLI(net)
 
     try:
-        olt_proc.terminate()
-        olt_proc.wait(timeout=2)
+        relay_switch_proc.terminate()
+        relay_switch_proc.wait(timeout=2)
     except Exception:
-        olt_proc.kill()
+        relay_switch_proc.kill()
     if sniffer_proc:
         try:
             sniffer_proc.terminate()
@@ -198,7 +222,6 @@ def run():
             sniffer_proc.kill()
     bng_stop_event.set()
     bng_thread.join()
-    bng.cmd('pkill -f "dhcrelay " 2>/dev/null || true')
     kea.cmd('pkill -f "kea-dhcp4 -c /etc/kea/kea-dhcp4.conf" 2>/dev/null || true')
     # Also remove the config file to avoid confusion on next run
     net.stop()

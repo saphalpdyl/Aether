@@ -1,3 +1,4 @@
+from os import wait
 import time
 import threading
 from queue import Queue, Empty
@@ -128,6 +129,7 @@ def dhcp_lease_handler(
                     status="PENDING",
 
                 )
+                print(f"Created temp DHCP session for mac={chaddr} circuit: {circuit_id}")
 
         except Exception as e:
             print(f"Failed to create temp DHCP session for mac={chaddr} circuit: {circuit_id}: {e}")
@@ -270,6 +272,7 @@ def dhcp_lease_handler(
         chaddr = _decode_bytes(event.get("chaddr"))
 
         if event_handler is not None and circuit_id is not None and remote_id is not None and chaddr:
+            print(f"Handling DHCP event {event_handler.__name__}")
             event_handler(circuit_id, remote_id, chaddr, event)
 
     def handler():

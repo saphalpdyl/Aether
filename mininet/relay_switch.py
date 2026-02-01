@@ -44,7 +44,7 @@ def build_option82(circuit_id: bytes, remote_id: bytes) -> bytes:
     sub1 = bytes([DHCP_RELAY_SUBOPT_CIRCUIT_ID, len(circuit_id)]) + circuit_id
     sub2 = bytes([DHCP_RELAY_SUBOPT_REMOTE_ID, len(remote_id)]) + remote_id
     data = sub1 + sub2
-    print("Circuit ID:", sub1)
+    # print("Circuit ID:", sub1)
     if len(data) > 255:
         data = data[:255]
     return bytes([DHCP_OPTION_RELAY_AGENT, len(data)]) + data
@@ -181,7 +181,6 @@ def main():
                 send_sock.send(out)
                 now = time.time()
                 if now - last_log > 1:
-                    print(f"olt_processor forwarded DHCP from {iface}")
                     last_log = now
 
 
