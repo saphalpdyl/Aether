@@ -1,4 +1,5 @@
 from os import wait
+import re
 import time
 import threading
 from queue import Queue, Empty
@@ -31,6 +32,51 @@ class Tombstone:
     stopped_at: float
     reason: str
     missing_seen: bool = False
+
+
+def _install_rules_and_baseline(bng: Host, s: DHCPSession, ip: str, mac: str, iface: str) -> None:
+    up_handle, down_handle = nft_add_subscriber_rules(bng, ip=ip, mac=mac, sub_if=iface)
+    s.nft_up_handle = up_handle
+    s.nft_down_handle = down_handle
+
+    snapshot = nft_list_chain_rules(bng)
+    base_up_bytes, base_up_pkts = nft_get_counter_by_handle(snapshot, up_handle) or (0,0)
+    base_down_bytes, base_down_pkts = nft_get_counter_by_handle(snapshot, down_handle) or (0,0)
+    s.base_up_bytes = base_up_bytes
+    s.base_down_bytes = base_down_bytes
+    s.base_up_pkts = base_up_pkts
+    s.base_down_pkts = base_down_pkts
+
+
+def _authorize_session(
+    bng: Host,
+    s: DHCPSession,
+    ip: str,
+    mac: str,
+    iface: str,
+    radius_server_ip: str,
+    radius_secret: str,
+    nas_ip: str,
+    nas_port_id: str,
+    ensure_rules: bool = False,
+) -> str | None:
+    access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+    access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
+    if not access_request_response:
+        raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
+    if re.search(r'Access-Reject', access_request_response):
+        s.auth_state = "REJECTED"
+        return "REJECTED"
+    if re.search(r'Access-Accept', access_request_response):
+        if ensure_rules and (s.nft_up_handle is None or s.nft_down_handle is None):
+            _install_rules_and_baseline(bng, s, ip, mac, iface)
+        s.auth_state = "AUTHORIZED"
+        nft_allow_mac(bng, mac)
+        acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+        rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+        print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
+        return "AUTHORIZED"
+    return None
 
 
 def terminate_session(
@@ -220,45 +266,22 @@ def dhcp_lease_handler(
                 print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
 
                 try:
-                    # Try authorize first
-                    # IMPORTANT: Move this responsibility to the OSS  
-                    #   so that BNG can be stateless and scaled horizontally
-                    #   Furthermore, use a hookable DHCP server that calls to the OSS
-                    access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-                    access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
-
-                    import re
-                    if access_request_response:
-                        if re.search(r'Access-Reject', access_request_response):
-                            print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
-
-                            s.auth_state = "REJECTED"
-                        elif re.search(r'Access-Accept', access_request_response):
-                            print(f"RADIUS Access-Accept received for mac={s.mac} ip={s.ip}")
-
-                            up_handle, down_handle = nft_add_subscriber_rules(bng, ip=leased_ip, mac=s.mac, sub_if=iface)
-
-                            s.nft_up_handle = up_handle
-                            s.nft_down_handle = down_handle
-
-                            nftables_snapshot = nft_list_chain_rules(bng)
-                            base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
-                            base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
-
-                            s.base_up_bytes = base_up_bytes
-                            s.base_down_bytes = base_down_bytes
-                            s.base_up_pkts = base_up_pkts
-                            s.base_down_pkts = base_down_pkts
-
-                            # Add allow policy in nftables
-                            s.auth_state = "AUTHORIZED"
-                            nft_allow_mac(bng, format_mac(chaddr))
-
-                            acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-                            rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
-                            print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
-                    else:
-                        raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
+                    result = _authorize_session(
+                        bng,
+                        s,
+                        leased_ip,
+                        s.mac,
+                        iface,
+                        radius_server_ip,
+                        radius_secret,
+                        nas_ip,
+                        nas_port_id,
+                        ensure_rules=True,
+                    )
+                    if result == "REJECTED":
+                        print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
+                    elif result == "AUTHORIZED":
+                        print(f"RADIUS Access-Accept received for mac={s.mac} ip={s.ip}")
                 except Exception as e:
                     print(f"RADIUS Acct-Start failed for mac={s.mac} ip={s.ip}: {e}")
             else:
@@ -378,12 +401,6 @@ def dhcp_lease_handler(
 
             if key not in sessions and l._kea_state == 0:
                 try:
-                    up_handle, down_handle = nft_add_subscriber_rules(bng, ip=l.ip, mac=l.mac, sub_if=iface)
-
-                    nftables_snapshot = nft_list_chain_rules(bng)
-                    base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
-                    base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
-
                     sessions[key] = DHCPSession(
                         mac=l.mac,
                         ip=l.ip,
@@ -398,43 +415,29 @@ def dhcp_lease_handler(
                         remote_id=l.remote_id,
                         circuit_id=l.circuit_id,
 
-                        nft_up_handle=up_handle,
-                        nft_down_handle=down_handle,
-
-                        base_up_bytes=base_up_bytes,
-                        base_down_bytes=base_down_bytes,
-                        base_up_pkts=base_up_pkts,
-                        base_down_pkts=base_down_pkts,
                         status="ACTIVE",
                     )
+
+                    _install_rules_and_baseline(bng, sessions[key], l.ip, l.mac, iface)
 
                     print(f"Reconciler: DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
 
                     try:
-                        # Try authorize first
-                        # IMPORTANT: Move this responsibility to the OSS  
-                        #   so that BNG can be stateless and scaled horizontally
-                        #   Furthermore, use a hookable DHCP server that calls to the OSS
-                        access_request_pkt = build_access_request(sessions[key], nas_ip=nas_ip, nas_port_id=nas_port_id)
-                        access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
-
-                        import re
-                        if access_request_response:
-                            if re.search(r'Access-Reject', access_request_response):
-                                print(f"RADIUS Access-Reject received for mac={l.mac} ip={l.ip}")
-
-                                sessions[key].auth_state = "REJECTED"
-                            elif re.search(r'Access-Accept', access_request_response):
-                                print(f"RADIUS Access-Accept received for mac={l.mac} ip={l.ip}")
-                                # Add allow policy in nftables
-                                sessions[key].auth_state = "AUTHORIZED"
-                                nft_allow_mac(bng, l.mac)
-
-                                acct_start_pkt = build_acct_start(sessions[key], nas_ip=nas_ip, nas_port_id=nas_port_id)
-                                rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
-                                print(f"RADIUS Acct-Start sent for mac={l.mac} ip={l.ip}")
-                        else:
-                            raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
+                        result = _authorize_session(
+                            bng,
+                            sessions[key],
+                            l.ip,
+                            l.mac,
+                            iface,
+                            radius_server_ip,
+                            radius_secret,
+                            nas_ip,
+                            nas_port_id,
+                        )
+                        if result == "REJECTED":
+                            print(f"RADIUS Access-Reject received for mac={l.mac} ip={l.ip}")
+                        elif result == "AUTHORIZED":
+                            print(f"RADIUS Access-Accept received for mac={l.mac} ip={l.ip}")
                     except Exception as e:
                         print(f"Reconciler: RADIUS Acct-Start failed for mac={l.mac} ip={l.ip}: {e}")
 
@@ -461,44 +464,26 @@ def dhcp_lease_handler(
                         s.status = "ACTIVE"
                         s.last_status_change_ts = now
 
-                        up_handle, down_handle = nft_add_subscriber_rules(bng, ip=s.ip, mac=s.mac, sub_if=iface)
-
-                        nftables_snapshot = nft_list_chain_rules(bng)
-                        base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
-                        base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
-
-                        s.base_up_bytes = base_up_bytes
-                        s.base_down_bytes = base_down_bytes
-                        s.base_up_pkts = base_up_pkts
-                        s.base_down_pkts = base_down_pkts
+                        _install_rules_and_baseline(bng, s, s.ip, s.mac, iface)
 
                         print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
 
                         try:
-                            # Try authorize first
-                            # IMPORTANT: Move this responsibility to the OSS  
-                            #   so that BNG can be stateless and scaled horizontally
-                            #   Furthermore, use a hookable DHCP server that calls to the OSS
-                            access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-                            access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
-
-                            import re
-                            if access_request_response:
-                                if re.search(r'Access-Reject', access_request_response):
-                                    print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
-
-                                    s.auth_state = "REJECTED"
-                                elif re.search(r'Access-Accept', access_request_response):
-                                    print(f"RADIUS Access-Accept received for mac={s.mac} ip={s.ip}")
-                                    # Add allow policy in nftables
-                                    s.auth_state = "AUTHORIZED"
-                                    nft_allow_mac(bng, s.mac)
-
-                                    acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-                                    rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
-                                    print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
-                            else:
-                                raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
+                            result = _authorize_session(
+                                bng,
+                                s,
+                                s.ip,
+                                s.mac,
+                                iface,
+                                radius_server_ip,
+                                radius_secret,
+                                nas_ip,
+                                nas_port_id,
+                            )
+                            if result == "REJECTED":
+                                print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
+                            elif result == "AUTHORIZED":
+                                print(f"RADIUS Access-Accept received for mac={s.mac} ip={s.ip}")
                         except Exception as e:
                             print(f"RADIUS Acct-Start failed for mac={s.mac} ip={s.ip}: {e}")
 
@@ -580,19 +565,7 @@ def dhcp_lease_handler(
                         try:
                             acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
 
-                            up_handle, down_handle = nft_add_subscriber_rules(bng, ip=l.ip, mac=l.mac, sub_if=iface)
-
-                            nftables_snapshot = nft_list_chain_rules(bng)
-                            base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
-                            base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
-
-                            s.nft_up_handle = up_handle
-                            s.nft_down_handle = down_handle
-
-                            s.base_up_bytes = base_up_bytes
-                            s.base_down_bytes = base_down_bytes
-                            s.base_up_pkts = base_up_pkts
-                            s.base_down_pkts = base_down_pkts
+                            _install_rules_and_baseline(bng, s, l.ip, l.mac, iface)
 
                             rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
                             s.last_interim = now
@@ -713,30 +686,21 @@ def bng_event_loop(
 
         if now >= next_auth_retry:
             try:
-                import re
                 for s in sessions.values():
                     if s.auth_state != "PENDING_AUTH" or s.status == "PENDING" or s.ip is None:
                         continue
-                    access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-                    access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
-                    if access_request_response and re.search(r'Access-Accept', access_request_response):
-                        if s.nft_up_handle is None or s.nft_down_handle is None:
-                            up_handle, down_handle = nft_add_subscriber_rules(bng, ip=s.ip, mac=s.mac, sub_if=iface)
-                            snapshot = nft_list_chain_rules(bng)
-                            base_up_bytes, base_up_pkts = nft_get_counter_by_handle(snapshot, up_handle) or (0,0)
-                            base_down_bytes, base_down_pkts = nft_get_counter_by_handle(snapshot, down_handle) or (0,0)
-                            s.nft_up_handle = up_handle
-                            s.nft_down_handle = down_handle
-                            s.base_up_bytes = base_up_bytes
-                            s.base_down_bytes = base_down_bytes
-                            s.base_up_pkts = base_up_pkts
-                            s.base_down_pkts = base_down_pkts
-                        s.auth_state = "AUTHORIZED"
-                        nft_allow_mac(bng, s.mac)
-                        acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-                        rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
-                    elif access_request_response and re.search(r'Access-Reject', access_request_response):
-                        s.auth_state = "REJECTED"
+                    _authorize_session(
+                        bng,
+                        s,
+                        s.ip,
+                        s.mac,
+                        iface,
+                        radius_server_ip,
+                        radius_secret,
+                        nas_ip,
+                        nas_port_id,
+                        ensure_rules=True,
+                    )
             except Exception as e:
                 print(f"BNG thread Auth-Retry error: {e}")
             next_auth_retry = now + auth_retry_interval
