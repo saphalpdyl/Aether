@@ -11,3 +11,4 @@ IDLE_GRACE_AFTER_CONNECT = 40 # To check for idle after initial connect where th
 # Move this to a dynamic configuration later that can be changed at runtime
 ENABLE_IDLE_DISCONNECT = False
 TOMBSTONE_TTL_SECONDS = 600
+TOMBSTONE_EXPIRY_GRACE_SECONDS = 60

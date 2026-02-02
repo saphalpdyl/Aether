@@ -13,7 +13,7 @@ from lib.nftables.helpers import nft_add_subscriber_rules, nft_allow_mac, nft_de
 from lib.radius.packet_builders import build_access_request, build_acct_start, build_acct_stop, rad_acct_send_from_bng, rad_auth_send_from_bng
 from lib.radius.session import DHCPSession
 from lib.secrets import __RADIUS_SECRET, __KEA_CTRL_AGENT_PASSWORD
-from lib.constants import DHCP_NAK_TERMINATE_COUNT_THRESHOLD, DHCP_LEASE_FILE_PATH, MARK_DISCONNECT_GRACE_SECONDS, ENABLE_IDLE_DISCONNECT, TOMBSTONE_TTL_SECONDS
+from lib.constants import DHCP_NAK_TERMINATE_COUNT_THRESHOLD, DHCP_LEASE_FILE_PATH, MARK_DISCONNECT_GRACE_SECONDS, ENABLE_IDLE_DISCONNECT, TOMBSTONE_TTL_SECONDS, TOMBSTONE_EXPIRY_GRACE_SECONDS
 from lib.radius.handlers import radius_handle_interim_updates
 from lib.dhcp.lease_service import KeaClient, KeaLeaseService
 
@@ -105,11 +105,12 @@ def dhcp_lease_handler(
     def handle_dhcp_request(circuit_id: str, remote_id: str, chaddr: str, event: dict):
         key = (nas_ip,circuit_id,remote_id)
         existing_sess = sessions.get(key)
-        now = time.monotonic()
+        now = time.time()
         try:
             if chaddr is None or isinstance(chaddr, str) is False:
                 raise RuntimeError("DHCP ACK missing chaddr")
 
+            print(sessions.keys())
             if existing_sess is None:
                 # Creating an empty session for tracking
                 sessions[key] = DHCPSession(
@@ -150,7 +151,7 @@ def dhcp_lease_handler(
 
     def handle_dhcp_ack(circuit_id: str, remote_id: str, chaddr: str, event: dict):
         key = (nas_ip,circuit_id,remote_id)
-        now = time.monotonic()
+        now = time.time()
 
         try:
             leased_ip: str | None = event.get("ip")
@@ -167,15 +168,48 @@ def dhcp_lease_handler(
 
             s = sessions.get(key)
             if s:
+                tombstones.pop(key, None)
                 s.last_seen = now
                 s.expiry = expiry
                 s.dhcp_nak_count = 0
                 s.mac = format_mac(chaddr)
 
-                print("Leased IP vs session IP:", leased_ip, s.ip)
-                if leased_ip == s.ip: 
-                    # Already have this lease assigned
+                if leased_ip == "0.0.0.0":
+                    s.ip = None
+                    s.status = "PENDING"
+                    s.last_status_change_ts = now
                     return
+
+                if leased_ip == s.ip:
+                    # Renew with same IP
+
+                    s.expiry = expiry
+                    s.last_seen = now
+                    s.status = "ACTIVE"
+                    s.last_status_change_ts = now
+                    s.last_idle_ts = None
+                    s.last_traffic_seen_ts = None
+                    return
+
+                if s.ip is not None and s.auth_state == "AUTHORIZED":
+                    # Renew with IP change; Accounting restart required
+                    if s.nft_up_handle is not None:
+                        nft_delete_rule_by_handle(bng, s.nft_up_handle)
+                    if s.nft_down_handle is not None:
+                        nft_delete_rule_by_handle(bng, s.nft_down_handle)
+
+                    terminate_session(
+                        bng,
+                        s,
+                        cause="Lost-Service",
+                        radius_server_ip=radius_server_ip,
+                        radius_secret=radius_secret,
+                        nas_ip=nas_ip,
+                        nas_port_id=nas_port_id,
+                    )
+                    s.nft_up_handle = None
+                    s.nft_down_handle = None
+                    s.auth_state = "PENDING_AUTH"
 
                 s.ip = leased_ip
                 s.first_seen = now
@@ -238,7 +272,7 @@ def dhcp_lease_handler(
 
     def handle_dhcp_nak(circuit_id: str, remote_id: str, chaddr: str, event: dict):
         key = (nas_ip,circuit_id,remote_id)
-        now = time.monotonic()
+        now = time.time()
         
         s = sessions.get(key)
 
@@ -254,10 +288,20 @@ def dhcp_lease_handler(
 
     def handle_dhcp_release(circuit_id: str, remote_id: str, chaddr: str, event: dict):
         key = (nas_ip,circuit_id,remote_id)
-        now = time.monotonic()
+        now = time.time()
         nftables_snapshot = nft_list_chain_rules(bng)
 
-        s = sessions.pop(key)
+        s = sessions.pop(key, None)
+        if s is None:
+            print(f"DHCP RELEASE for unknown session circuit: {circuit_id} remote: {remote_id}")
+            return
+        tombstones[key] = Tombstone(
+            ip_at_stop=s.ip or "",
+            latest_state_update_ts_at_stop=s.expiry or int(time.time()),
+            stopped_at=time.time(),
+            reason="User-Request",
+            missing_seen=False,
+        )
 
         dur = int(now - s.first_seen)
         print(f"DHCP SESSION END mac={s.mac} ip={s.ip} iface={s.iface} hostname={s.hostname} duration={dur}s")
@@ -312,13 +356,15 @@ def dhcp_lease_handler(
         #         print(f"DHCP Lease parse error: {lease_parse_err_message}", leases, raw)
         #         return
 
-        now = time.monotonic()
+        now = time.time()
         leases = _kea_lease_service.get_all_leases()
 
         current = {(l.relay_id, l.circuit_id , l.remote_id): l for l in leases}
 
         for key, t in list(tombstones.items()):
-            if now - t.stopped_at >= TOMBSTONE_TTL_SECONDS:
+            expired_by_lease = t.latest_state_update_ts_at_stop and now >= (t.latest_state_update_ts_at_stop + TOMBSTONE_EXPIRY_GRACE_SECONDS)
+            expired_by_ttl = now - t.stopped_at >= TOMBSTONE_TTL_SECONDS
+            if expired_by_lease or expired_by_ttl:
                 tombstones.pop(key, None)
 
         for key, l in current.items():
@@ -347,6 +393,10 @@ def dhcp_lease_handler(
                         iface=iface,
                         hostname=l.hostname,
                         last_interim=now,
+
+                        relay_id=l.relay_id,
+                        remote_id=l.remote_id,
+                        circuit_id=l.circuit_id,
 
                         nft_up_handle=up_handle,
                         nft_down_handle=down_handle,
@@ -600,13 +650,22 @@ def bng_event_loop(
     event_queue: Queue,
     iface: str = "bng-eth0",
     interim_interval: int = 30,
+    auth_retry_interval: int = 10,
     radius_server_ip: str ="192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
     nas_port_id: str="bng-eth0",
 ):
-    dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(bng, iface=iface)
+    dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(
+        bng,
+        iface=iface,
+        radius_server_ip=radius_server_ip,
+        radius_secret=radius_secret,
+        nas_ip=nas_ip,
+        nas_port_id=nas_port_id,
+    )
     next_interim = time.time() + interim_interval
+    next_auth_retry = time.time() + auth_retry_interval
     next_disconnection_check = time.time() + 5
     next_reconcile = time.time() + 15
 
@@ -633,7 +692,14 @@ def bng_event_loop(
         now = time.time()
         if now >= next_interim:
             try:
-                radius_handle_interim_updates(bng, sessions)
+                radius_handle_interim_updates(
+                    bng,
+                    sessions,
+                    radius_server_ip=radius_server_ip,
+                    radius_secret=radius_secret,
+                    nas_ip=nas_ip,
+                    nas_port_id=nas_port_id,
+                )
             except Exception as e:
                 print(f"BNG thread Interim-Update error: {e}")
             next_interim = now + interim_interval
@@ -644,6 +710,36 @@ def bng_event_loop(
             except Exception as e:
                 print(f"BNG thread Reconcile error: {e}")
             next_reconcile = now + 15
+
+        if now >= next_auth_retry:
+            try:
+                import re
+                for s in sessions.values():
+                    if s.auth_state != "PENDING_AUTH" or s.status == "PENDING" or s.ip is None:
+                        continue
+                    access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+                    access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
+                    if access_request_response and re.search(r'Access-Accept', access_request_response):
+                        if s.nft_up_handle is None or s.nft_down_handle is None:
+                            up_handle, down_handle = nft_add_subscriber_rules(bng, ip=s.ip, mac=s.mac, sub_if=iface)
+                            snapshot = nft_list_chain_rules(bng)
+                            base_up_bytes, base_up_pkts = nft_get_counter_by_handle(snapshot, up_handle) or (0,0)
+                            base_down_bytes, base_down_pkts = nft_get_counter_by_handle(snapshot, down_handle) or (0,0)
+                            s.nft_up_handle = up_handle
+                            s.nft_down_handle = down_handle
+                            s.base_up_bytes = base_up_bytes
+                            s.base_down_bytes = base_down_bytes
+                            s.base_up_pkts = base_up_pkts
+                            s.base_down_pkts = base_down_pkts
+                        s.auth_state = "AUTHORIZED"
+                        nft_allow_mac(bng, s.mac)
+                        acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+                        rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+                    elif access_request_response and re.search(r'Access-Reject', access_request_response):
+                        s.auth_state = "REJECTED"
+            except Exception as e:
+                print(f"BNG thread Auth-Retry error: {e}")
+            next_auth_retry = now + auth_retry_interval
 
         if ENABLE_IDLE_DISCONNECT and now >= next_disconnection_check:
             # Disconnect IDLE sessions after grace
@@ -673,8 +769,8 @@ def bng_event_loop(
                             )
                             tombstones[key] = Tombstone(
                                 ip_at_stop=s.ip or "",
-                                latest_state_update_ts_at_stop=s.expiry or int(time.monotonic()),
-                                stopped_at=time.monotonic(),
+                                latest_state_update_ts_at_stop=s.expiry or int(time.time()),
+                                stopped_at=time.time(),
                                 reason="Idle-Timeout",
                                 missing_seen=False,
 

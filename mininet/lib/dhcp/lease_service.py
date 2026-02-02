@@ -59,9 +59,21 @@ class KeaLeaseService(LeaseService):
             if data.get("state", -1) != 0:
                 continue
 
-            parsed_opt82 = parse_network_tlv(data["user-context"]["ISC"]["relay-agent-info"]["sub-options"])
+            user_ctx = data.get("user-context") or {}
+            isc_ctx = user_ctx.get("ISC") or {}
+            relay_info = isc_ctx.get("relay-agent-info") or {}
+            sub_options = relay_info.get("sub-options")
+            if not sub_options:
+                continue
 
-            if parsed_opt82["relay_id"] != self.relay_id:
+            parsed_opt82 = parse_network_tlv(sub_options)
+            relay_id = parsed_opt82.get("relay_id")
+            circuit_id = parsed_opt82.get("circuit_id")
+            remote_id = parsed_opt82.get("remote_id")
+            if not relay_id or not circuit_id or not remote_id:
+                continue
+
+            if relay_id != self.relay_id:
                 continue
 
             lease = DHCPLease(
@@ -71,9 +83,9 @@ class KeaLeaseService(LeaseService):
                 expiry_for=data.get("valid-lifetime", None),
                 expiry=data["cltt"]+data["valid-lft"],
 
-                remote_id=parsed_opt82["remote_id"],
-                relay_id=parsed_opt82["relay_id"],
-                circuit_id=parsed_opt82["circuit_id"],
+                remote_id=remote_id,
+                relay_id=relay_id,
+                circuit_id=circuit_id,
 
                 last_state_update_ts=data["cltt"],
                 _kea_state=data.get("state", -1),

@@ -39,11 +39,16 @@ def rad_auth_send_from_bng(
 def acct_session_id(mac: str, ip: str, first_seen: float) -> str:
     return f"{mac.lower()}-{ip}-{int(first_seen)}"
 
+def acct_user_name(s: DHCPSession) -> str:
+    if not s.remote_id or not s.circuit_id:
+        raise RuntimeError("Missing required Option 82 fields for User-Name (remote_id/circuit_id).")
+    return f"{s.remote_id}/{s.circuit_id}"
+
 def build_acct_start(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0") -> str:
     now = int(time.time())
     return "\n".join([
         "Acct-Status-Type = Start",
-        f'User-Name = "mac:{s.mac.lower()}"',
+        f'User-Name = "{acct_user_name(s)}"',
         f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
@@ -72,7 +77,7 @@ def build_acct_stop(
 
     return "\n".join([
         "Acct-Status-Type = Stop",
-        f'User-Name = "mac:{s.mac.lower()}"',
+        f'User-Name = "{acct_user_name(s)}"',
         f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
@@ -113,7 +118,7 @@ def build_acct_interim(
 
     return "\n".join([
         "Acct-Status-Type = Interim-Update",
-        f'User-Name = "mac:{s.mac.lower()}"',
+        f'User-Name = "{acct_user_name(s)}"',
         f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
@@ -148,9 +153,11 @@ def build_access_request(
     now = int(time.time())
     mac = s.mac.lower()
 
+    print(f"Building Access-Request for User-Name: {acct_user_name(s)}, MAC: {mac}, IP: {s.ip}")
+
     return "\n".join([
         # RADIUS auth type implied by radclient 'auth' (Access-Request)
-        f'User-Name = "mac:{mac}"',
+        f'User-Name = "{acct_user_name(s)}"',
         f'User-Password = "{user_password}"',          # lab-simple PAP
         f'Calling-Station-Id = "{mac}"',               # who is calling (subscriber MAC)
         f'Called-Station-Id = "{nas_port_id}"',        # optional; can be iface or BNG id
