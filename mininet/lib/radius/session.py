@@ -12,6 +12,11 @@ class DHCPSession:
     hostname: str | None
     last_interim: float | None # For Interim-Update tracking
 
+    # opt82
+    relay_id: str;
+    remote_id: str;
+    circuit_id: str;
+
     # nftables related data
     nft_up_handle: int | None = None
     nft_down_handle: int | None = None
@@ -29,5 +34,7 @@ class DHCPSession:
 
     status: Literal["ACTIVE", "IDLE", "EXPIRED", "PENDING"] = "PENDING"
     auth_state: Literal["PENDING_AUTH", "AUTHORIZED", "REJECTED"] = "PENDING_AUTH"
+    last_status_change_ts: float | None = None
+
 
     dhcp_nak_count: int = 0

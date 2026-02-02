@@ -12,9 +12,10 @@ from lib.dhcp.utils import parse_dhcp_leases, format_mac
 from lib.nftables.helpers import nft_add_subscriber_rules, nft_allow_mac, nft_delete_rule_by_handle, nft_get_counter_by_handle, nft_list_chain_rules, nft_remove_mac
 from lib.radius.packet_builders import build_access_request, build_acct_start, build_acct_stop, rad_acct_send_from_bng, rad_auth_send_from_bng
 from lib.radius.session import DHCPSession
-from lib.secrets import __RADIUS_SECRET
+from lib.secrets import __RADIUS_SECRET, __KEA_CTRL_AGENT_PASSWORD
 from lib.constants import DHCP_NAK_TERMINATE_COUNT_THRESHOLD, DHCP_LEASE_FILE_PATH, MARK_DISCONNECT_GRACE_SECONDS, ENABLE_IDLE_DISCONNECT, TOMBSTONE_TTL_SECONDS
 from lib.radius.handlers import radius_handle_interim_updates
+from lib.dhcp.lease_service import KeaClient, KeaLeaseService
 
 def _decode_bytes(v):
     if v is None:
@@ -26,7 +27,7 @@ def _decode_bytes(v):
 @dataclass
 class Tombstone:
     ip_at_stop: str
-    lease_expiry_at_stop: float
+    latest_state_update_ts_at_stop: int
     stopped_at: float
     reason: str
     missing_seen: bool = False
@@ -93,9 +94,13 @@ def dhcp_lease_handler(
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
     nas_port_id: str="bng-eth0",
+    kea_ctrl_agent_auth_key: str = __KEA_CTRL_AGENT_PASSWORD
 ):
     sessions: Dict[Tuple[str,str,str], DHCPSession] = {}
-    tombstones: Dict[Tuple[str,str], Tombstone] = {} # NOTE: Used only when ENABLE_IDLE_DISCONNECT = True
+    tombstones: Dict[Tuple[str,str,str], Tombstone] = {} # NOTE: Used only when ENABLE_IDLE_DISCONNECT = True
+    
+    _kea_client = KeaClient(base_url=f"http://192.0.2.3:6772", auth_key=kea_ctrl_agent_auth_key)
+    _kea_lease_service = KeaLeaseService(_kea_client, bng_relay_id=nas_ip)
 
     def handle_dhcp_request(circuit_id: str, remote_id: str, chaddr: str, event: dict):
         key = (nas_ip,circuit_id,remote_id)
@@ -127,6 +132,11 @@ def dhcp_lease_handler(
 
                     auth_state="PENDING_AUTH",
                     status="PENDING",
+                    last_status_change_ts=now,
+
+                    relay_id=nas_ip,
+                    remote_id=remote_id,
+                    circuit_id=circuit_id,
 
                 )
                 print(f"Created temp DHCP session for mac={chaddr} circuit: {circuit_id}")
@@ -157,23 +167,21 @@ def dhcp_lease_handler(
 
             s = sessions.get(key)
             if s:
-                s.ip = leased_ip
-                s.expiry = expiry
-                s.first_seen = now
                 s.last_seen = now
-                s.status = "ACTIVE"
+                s.expiry = expiry
                 s.dhcp_nak_count = 0
+                s.mac = format_mac(chaddr)
 
-                up_handle, down_handle = nft_add_subscriber_rules(bng, ip=leased_ip, mac=chaddr, sub_if=iface)
+                print("Leased IP vs session IP:", leased_ip, s.ip)
+                if leased_ip == s.ip: 
+                    # Already have this lease assigned
+                    return
 
-                nftables_snapshot = nft_list_chain_rules(bng)
-                base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
-                base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
+                s.ip = leased_ip
+                s.first_seen = now
+                s.status = "ACTIVE"
+                s.last_status_change_ts = now
 
-                s.base_up_bytes = base_up_bytes
-                s.base_down_bytes = base_down_bytes
-                s.base_up_pkts = base_up_pkts
-                s.base_down_pkts = base_down_pkts
 
                 print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
 
@@ -193,6 +201,21 @@ def dhcp_lease_handler(
                             s.auth_state = "REJECTED"
                         elif re.search(r'Access-Accept', access_request_response):
                             print(f"RADIUS Access-Accept received for mac={s.mac} ip={s.ip}")
+
+                            up_handle, down_handle = nft_add_subscriber_rules(bng, ip=leased_ip, mac=s.mac, sub_if=iface)
+
+                            s.nft_up_handle = up_handle
+                            s.nft_down_handle = down_handle
+
+                            nftables_snapshot = nft_list_chain_rules(bng)
+                            base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
+                            base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
+
+                            s.base_up_bytes = base_up_bytes
+                            s.base_down_bytes = base_down_bytes
+                            s.base_up_pkts = base_up_pkts
+                            s.base_down_pkts = base_down_pkts
+
                             # Add allow policy in nftables
                             s.auth_state = "AUTHORIZED"
                             nft_allow_mac(bng, format_mac(chaddr))
@@ -272,39 +295,42 @@ def dhcp_lease_handler(
         chaddr = _decode_bytes(event.get("chaddr"))
 
         if event_handler is not None and circuit_id is not None and remote_id is not None and chaddr:
-            print(f"Handling DHCP event {event_handler.__name__}")
+            print(f"Handling DHCP event {event_handler.__name__} event: {event}")
             event_handler(circuit_id, remote_id, chaddr, event)
 
-    def handler():
-        raw = bng.cmd(f"cat {leasefile} 2>/dev/null || true")
-        now = time.time()
-        leases: List[DHCPLease] | None = []
+    def reconcile_handler():
+        # raw = bng.cmd(f"cat {leasefile} 2>/dev/null || true")
+        # now = time.time()
+        # leases: List[DHCPLease] | None = []
+        #
+        # lease_parse_success = False
+        # lease_parse_err_message = "Unknown error"
+        # if raw and raw.strip():
+        #     leases, lease_parse_success, lease_parse_err_message = parse_dhcp_leases(raw)
+        #
+        #     if not lease_parse_success:
+        #         print(f"DHCP Lease parse error: {lease_parse_err_message}", leases, raw)
+        #         return
 
-        lease_parse_success = False
-        lease_parse_err_message = "Unknown error"
-        if raw and raw.strip():
-            leases, lease_parse_success, lease_parse_err_message = parse_dhcp_leases(raw)
+        now = time.monotonic()
+        leases = _kea_lease_service.get_all_leases()
 
-            if not lease_parse_success:
-                print(f"DHCP Lease parse error: {lease_parse_err_message}", leases, raw)
-                return
-
-        current = {(l.mac,iface): l for l in leases}
-        now_mono = time.monotonic()
+        current = {(l.relay_id, l.circuit_id , l.remote_id): l for l in leases}
 
         for key, t in list(tombstones.items()):
-            if now_mono - t.stopped_at >= TOMBSTONE_TTL_SECONDS:
+            if now - t.stopped_at >= TOMBSTONE_TTL_SECONDS:
                 tombstones.pop(key, None)
 
         for key, l in current.items():
             tombstone = tombstones.get(key)
+
             if tombstone is not None:
-                lease_changed = l.time > tombstone.lease_expiry_at_stop
+                lease_changed = l.last_state_update_ts > tombstone.latest_state_update_ts_at_stop
                 if not lease_changed:
                     continue
                 tombstones.pop(key, None)
 
-            if key not in sessions:
+            if key not in sessions and l._kea_state == 0:
                 try:
                     up_handle, down_handle = nft_add_subscriber_rules(bng, ip=l.ip, mac=l.mac, sub_if=iface)
 
@@ -317,7 +343,7 @@ def dhcp_lease_handler(
                         ip=l.ip,
                         first_seen=now,
                         last_seen=now,
-                        expiry=l.time,
+                        expiry=l.expiry,
                         iface=iface,
                         hostname=l.hostname,
                         last_interim=now,
@@ -329,9 +355,10 @@ def dhcp_lease_handler(
                         base_down_bytes=base_down_bytes,
                         base_up_pkts=base_up_pkts,
                         base_down_pkts=base_down_pkts,
+                        status="ACTIVE",
                     )
 
-                    print(f"DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
+                    print(f"Reconciler: DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
 
                     try:
                         # Try authorize first
@@ -359,17 +386,84 @@ def dhcp_lease_handler(
                         else:
                             raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
                     except Exception as e:
-                        print(f"RADIUS Acct-Start failed for mac={l.mac} ip={l.ip}: {e}")
+                        print(f"Reconciler: RADIUS Acct-Start failed for mac={l.mac} ip={l.ip}: {e}")
 
-                    
+
                 except Exception as e:
-                    print(f"Failed to create DHCP session for mac={l.mac} ip={l.ip}: {e}")
+                    print(f"Reconciler: Failed to create DHCP session for mac={l.mac} ip={l.ip}: {e}")
             else:
                 s = sessions[key]
+                
+                # Case 0: Temp session with no IP yet assigned
+                if s.status == "PENDING" and s.ip is None:
+                    # Give 8 seconds grace for DHCP ACK to arrive otherwise create session
+                    if now - s.first_seen > 8:
+                        s.last_seen = now
+                        s.expiry = l.expiry
+                        s.dhcp_nak_count = 0
+
+                        if l.ip == s.ip: 
+                            # Already have this lease assigned
+                            continue
+
+                        s.ip = l.ip
+                        s.first_seen = now
+                        s.status = "ACTIVE"
+                        s.last_status_change_ts = now
+
+                        up_handle, down_handle = nft_add_subscriber_rules(bng, ip=s.ip, mac=s.mac, sub_if=iface)
+
+                        nftables_snapshot = nft_list_chain_rules(bng)
+                        base_up_bytes, base_up_pkts = nft_get_counter_by_handle(nftables_snapshot, up_handle) or (0,0)
+                        base_down_bytes, base_down_pkts = nft_get_counter_by_handle(nftables_snapshot, down_handle) or (0,0)
+
+                        s.base_up_bytes = base_up_bytes
+                        s.base_down_bytes = base_down_bytes
+                        s.base_up_pkts = base_up_pkts
+                        s.base_down_pkts = base_down_pkts
+
+                        print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
+
+                        try:
+                            # Try authorize first
+                            # IMPORTANT: Move this responsibility to the OSS  
+                            #   so that BNG can be stateless and scaled horizontally
+                            #   Furthermore, use a hookable DHCP server that calls to the OSS
+                            access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+                            access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
+
+                            import re
+                            if access_request_response:
+                                if re.search(r'Access-Reject', access_request_response):
+                                    print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
+
+                                    s.auth_state = "REJECTED"
+                                elif re.search(r'Access-Accept', access_request_response):
+                                    print(f"RADIUS Access-Accept received for mac={s.mac} ip={s.ip}")
+                                    # Add allow policy in nftables
+                                    s.auth_state = "AUTHORIZED"
+                                    nft_allow_mac(bng, s.mac)
+
+                                    acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
+                                    rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+                                    print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
+                            else:
+                                raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
+                        except Exception as e:
+                            print(f"RADIUS Acct-Start failed for mac={s.mac} ip={s.ip}: {e}")
+
+                        continue
+
+                # Case A: Lease renewed ( expiry extended ) but missed DHCP packet
+                if s.expiry is not None and s.expiry != l.expiry:
+                    s.expiry = l.expiry
+
                 s.last_seen = now
-                if s.ip != l.ip or s.expiry != l.time:
+
+                # Case B: Lease changed ( IP changed )
+                if s.ip != l.ip:
                     old_ip, old_expiry = s.ip, s.expiry
-                    s.ip, s.expiry, s.hostname = l.ip, l.time, l.hostname
+                    s.ip, s.expiry, s.hostname = l.ip, l.expiry, l.hostname
 
                     # Remove idle status on renew
                     s.last_idle_ts = None
@@ -390,6 +484,13 @@ def dhcp_lease_handler(
                             iface=s.iface,
                             hostname=s.hostname,
                             last_interim=s.last_interim,
+
+                            relay_id=s.relay_id,
+                            remote_id=s.remote_id,
+                            circuit_id=s.circuit_id,
+
+                            status=s.status,
+                            auth_state=s.auth_state,
                         )
 
                         nftables_snapshot = nft_list_chain_rules(bng)
@@ -450,7 +551,19 @@ def dhcp_lease_handler(
                             print(f"RADIUS Acct-Start failed for mac={s.mac} new_ip={s.ip}: {e}")
 
 
-        ended = [key for key in sessions.keys() if key not in current]
+        # Zombie sessions cleanup
+        # ended = [key for key, l in sessions.items() if (key not in current and current[key])]
+        ended = []
+        for key, s in list(sessions.items()):
+            l = current.get(key)
+            if l is None:
+                # Not in current leases
+                if s.expiry is not None and now >= s.expiry:
+                    ended.append(key)
+            elif l._kea_state != 0:
+                # Not an active lease 
+                ended.append(key)
+
         nftables_snapshot = None
         if ended:
             try:
@@ -478,7 +591,7 @@ def dhcp_lease_handler(
 
         # Tombstones only clear on renewal (expiry moved forward) or TTL expiry.
 
-    return handler, sessions, tombstones, handle_dhcp_event
+    return reconcile_handler, sessions, tombstones, handle_dhcp_event
 
 
 def bng_event_loop(
@@ -492,9 +605,10 @@ def bng_event_loop(
     nas_ip: str="192.0.2.1",
     nas_port_id: str="bng-eth0",
 ):
-    dhcp_handler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(bng, iface=iface)
+    dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(bng, iface=iface)
     next_interim = time.time() + interim_interval
     next_disconnection_check = time.time() + 5
+    next_reconcile = time.time() + 15
 
     while not stop_event.is_set():
 
@@ -509,19 +623,10 @@ def bng_event_loop(
         except Empty:
             pass
 
-        if event == "lease_changed":
-            try:
-                while True:
-                    event_queue.get_nowait()
-            except Empty:
-                pass
-            try:
-                dhcp_handler()
-            except Exception as e:
-                print(f"BNG thread DHCP handler error: {e}")
-        elif isinstance(event, dict) and event.get("event") == "dhcp":
+        if isinstance(event, dict) and event.get("event") == "dhcp":
             try:
                 handle_dhcp_event(event)
+                next_reconcile = time.time() + 1
             except Exception as e:
                 print(f"BNG thread DHCP event processing error: {e}")
         
@@ -532,6 +637,13 @@ def bng_event_loop(
             except Exception as e:
                 print(f"BNG thread Interim-Update error: {e}")
             next_interim = now + interim_interval
+
+        if now >= next_reconcile:
+            try:
+                dhcp_reconciler()
+            except Exception as e:
+                print(f"BNG thread Reconcile error: {e}")
+            next_reconcile = now + 15
 
         if ENABLE_IDLE_DISCONNECT and now >= next_disconnection_check:
             # Disconnect IDLE sessions after grace
@@ -560,11 +672,12 @@ def bng_event_loop(
                                 nftables_snapshot=nftables_snapshot,
                             )
                             tombstones[key] = Tombstone(
-                                ip_at_stop=s.ip,
-                                lease_expiry_at_stop=s.expiry,
+                                ip_at_stop=s.ip or "",
+                                latest_state_update_ts_at_stop=s.expiry or int(time.monotonic()),
                                 stopped_at=time.monotonic(),
                                 reason="Idle-Timeout",
                                 missing_seen=False,
+
                             )
                             sessions.pop(key)
             except Exception as e:

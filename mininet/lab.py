@@ -117,12 +117,13 @@ def run():
     kea.cmd('ip link set kea-eth0 up')
     kea.cmd('ip addr add 192.0.2.3/24 dev kea-eth0')
     kea.cmd('ip route replace default via 192.0.2.1 dev kea-eth0')
-    kea.cmd('mkdir -p /tmp/kea')
-    kea.cmd('chmod 777 /tmp/kea')
     kea.cmd('rm -f /tmp/kea/logger_lockfile 2>/dev/null || true')
     kea.cmd('mkdir -p /run/kea')
     kea.cmd('chmod 777 /run/kea')
     kea.cmd('KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf > /tmp/kea-dhcp4.log 2>&1 &')
+
+    kea.cmd('rm -f /run/kea/kea-ctrl-agent.*.pid')
+    kea.cmd('KEA_LOCKFILE_DIR=none kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf > /tmp/kea-ctrl-agent.log 2>&1 &')
 
     bng.cmd('mkdir -p ' + DHCP_LEASE_FILE_DIR_PATH)
 
@@ -223,6 +224,7 @@ def run():
     bng_stop_event.set()
     bng_thread.join()
     kea.cmd('pkill -f "kea-dhcp4 -c /etc/kea/kea-dhcp4.conf" 2>/dev/null || true')
+    kea.cmd('pkill -f "kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf" 2>/dev/null || true')
     # Also remove the config file to avoid confusion on next run
     net.stop()
 

@@ -39,3 +39,39 @@ def format_mac(raw_mac: str, delimiter: str = ":") -> str:
         raise ValueError("Invalid MAC address length")
 
     return delimiter.join(clean_mac[i:i+2] for i in range(0, 12, 2)).lower()
+
+def parse_network_tlv(hex_str):
+    # Clean up the input string
+    if hex_str.startswith("0x"):
+        hex_str = hex_str[2:]
+    
+    raw_data = bytes.fromhex(hex_str)
+    
+    # Define our mapping: {Type_Byte: "Desired_Key_Name"}
+    mapping = {
+        1: "circuit_id",
+        2: "remote_id",
+        12: "relay_id"  # Type 0x0C is 12 in decimal
+    }
+    
+    decoded_dict = {}
+    i = 0
+    
+    while i < len(raw_data):
+        try:
+            t_type = raw_data[i]      # The Type byte
+            t_len = raw_data[i+1]     # The Length byte
+            # Extract and decode the value based on the length
+            t_value = raw_data[i+2 : i+2+t_len].decode('ascii', errors='replace')
+            
+            # If the type is in our map, add it to the dictionary
+            if t_type in mapping:
+                decoded_dict[mapping[t_type]] = t_value
+                
+            # Move index to the start of the next TLV block
+            i += 2 + t_len
+        except (IndexError, UnicodeDecodeError):
+            # Break if the packet is malformed or truncated
+            break
+            
+    return decoded_dict
