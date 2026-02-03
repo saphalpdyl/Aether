@@ -38,11 +38,12 @@ class KeaClient:
         response = response.json()
 
         try:
-            response[0]["arguments"]["leases"]
-        except (KeyError, IndexError):
+            leases = response[0]["arguments"]["leases"]
+        except (KeyError, IndexError, TypeError):
             return [], False
-
-        return response[0]['arguments']['leases'], True
+        if not isinstance(leases, list):
+            return [], False
+        return leases, True
 
 class KeaLeaseService(LeaseService):
     def __init__(self, kea_client: KeaClient, bng_relay_id: str) -> None:
@@ -61,8 +62,12 @@ class KeaLeaseService(LeaseService):
 
             user_ctx = data.get("user-context") or {}
             isc_ctx = user_ctx.get("ISC") or {}
-            relay_info = isc_ctx.get("relay-agent-info") or {}
-            sub_options = relay_info.get("sub-options")
+            relay_info = isc_ctx.get("relay-agent-info")
+            sub_options = None
+            if isinstance(relay_info, dict):
+                sub_options = relay_info.get("sub-options")
+            elif isinstance(relay_info, str):
+                sub_options = relay_info
             if not sub_options:
                 continue
 

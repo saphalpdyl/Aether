@@ -62,6 +62,7 @@ def _authorize_session(
 ) -> str | None:
     access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
     access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
+    print(access_request_response)
     if not access_request_response:
         raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
     if re.search(r'Access-Reject', access_request_response):

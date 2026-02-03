@@ -1,0 +1,3 @@
+OLT-1/relay-eth0 Cleartext-Password := "testing123"
+    Filter-Id = "basic",
+    Acct-Interim-Interval = 30

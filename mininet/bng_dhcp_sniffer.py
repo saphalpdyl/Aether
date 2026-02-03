@@ -286,8 +286,10 @@ def relay_loop(
     raw = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_IP))
     raw.bind((client_if, 0))
 
-    send_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
-    send_sock.bind((uplink_if, 0))
+    uplink_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    uplink_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    uplink_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, uplink_if.encode())
+    uplink_sock.bind((src_ip, DHCP_SERVER_PORT))
 
     reply_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     reply_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -348,36 +350,7 @@ def relay_loop(
                 new_payload = payload[: BOOTP_FIXED_LEN + len(DHCP_MAGIC)] + new_opts
                 new_payload = set_giaddr(new_payload, giaddr)
 
-                # Build an IPv4/UDP packet for the relay->server hop.
-                ip_off = ETH_HDR_LEN
-                vihl = pkt[ip_off]
-                ihl = (vihl & 0x0F) * 4
-                if len(pkt) < ip_off + ihl + UDP_HDR_LEN:
-                    log("drop: packet too short for IP header")
-                    continue
-
-                new_udp_len = UDP_HDR_LEN + len(new_payload)
-                new_ip_len = ihl + new_udp_len
-
-                ip_hdr = bytearray(pkt[ip_off : ip_off + ihl])
-                ip_hdr[2:4] = struct.pack("!H", new_ip_len)
-                ip_hdr[12:16] = socket.inet_aton(src_ip)
-                ip_hdr[16:20] = socket.inet_aton(server_ip)
-                ip_hdr[10:12] = b"\x00\x00"
-                ip_hdr[10:12] = struct.pack("!H", checksum16(bytes(ip_hdr)))
-
-                udp_off = ip_off + ihl
-                udp_hdr = bytearray(pkt[udp_off : udp_off + UDP_HDR_LEN])
-                udp_hdr[0:2] = struct.pack("!H", DHCP_SERVER_PORT)
-                udp_hdr[2:4] = struct.pack("!H", DHCP_SERVER_PORT)
-                udp_hdr[4:6] = struct.pack("!H", new_udp_len)
-                udp_hdr[6:8] = b"\x00\x00"
-
-                dst = dst_mac if dst_mac else b"\xff\xff\xff\xff\xff\xff"
-                src = src_mac if src_mac else pkt[6:12]
-                eth_hdr = dst + src + struct.pack("!H", ETH_P_IP)
-
-                send_sock.send(eth_hdr + ip_hdr + udp_hdr + new_payload)
+                uplink_sock.sendto(new_payload, (server_ip, DHCP_SERVER_PORT))
                 log("forwarded to server")
                 
             elif s is reply_sock:

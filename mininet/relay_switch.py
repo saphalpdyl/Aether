@@ -12,6 +12,7 @@ UDP_PROTO = 17
 ETH_HDR_LEN = 14
 IPV4_MIN_IHL = 5
 UDP_HDR_LEN = 8
+PACKET_OUTGOING = 4
 
 # BOOTP/DHCP layout and option codes (RFC 2131/3046).
 BOOTP_FIXED_LEN = 236
@@ -37,6 +38,52 @@ def checksum16(data: bytes) -> int:
         s += (data[i] << 8) + data[i + 1]
         s = (s & 0xFFFF) + (s >> 16)
     return (~s) & 0xFFFF
+
+
+def udp_checksum_ipv4(ip_hdr: bytes, udp_hdr: bytes, payload: bytes) -> int:
+    src = ip_hdr[12:16]
+    dst = ip_hdr[16:20]
+    proto = ip_hdr[9:10]
+    udp_len = udp_hdr[4:6]
+    pseudo = src + dst + b"\x00" + proto + udp_len
+    chk_data = pseudo + udp_hdr[:6] + b"\x00\x00" + payload
+    return checksum16(chk_data)
+
+
+def fix_ipv4_udp_checksum(pkt: bytes, zero_udp: bool = False) -> bytes:
+    if len(pkt) < ETH_HDR_LEN:
+        return pkt
+    eth_type = struct.unpack("!H", pkt[12:14])[0]
+    if eth_type != ETH_P_IP:
+        return pkt
+    ip_off = ETH_HDR_LEN
+    vihl = pkt[ip_off]
+    ihl = (vihl & 0x0F) * 4
+    if ihl < IPV4_MIN_IHL * 4:
+        return pkt
+    if len(pkt) < ip_off + ihl + UDP_HDR_LEN:
+        return pkt
+    if pkt[ip_off + 9] != UDP_PROTO:
+        return pkt
+
+    udp_off = ip_off + ihl
+    udp_len = struct.unpack("!H", pkt[udp_off + 4 : udp_off + 6])[0]
+    if len(pkt) < udp_off + udp_len:
+        return pkt
+
+    ip_hdr = bytearray(pkt[ip_off : ip_off + ihl])
+    ip_hdr[10:12] = b"\x00\x00"
+    ip_hdr[10:12] = struct.pack("!H", checksum16(bytes(ip_hdr)))
+
+    udp_hdr = bytearray(pkt[udp_off : udp_off + UDP_HDR_LEN])
+    payload = pkt[udp_off + UDP_HDR_LEN : udp_off + udp_len]
+    if zero_udp:
+        udp_hdr[6:8] = b"\x00\x00"
+    else:
+        udp_hdr[6:8] = b"\x00\x00"
+        udp_hdr[6:8] = struct.pack("!H", udp_checksum_ipv4(bytes(ip_hdr), bytes(udp_hdr), payload))
+
+    return pkt[:ip_off] + bytes(ip_hdr) + bytes(udp_hdr) + payload + pkt[udp_off + udp_len :]
 
 
 def build_option82(circuit_id: bytes, remote_id: bytes) -> bytes:
@@ -143,6 +190,7 @@ def handle_packet(pkt: bytes, iface: str, uplink_mac: bytes | None, dst_mac: byt
         dst = dst_mac
 
     eth_hdr = dst + src + struct.pack("!H", ETH_P_IP)
+    udp_hdr[6:8] = struct.pack("!H", udp_checksum_ipv4(bytes(ip_hdr), bytes(udp_hdr), new_payload))
     return eth_hdr + ip_hdr + udp_hdr + new_payload
 
 
@@ -159,29 +207,55 @@ def main():
     dst_mac = mac_to_bytes(args.dst_mac) if args.dst_mac else None
     src_mac = mac_to_bytes(args.src_mac) if args.src_mac else None
 
-    # One raw socket per access port to sniff DHCP.
     recv_socks = []
-    for iface in args.access:
+    for iface in args.access + [args.uplink]:
         s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
         s.bind((iface, 0))
         recv_socks.append((s, iface))
 
-    # Raw socket for reinjection on the uplink.
-    send_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
-    send_sock.bind((args.uplink, 0))
+    send_uplink = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+    send_uplink.bind((args.uplink, 0))
+
+    send_access = {}
+    for iface in args.access:
+        s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+        s.bind((iface, 0))
+        send_access[iface] = s
+
+    mac_table = {}
 
     last_log = 0
     while True:
         rlist, _, _ = select.select([s for s, _ in recv_socks], [], [], 1.0)
         for s in rlist:
-            pkt, _ = s.recvfrom(65535)
+            pkt, addr = s.recvfrom(65535)
             iface = next(i for sock, i in recv_socks if sock == s)
+            if len(addr) >= 3 and addr[2] == PACKET_OUTGOING:
+                continue
+
+            if iface == args.uplink:
+                pkt = fix_ipv4_udp_checksum(pkt, zero_udp=True)
+                dst_mac = pkt[0:6]
+                out_iface = mac_table.get(dst_mac)
+                if out_iface and out_iface in send_access:
+                    send_access[out_iface].send(pkt)
+                else:
+                    for dst_iface, send_sock in send_access.items():
+                        send_sock.send(pkt)
+                continue
+
             out = handle_packet(pkt, iface, src_mac, dst_mac, remote_id)
             if out:
-                send_sock.send(out)
-                now = time.time()
-                if now - last_log > 1:
-                    last_log = now
+                send_uplink.send(fix_ipv4_udp_checksum(out))
+            else:
+                send_uplink.send(fix_ipv4_udp_checksum(pkt))
+
+            src_mac = pkt[6:12]
+            mac_table[src_mac] = iface
+
+            now = time.time()
+            if now - last_log > 1:
+                last_log = now
 
 
 if __name__ == "__main__":
