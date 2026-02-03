@@ -6,7 +6,6 @@ from queue import Queue, Empty
 from typing import Dict, Tuple, List
 from dataclasses import dataclass
 
-from mininet.node import Host
 
 from lib.dhcp.lease import DHCPLease
 from lib.dhcp.utils import parse_dhcp_leases, format_mac
@@ -34,22 +33,25 @@ class Tombstone:
     missing_seen: bool = False
 
 
-def _install_rules_and_baseline(bng: Host, s: DHCPSession, ip: str, mac: str, iface: str) -> None:
-    up_handle, down_handle = nft_add_subscriber_rules(bng, ip=ip, mac=mac, sub_if=iface)
-    s.nft_up_handle = up_handle
-    s.nft_down_handle = down_handle
+def _install_rules_and_baseline(s: DHCPSession, ip: str, mac: str, iface: str) -> None:
+    try:
 
-    snapshot = nft_list_chain_rules(bng)
-    base_up_bytes, base_up_pkts = nft_get_counter_by_handle(snapshot, up_handle) or (0,0)
-    base_down_bytes, base_down_pkts = nft_get_counter_by_handle(snapshot, down_handle) or (0,0)
-    s.base_up_bytes = base_up_bytes
-    s.base_down_bytes = base_down_bytes
-    s.base_up_pkts = base_up_pkts
-    s.base_down_pkts = base_down_pkts
+        up_handle, down_handle = nft_add_subscriber_rules(ip=ip, mac=mac, sub_if=iface)
+        s.nft_up_handle = up_handle
+        s.nft_down_handle = down_handle
+
+        snapshot = nft_list_chain_rules()
+        base_up_bytes, base_up_pkts = nft_get_counter_by_handle(snapshot, up_handle) or (0,0)
+        base_down_bytes, base_down_pkts = nft_get_counter_by_handle(snapshot, down_handle) or (0,0)
+        s.base_up_bytes = base_up_bytes
+        s.base_down_bytes = base_down_bytes
+        s.base_up_pkts = base_up_pkts
+        s.base_down_pkts = base_down_pkts
+    except Exception as e:
+        print(f"Failed to install nftables rules for mac={mac} ip={ip}: {e}")
 
 
 def _authorize_session(
-    bng: Host,
     s: DHCPSession,
     ip: str,
     mac: str,
@@ -61,8 +63,7 @@ def _authorize_session(
     ensure_rules: bool = False,
 ) -> str | None:
     access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-    access_request_response = rad_auth_send_from_bng(bng, access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
-    print(access_request_response)
+    access_request_response = rad_auth_send_from_bng(access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
     if not access_request_response:
         raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
     if re.search(r'Access-Reject', access_request_response):
@@ -70,18 +71,17 @@ def _authorize_session(
         return "REJECTED"
     if re.search(r'Access-Accept', access_request_response):
         if ensure_rules and (s.nft_up_handle is None or s.nft_down_handle is None):
-            _install_rules_and_baseline(bng, s, ip, mac, iface)
+            _install_rules_and_baseline(s, ip, mac, iface)
         s.auth_state = "AUTHORIZED"
-        nft_allow_mac(bng, mac)
+        nft_allow_mac(mac)
         acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-        rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+        rad_acct_send_from_bng(acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
         print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
         return "AUTHORIZED"
     return None
 
 
 def terminate_session(
-    bng: Host,
     s: DHCPSession,
     cause: str,
     radius_server_ip: str,
@@ -93,7 +93,7 @@ def terminate_session(
 ):
     try:
         if nftables_snapshot is None:
-            nftables_snapshot = nft_list_chain_rules(bng)
+            nftables_snapshot = nft_list_chain_rules()
 
         up_bytes, up_pkts = 0, 0
         down_bytes, down_pkts = 0, 0
@@ -115,17 +115,17 @@ def terminate_session(
                 input_pkts=total_in_pkts,
                 output_pkts=total_out_pkts,
             )
-            rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+            rad_acct_send_from_bng(pkt, server_ip=radius_server_ip, secret=radius_secret)
 
         # Remove rulesets allowing traffic 
         if s.mac is not None:
-            nft_remove_mac(bng, s.mac)
+            nft_remove_mac(s.mac)
 
         if delete_rules:
             if s.nft_up_handle is not None:
-                nft_delete_rule_by_handle(bng, s.nft_up_handle)
+                nft_delete_rule_by_handle(s.nft_up_handle)
             if s.nft_down_handle is not None:
-                nft_delete_rule_by_handle(bng, s.nft_down_handle)
+                nft_delete_rule_by_handle(s.nft_down_handle)
 
         return True
     except Exception as e:
@@ -134,7 +134,6 @@ def terminate_session(
 
 
 def dhcp_lease_handler(
-    bng: Host,
     leasefile=DHCP_LEASE_FILE_PATH,
     iface: str="bng-eth0",
     radius_server_ip: str ="192.0.2.2",
@@ -241,12 +240,11 @@ def dhcp_lease_handler(
                 if s.ip is not None and s.auth_state == "AUTHORIZED":
                     # Renew with IP change; Accounting restart required
                     if s.nft_up_handle is not None:
-                        nft_delete_rule_by_handle(bng, s.nft_up_handle)
+                        nft_delete_rule_by_handle(s.nft_up_handle)
                     if s.nft_down_handle is not None:
-                        nft_delete_rule_by_handle(bng, s.nft_down_handle)
+                        nft_delete_rule_by_handle(s.nft_down_handle)
 
                     terminate_session(
-                        bng,
                         s,
                         cause="Lost-Service",
                         radius_server_ip=radius_server_ip,
@@ -268,7 +266,6 @@ def dhcp_lease_handler(
 
                 try:
                     result = _authorize_session(
-                        bng,
                         s,
                         leased_ip,
                         s.mac,
@@ -313,7 +310,7 @@ def dhcp_lease_handler(
     def handle_dhcp_release(circuit_id: str, remote_id: str, chaddr: str, event: dict):
         key = (nas_ip,circuit_id,remote_id)
         now = time.time()
-        nftables_snapshot = nft_list_chain_rules(bng)
+        nftables_snapshot = nft_list_chain_rules()
 
         s = sessions.pop(key, None)
         if s is None:
@@ -332,7 +329,6 @@ def dhcp_lease_handler(
 
         if s.auth_state == "AUTHORIZED":
             if terminate_session(
-                bng,
                 s,
                 cause="User-Request",
                 radius_server_ip=radius_server_ip,
@@ -419,13 +415,12 @@ def dhcp_lease_handler(
                         status="ACTIVE",
                     )
 
-                    _install_rules_and_baseline(bng, sessions[key], l.ip, l.mac, iface)
+                    _install_rules_and_baseline(sessions[key], l.ip, l.mac, iface)
 
                     print(f"Reconciler: DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
 
                     try:
                         result = _authorize_session(
-                            bng,
                             sessions[key],
                             l.ip,
                             l.mac,
@@ -465,13 +460,12 @@ def dhcp_lease_handler(
                         s.status = "ACTIVE"
                         s.last_status_change_ts = now
 
-                        _install_rules_and_baseline(bng, s, s.ip, s.mac, iface)
+                        _install_rules_and_baseline(s, s.ip, s.mac, iface)
 
                         print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
 
                         try:
                             result = _authorize_session(
-                                bng,
                                 s,
                                 s.ip,
                                 s.mac,
@@ -529,7 +523,7 @@ def dhcp_lease_handler(
                             auth_state=s.auth_state,
                         )
 
-                        nftables_snapshot = nft_list_chain_rules(bng)
+                        nftables_snapshot = nft_list_chain_rules()
                         up_bytes, up_pkts = 0, 0
                         down_bytes, down_pkts = 0, 0
 
@@ -552,13 +546,13 @@ def dhcp_lease_handler(
                             )
 
                             if s.nft_up_handle is not None:
-                                nft_delete_rule_by_handle(bng, s.nft_up_handle)
+                                nft_delete_rule_by_handle(s.nft_up_handle)
                                 s.nft_up_handle = None
                             if s.nft_down_handle is not None:
-                                nft_delete_rule_by_handle(bng, s.nft_down_handle)
+                                nft_delete_rule_by_handle(s.nft_down_handle)
                                 s.nft_down_handle = None
 
-                            rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+                            rad_acct_send_from_bng(acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
                             print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
                         except Exception as e:
                             print(f"RADIUS Acct-Stop failed for mac={s.mac} old_ip={old_ip}: {e}")
@@ -566,9 +560,9 @@ def dhcp_lease_handler(
                         try:
                             acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
 
-                            _install_rules_and_baseline(bng, s, l.ip, l.mac, iface)
+                            _install_rules_and_baseline(s, l.ip, l.mac, iface)
 
-                            rad_acct_send_from_bng(bng, acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+                            rad_acct_send_from_bng(acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
                             s.last_interim = now
                             print(f"RADIUS Acct-Start sent for mac={s.mac} new_ip={s.ip}")
                         except Exception as e:
@@ -591,7 +585,7 @@ def dhcp_lease_handler(
         nftables_snapshot = None
         if ended:
             try:
-                nftables_snapshot = nft_list_chain_rules(bng)
+                nftables_snapshot = nft_list_chain_rules()
             except Exception as e:
                 print(f"Failed to get nftables snapshot for Acct-Stop: {e}")
                 nftables_snapshot = None
@@ -602,7 +596,6 @@ def dhcp_lease_handler(
             print(f"DHCP SESSION END mac={s.mac} ip={s.ip} iface={s.iface} hostname={s.hostname} duration={dur}s")
 
             if terminate_session(
-                bng,
                 s,
                 cause="User-Request",
                 radius_server_ip=radius_server_ip,
@@ -619,7 +612,6 @@ def dhcp_lease_handler(
 
 
 def bng_event_loop(
-    bng: Host,
     stop_event: threading.Event,
     event_queue: Queue,
     iface: str = "bng-eth0",
@@ -631,7 +623,6 @@ def bng_event_loop(
     nas_port_id: str="bng-eth0",
 ):
     dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(
-        bng,
         iface=iface,
         radius_server_ip=radius_server_ip,
         radius_secret=radius_secret,
@@ -667,7 +658,6 @@ def bng_event_loop(
         if now >= next_interim:
             try:
                 radius_handle_interim_updates(
-                    bng,
                     sessions,
                     radius_server_ip=radius_server_ip,
                     radius_secret=radius_secret,
@@ -691,7 +681,6 @@ def bng_event_loop(
                     if s.auth_state != "PENDING_AUTH" or s.status == "PENDING" or s.ip is None:
                         continue
                     _authorize_session(
-                        bng,
                         s,
                         s.ip,
                         s.mac,
@@ -712,7 +701,7 @@ def bng_event_loop(
                 nftables_snapshot = None
                 if sessions:
                     try:
-                        nftables_snapshot = nft_list_chain_rules(bng)
+                        nftables_snapshot = nft_list_chain_rules()
                     except Exception as e:
                         print(f"Failed to get nftables snapshot for IDLE disconnect: {e}")
                         nftables_snapshot = None
@@ -723,7 +712,6 @@ def bng_event_loop(
                         if idle_duration >= MARK_DISCONNECT_GRACE_SECONDS:
                             print(f"DHCP IDLE SESSION DISCONNECT mac={s.mac} ip={s.ip} iface={s.iface} hostname={s.hostname} idle_duration={int(idle_duration)}s")
                             terminate_session(
-                                bng,
                                 s,
                                 cause="Idle-Timeout",
                                 radius_server_ip=radius_server_ip,

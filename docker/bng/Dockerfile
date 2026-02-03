@@ -3,6 +3,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     freeradius-utils \
+    curl \
     iproute2 \
     iputils-ping \
     nftables \
@@ -13,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 COPY mininet/lib /opt/bng/lib
-COPY mininet/bng_event_server.py /opt/bng/bng_event_server.py
+COPY mininet/bng_main.py /opt/bng/bng_main.py
 COPY mininet/bng_dhcp_sniffer.py /opt/bng/bng_dhcp_sniffer.py
 COPY docker/bng/entrypoint.sh /opt/bng/entrypoint.sh
 RUN chmod +x /opt/bng/entrypoint.sh

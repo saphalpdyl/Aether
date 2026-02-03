@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+import json
+import threading
+import subprocess
+import time
+from queue import Queue
+
+from lib.services.bng import bng_event_loop
+
+
+def start_sniffer() -> None:
+    subprocess.run("pkill -f bng_dhcp_sniffer.py 2>/dev/null || true", shell=True)
+    subprocess.run("rm -f /tmp/bng_dhcp_events.json /tmp/bng_dhcp_sniffer.stderr", shell=True)
+
+    bng_uplink_mac = subprocess.check_output("cat /sys/class/net/bng-eth1/address", shell=True, text=True).strip()
+
+    cmd = (
+        "nohup python3 /opt/bng/bng_dhcp_sniffer.py "
+        "--client-if bng-eth0 --uplink-if bng-eth1 "
+        "--server-ip 192.0.2.3 --giaddr 10.0.0.1 --relay-id 192.0.2.1 "
+        "--src-ip 192.0.2.1 --src-mac {src_mac} "
+        "--log /tmp/bng_dhcp_relay.log --json "
+        "> /tmp/bng_dhcp_events.json 2> /tmp/bng_dhcp_sniffer.stderr &"
+    ).format(src_mac=bng_uplink_mac)
+    subprocess.run(cmd, shell=True)
+
+
+def tail_events(q: Queue):
+    proc = subprocess.Popen(
+        ["tail", "-F", "/tmp/bng_dhcp_events.json"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    if not proc.stdout:
+        return
+    for line in proc.stdout:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+            q.put(event)
+        except Exception:
+            continue
+
+
+def main():
+    for _ in range(20):
+        if subprocess.call("ip link show bng-eth0 >/dev/null 2>&1 && ip link show bng-eth1 >/dev/null 2>&1", shell=True) == 0:
+            break
+        time.sleep(0.5)
+
+    start_sniffer()
+
+    q: Queue = Queue(maxsize=1000)
+    stop_event = threading.Event()
+    t = threading.Thread(target=tail_events, args=(q,), daemon=True)
+    t.start()
+
+    bng_event_loop(stop_event, q, "bng-eth0", 30)
+
+
+if __name__ == "__main__":
+    main()

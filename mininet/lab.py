@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
 
-import json
-import threading
 import subprocess
-import shlex
-import re
-from queue import Queue
 import time
 
 from mininet.net import Containernet
-from mininet.node import Docker, OVSSwitch
-from mininet.nodelib import NAT
+from mininet.node import OVSSwitch
 from mininet.cli import CLI
 from mininet.log import setLogLevel
 
-from lib.services.bng import bng_event_loop
 
 def run():
     net = Containernet(controller=None, switch=OVSSwitch)
@@ -45,8 +38,12 @@ def run():
     net.addLink(bng, relay)  # bng-eth0 subscriber side
     net.addLink(bng, s2)  # bng-eth1 upstream side
 
-    nat = net.addHost('nat', cls=NAT, ip='192.0.2.5/24', inNamespace=False)
-    net.addLink(nat, s2)  # nat-eth0 on upstream segment
+    nat = net.addNAT(
+        name='nat',
+        connect=s2,
+        ip='192.0.2.5/24',
+        inNamespace=False,
+    )
 
     radius = net.addDocker(
         'radius',
@@ -102,11 +99,15 @@ def run():
     relay.cmd('/opt/relay/entrypoint.sh > /tmp/relay-entry.log 2>&1 &')
     bng.cmd('/opt/bng/entrypoint.sh >> /tmp/bng-entry.log 2>&1 &')
 
-    # Root-namespace NAT (known-good baseline)
-    nat.configDefault()
-    nat.cmd('ip route replace 10.0.0.0/24 via 192.0.2.1 dev nat-eth0')
+    # Host-namespace NAT setup
+    nat.cmd('ip route add 10.0.0.0/24 via 192.0.2.1 dev nat-eth0')
+    nat.cmd('sysctl -w net.ipv4.ip_forward=1')
+    nat.cmd('iptables -t nat -F')
+    nat.cmd('iptables -F FORWARD')
+    nat.cmd('iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -o $(ip route | awk \'$1=="default" {print $5; exit}\') -j MASQUERADE')
+    nat.cmd('iptables -A FORWARD -i nat-eth0 -j ACCEPT')
+    nat.cmd('iptables -A FORWARD -o nat-eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
 
-    # RADIUS server container
     radius.cmd('ip addr flush dev radius-eth0')
     radius.cmd('ip link set radius-eth0 up')
     radius.cmd('ip addr add 192.0.2.2/24 dev radius-eth0')
@@ -152,82 +153,12 @@ def run():
     kea.cmd('rm -f /run/kea/kea-ctrl-agent.*.pid')
     kea.cmd('KEA_LOCKFILE_DIR=none kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf > /tmp/kea-ctrl-agent.log 2>&1 &')
 
-    # OLT processor runs in root namespace
-    bng_event_queue: Queue = Queue(maxsize=100)
-    bng_stop_event = threading.Event()
-
-    bng_thread = threading.Thread(
-        target=bng_event_loop,
-        args=(bng, bng_stop_event, bng_event_queue, "bng-eth0", 30),
-        daemon=False,
-    )
-    bng_thread.start()
-
-    sniffer_path = "/opt/bng/bng_dhcp_sniffer.py"
-    def _clean_mac(raw: str) -> str:
-        token = raw.strip().split()[0] if raw else ""
-        token = token.lower()
-        token = re.sub(r"[^0-9a-f:]", "", token)
-        return token
-
-    kea_mac = _clean_mac(kea.cmd("cat /sys/class/net/kea-eth0/address"))
-    bng_uplink_mac = _clean_mac(bng.cmd("cat /sys/class/net/bng-eth1/address"))
-    for _ in range(20):
-        if bng.cmd('ip link show bng-eth0 >/dev/null 2>&1 && ip link show bng-eth1 >/dev/null 2>&1; echo $?').strip() == "0":
-            break
-        time.sleep(0.5)
-
-    bng.cmd("pkill -f bng_dhcp_sniffer.py 2>/dev/null || true")
-    bng.cmd("rm -f /tmp/bng_dhcp_events.json /tmp/bng_dhcp_sniffer.stderr")
-    sniffer_q = shlex.quote(sniffer_path)
-    src_mac_q = shlex.quote(bng_uplink_mac)
-    dst_mac_q = shlex.quote(kea_mac)
-    bng.cmd(
-        "nohup python3 {sniffer} "
-        "--client-if bng-eth0 --uplink-if bng-eth1 "
-        "--server-ip 192.0.2.3 --giaddr 10.0.0.1 --relay-id 192.0.2.1 "
-        "--src-ip 192.0.2.1 --src-mac {src_mac} --dst-mac {dst_mac} "
-        "--log /tmp/bng_dhcp_relay.log --json "
-        "> /tmp/bng_dhcp_events.json 2> /tmp/bng_dhcp_sniffer.stderr &".format(
-            sniffer=sniffer_q,
-            src_mac=src_mac_q,
-            dst_mac=dst_mac_q,
-        )
-    )
-
-    sniffer_proc = bng.popen(
-        ["tail", "-F", "/tmp/bng_dhcp_events.json"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    def sniffer_reader():
-        if not sniffer_proc or not sniffer_proc.stdout:
-            return
-        for line in sniffer_proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                event = json.loads(line)
-                bng_event_queue.put(event)
-            except Exception:
-                continue
-
-    sniffer_thread = threading.Thread(target=sniffer_reader, daemon=True)
-    sniffer_thread.start()
+    bng.cmd('pkill -f bng_main.py 2>/dev/null || true')
+    bng.cmd('nohup python3 /opt/bng/bng_main.py > /tmp/bng_main.log 2>&1 &')
 
     CLI(net)
 
-    if sniffer_proc:
-        try:
-            sniffer_proc.terminate()
-            sniffer_proc.wait(timeout=2)
-        except Exception:
-            sniffer_proc.kill()
-    bng_stop_event.set()
-    bng_thread.join()
+    bng.cmd('pkill -f bng_main.py 2>/dev/null || true')
     kea.cmd('pkill -f "kea-dhcp4 -c /etc/kea/kea-dhcp4.conf" 2>/dev/null || true')
     kea.cmd('pkill -f "kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf" 2>/dev/null || true')
     # Also remove the config file to avoid confusion on next run

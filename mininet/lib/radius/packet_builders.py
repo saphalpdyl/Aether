@@ -2,8 +2,7 @@
 
 import time
 import shlex
-
-from mininet.node import Host
+import subprocess
 
 from lib.radius.session import DHCPSession
 from lib.radius.utils import split_bytes_to_gigawords_octets
@@ -11,7 +10,6 @@ from lib.secrets import __RADIUS_SECRET
 
 # Future: Move to somewhere so that mininet code and bng code can separate
 def rad_acct_send_from_bng(
-    bng: Host,
     packet: str,
     server_ip: str,
     port: int = 1813,
@@ -21,10 +19,10 @@ def rad_acct_send_from_bng(
     pkt_q = shlex.quote(packet)
     secret_q = shlex.quote(secret)
     cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} acct {secret_q}"
-    return bng.cmd(cmd)
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    return result.stdout or ""
 
 def rad_auth_send_from_bng(
-    bng: Host,
     packet: str,
     server_ip: str,
     port: int = 1812,
@@ -34,7 +32,8 @@ def rad_auth_send_from_bng(
     pkt_q = shlex.quote(packet)
     secret_q = shlex.quote(secret)
     cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} auth {secret_q}"
-    return bng.cmd(cmd)
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    return result.stdout or ""
 
 def acct_session_id(mac: str, ip: str, first_seen: float) -> str:
     return f"{mac.lower()}-{ip}-{int(first_seen)}"
