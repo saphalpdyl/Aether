@@ -1,4 +1,9 @@
 services:
+  host:
+    build:
+      context: .
+      dockerfile: docker/host/Dockerfile
+    image: lab-host
   bng:
     build:
       context: .

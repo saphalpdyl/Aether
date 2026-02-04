@@ -48,9 +48,9 @@ def nft_find_rule_handle(nft_json: dict, comment_match: str):
 def nft_add_subscriber_rules(
     ip: str,
     mac: str,
-    sub_if: str = "bng-eth0", # if = interface
-    # NOTE: We have bng-eth0 as the default iface because we want to measure on subscriber facing interface 
-    #   We could have measured on bng-eth1 ( upstream facing ) but that would not capture traffic that is dropped by BNG itself
+    sub_if: str = "eth0", # if = interface
+    # NOTE: We have eth0 as the default iface because we want to measure on subscriber facing interface 
+    #   We could have measured on eth1 ( upstream facing ) but that would not capture traffic that is dropped by BNG itself
 ):
     mac_l = mac.lower()
 

@@ -1,13 +1,16 @@
 #!/bin/sh
 set -eu
+
+# Wait for interfaces to appear
 for i in $(seq 1 30); do
-  if ls /sys/class/net/relay-eth* >/dev/null 2>&1; then
+  if ls /sys/class/net/eth* >/dev/null 2>&1; then
     break
   fi
   sleep 0.2
 done
 
-ifaces=$(ls /sys/class/net | grep '^relay-eth' | sort)
+# Get all data-plane interfaces (skip mgmt eth0)
+ifaces=$(ls /sys/class/net | grep '^eth' | grep -v '^eth0$' | sort)
 uplink=$(echo "$ifaces" | tail -n 1)
 access_ifaces=$(echo "$ifaces" | sed '$d')
 

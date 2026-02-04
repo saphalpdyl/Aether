@@ -1,0 +1,138 @@
+name: isp-lab
+
+topology:
+  kinds:
+    nokia_srlinux:
+      type: ixr-d2l
+      image: ghcr.io/nokia/srlinux:25.3.1
+
+  nodes:
+    # Subscriber hosts
+    h1:
+      kind: linux
+      image: lab-host
+      exec:
+        - ip link set eth1 address 00:00:00:00:00:01
+        - ip link set eth1 up
+
+    h2:
+      kind: linux
+      image: lab-host
+      exec:
+        - ip link set eth1 address 00:00:00:00:00:02
+        - ip link set eth1 up
+
+    # Nokia SR Linux access node (DHCP Option 82 circuit-id/remote-id)
+    srl:
+      kind: nokia_srlinux
+      startup-config: srl-access.cli
+
+    # BNG - Broadband Network Gateway
+    bng:
+      kind: linux
+      image: lab-bng
+      exec:
+        - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done; python3 /opt/bng/bng_main.py &"
+        - ip route add 10.0.1.0/24 via 10.0.0.2 dev eth1
+
+    # DHCP Server (Kea)
+    kea:
+      kind: linux
+      image: lab-kea
+      exec:
+        - sh -c "ip addr flush dev eth1 || true"
+        - ip link set eth1 up
+        - ip addr add 192.0.2.3/24 dev eth1
+        - ip route replace default via 192.0.2.1
+        - sh -c "for i in $(seq 1 60); do pg_isready -h 192.0.2.4 -U kea >/dev/null 2>&1 && break; sleep 0.5; done"
+        - sh -c "kea-admin db-init pgsql -u kea -p test -n kea_lease_db -h 192.0.2.4 || true"
+        - mkdir -p /run/kea && chmod 777 /run/kea
+        - sh -c "KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf &"
+        - sh -c "KEA_LOCKFILE_DIR=none kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf &"
+
+    # RADIUS server
+    radius:
+      memory: 8Gb
+      kind: linux
+      image: lab-radius
+      exec:
+        - sh -c "/opt/radius/entrypoint.sh >/tmp/radius-entry.log 2>&1 &"
+
+    # RADIUS PostgreSQL
+    radius_pg:
+      kind: linux
+      image: lab-radius-pg
+      memory: 8Gb
+      env:
+        POSTGRES_DB: radius
+        POSTGRES_USER: radius
+        POSTGRES_PASSWORD: test
+      exec:
+        - sh -c "ip addr flush dev eth1 || true"
+        - ip link set eth1 up
+        - ip addr add 192.0.2.6/24 dev eth1
+        - ip route replace default via 192.0.2.1
+        - sh -c "for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U radius >/dev/null 2>&1 && break; sleep 0.5; done"
+        - sh -c "/docker-entrypoint-initdb.d/00-radius-hba.sh || true"
+        - sh -c "pg_ctl -D \"$PGDATA\" reload || true"
+
+    # Kea PostgreSQL (lease database)
+    pg:
+      kind: linux
+      image: lab-pg
+      memory: 8Gb
+      env:
+        POSTGRES_DB: kea_lease_db
+        POSTGRES_USER: kea
+        POSTGRES_PASSWORD: test
+      exec:
+        - sh -c "ip addr flush dev eth1 || true"
+        - ip link set eth1 up
+        - ip addr add 192.0.2.4/24 dev eth1
+        - ip route replace default via 192.0.2.1
+
+    # Upstream router - provides internet access via macvlan
+    upstream:
+      kind: linux
+      image: alpine:latest
+      exec:
+        - apk add --no-cache iptables
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip link set eth1 up
+        - ip link set eth2 up
+        - ip link set eth3 up
+        - ip link set eth4 up
+        - ip link set eth5 up
+        - ip link add br0 type bridge
+        - ip link set br0 up
+        - ip link set eth1 master br0
+        - ip link set eth2 master br0
+        - ip link set eth3 master br0
+        - ip link set eth4 master br0
+        - ip link set eth5 master br0
+        - ip link set eth6 up
+        - iptables -t nat -A POSTROUTING -s 192.0.2.0/24 -o eth6 -j MASQUERADE
+        - iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -o eth6 -j MASQUERADE
+        - ip addr add 192.0.2.5/24 dev br0
+        - ip route replace 10.0.0.0/24 via 192.0.2.1
+
+  links:
+    # Subscriber -> SR Linux
+    - endpoints: ["h1:eth1", "srl:e1-1"]
+    - endpoints: ["h2:eth1", "srl:e1-2"]
+
+    # SR Linux -> BNG (subscriber side)
+    - endpoints: ["srl:e1-3", "bng:eth1"]
+
+    # BNG -> Upstream network (192.0.2.0/24)
+    - endpoints: ["bng:eth2", "upstream:eth1"]
+
+    # Services on upstream network
+    - endpoints: ["kea:eth1", "upstream:eth2"]
+    - endpoints: ["radius:eth1", "upstream:eth3"]
+    - endpoints: ["radius_pg:eth1", "upstream:eth4"]
+    - endpoints: ["pg:eth1", "upstream:eth5"]
+
+    # Upstream to internet (macvlan to host's interface)
+    # Replace 'enp1s0' with your host's internet interface
+    - endpoints: ["upstream:eth6", "macvlan:enp1s0"]

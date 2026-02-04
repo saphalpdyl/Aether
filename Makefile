@@ -2,6 +2,12 @@
 #
 
 dev:
-	sudo mn -c
 	sudo docker compose build
-	sudo python3 mininet/lab.py
+	sudo containerlab deploy -t containerlab/topology.yml
+
+clean:
+	sudo containerlab destroy -t containerlab/topology.yml
+
+debug:
+	sudo docker compose build
+	sudo containerlab deploy -t /home/test/lab/containerlab/topology.yml --log-level debug

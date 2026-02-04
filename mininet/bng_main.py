@@ -12,11 +12,11 @@ def start_sniffer() -> None:
     subprocess.run("pkill -f bng_dhcp_sniffer.py 2>/dev/null || true", shell=True)
     subprocess.run("rm -f /tmp/bng_dhcp_events.json /tmp/bng_dhcp_sniffer.stderr", shell=True)
 
-    bng_uplink_mac = subprocess.check_output("cat /sys/class/net/bng-eth1/address", shell=True, text=True).strip()
+    bng_uplink_mac = subprocess.check_output("cat /sys/class/net/eth2/address", shell=True, text=True).strip()
 
     cmd = (
         "nohup python3 /opt/bng/bng_dhcp_sniffer.py "
-        "--client-if bng-eth0 --uplink-if bng-eth1 "
+        "--client-if eth1 --uplink-if eth2 "
         "--server-ip 192.0.2.3 --giaddr 10.0.0.1 --relay-id 192.0.2.1 "
         "--src-ip 192.0.2.1 --src-mac {src_mac} "
         "--log /tmp/bng_dhcp_relay.log --json "
@@ -47,7 +47,7 @@ def tail_events(q: Queue):
 
 def main():
     for _ in range(20):
-        if subprocess.call("ip link show bng-eth0 >/dev/null 2>&1 && ip link show bng-eth1 >/dev/null 2>&1", shell=True) == 0:
+        if subprocess.call("ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1", shell=True) == 0:
             break
         time.sleep(0.5)
 
@@ -58,7 +58,7 @@ def main():
     t = threading.Thread(target=tail_events, args=(q,), daemon=True)
     t.start()
 
-    bng_event_loop(stop_event, q, "bng-eth0", 30)
+    bng_event_loop(stop_event, q, "eth1", 30)
 
 
 if __name__ == "__main__":

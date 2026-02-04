@@ -10,3 +10,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY docker/radius-pg/init/00-radius-hba.sh /docker-entrypoint-initdb.d/00-radius-hba.sh
 RUN chmod +x /docker-entrypoint-initdb.d/00-radius-hba.sh
+
+CMD ["postgres", "-c", "listen_addresses=*"]

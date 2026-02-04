@@ -14,4 +14,4 @@ COPY docker/radius/raddb/ /etc/freeradius/3.0/
 COPY docker/radius/entrypoint.sh /opt/radius/entrypoint.sh
 RUN chmod +x /opt/radius/entrypoint.sh
 
-ENTRYPOINT ["/opt/radius/entrypoint.sh"]
+ENTRYPOINT ["tail", "-f", "/dev/null"]

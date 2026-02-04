@@ -12,7 +12,7 @@ def radius_handle_interim_updates(
         radius_server_ip: str ="192.0.2.2",
         radius_secret: str = __RADIUS_SECRET,
         nas_ip: str="192.0.2.1",
-        nas_port_id: str="bng-eth0"):
+        nas_port_id: str="eth0"):
     now = time.time()
     try:
         if sessions is None or len(sessions) == 0:

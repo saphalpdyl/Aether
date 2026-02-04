@@ -135,11 +135,11 @@ def terminate_session(
 
 def dhcp_lease_handler(
     leasefile=DHCP_LEASE_FILE_PATH,
-    iface: str="bng-eth0",
+    iface: str="eth0",
     radius_server_ip: str ="192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
-    nas_port_id: str="bng-eth0",
+    nas_port_id: str="eth0",
     kea_ctrl_agent_auth_key: str = __KEA_CTRL_AGENT_PASSWORD
 ):
     sessions: Dict[Tuple[str,str,str], DHCPSession] = {}
@@ -614,13 +614,13 @@ def dhcp_lease_handler(
 def bng_event_loop(
     stop_event: threading.Event,
     event_queue: Queue,
-    iface: str = "bng-eth0",
+    iface: str = "eth0",
     interim_interval: int = 30,
     auth_retry_interval: int = 10,
     radius_server_ip: str ="192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
-    nas_port_id: str="bng-eth0",
+    nas_port_id: str="eth0",
 ):
     dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(
         iface=iface,

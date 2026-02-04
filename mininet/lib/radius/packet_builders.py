@@ -43,7 +43,7 @@ def acct_user_name(s: DHCPSession) -> str:
         raise RuntimeError("Missing required Option 82 fields for User-Name (remote_id/circuit_id).")
     return f"{s.remote_id}/{s.circuit_id}"
 
-def build_acct_start(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0") -> str:
+def build_acct_start(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="eth0") -> str:
     now = int(time.time())
     return "\n".join([
         "Acct-Status-Type = Start",
@@ -65,7 +65,7 @@ def build_acct_stop(
     input_pkts: int,
     output_pkts: int,
     nas_ip: str = "192.0.2.1",
-    nas_port_id: str = "bng-eth0",
+    nas_port_id: str = "eth0",
     cause: str = "User-Request",
 ) -> str:
     now = int(time.time())
@@ -107,7 +107,7 @@ def build_acct_interim(
     input_pkts: int,
     output_pkts: int,
     nas_ip: str = "192.0.2.1",
-    nas_port_id: str = "bng-eth0",
+    nas_port_id: str = "eth0",
 ) -> str:
     now = int(time.time())
     session_time = max(0, int(time.time() - s.first_seen))
@@ -143,7 +143,7 @@ def build_access_request(
     s: DHCPSession,
     user_password: str = "testing123",
     nas_ip: str = "192.0.2.1",
-    nas_port_id: str = "bng-eth0",
+    nas_port_id: str = "eth0",
 ) -> str:
     """
     Returns a radclient-compatible Access-Request attribute list.

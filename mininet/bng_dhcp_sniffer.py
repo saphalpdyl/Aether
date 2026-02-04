@@ -196,6 +196,7 @@ def decode_dhcp(pkt: bytes):
     if not (
         (src_port == DHCP_CLIENT_PORT and dst_port == DHCP_SERVER_PORT)
         or (src_port == DHCP_SERVER_PORT and dst_port == DHCP_CLIENT_PORT)
+        or (src_port == DHCP_SERVER_PORT and dst_port == DHCP_SERVER_PORT) # When SR Linux relays packetsm, its 67 -> 67
     ):
         return None
     if len(pkt) < udp_off + udp_len:
@@ -225,6 +226,7 @@ def decode_dhcp_with_reason(pkt: bytes):
     if not (
         (src_port == DHCP_CLIENT_PORT and dst_port == DHCP_SERVER_PORT)
         or (src_port == DHCP_SERVER_PORT and dst_port == DHCP_CLIENT_PORT)
+        or (src_port == DHCP_SERVER_PORT and dst_port == DHCP_SERVER_PORT) # When SR Linux relays packetsm, its 67 -> 67
     ):
         return None, f"ports_{src_port}_{dst_port}"
     if len(pkt) < udp_off + udp_len:
@@ -234,7 +236,7 @@ def decode_dhcp_with_reason(pkt: bytes):
         return None, "short_bootp"
     if payload[BOOTP_FIXED_LEN : BOOTP_FIXED_LEN + len(DHCP_MAGIC)] != DHCP_MAGIC:
         return None, "bad_magic"
-    return decode_dhcp(pkt), None
+    return decode_dhcp(pkt), "ok, maybe failed on decode if you see this"
 
 
 def _encode_event(info: dict) -> dict:
@@ -286,6 +288,9 @@ def relay_loop(
     raw = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_IP))
     raw.bind((client_if, 0))
 
+    raw_uplink = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_IP))
+    raw_uplink.bind((uplink_if, 0))
+
     uplink_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     uplink_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     uplink_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, uplink_if.encode())
@@ -303,17 +308,29 @@ def relay_loop(
     down_sock.bind(("0.0.0.0", DHCP_SERVER_PORT))
 
     while True:
-        rlist, _, _ = select.select([raw, reply_sock], [], [], 1.0)
+        rlist, _, _ = select.select([raw, raw_uplink, reply_sock], [], [], 1.0)
         for s in rlist:
             if s is raw:
-                # Client -> Server packets
+                # Client -> Server packets (including relay-to-server 67->67)
                 pkt, _ = raw.recvfrom(65535)
                 info, reason = decode_dhcp_with_reason(pkt)
                 if not info:
                     log(f"drop: decode_dhcp none reason={reason}")
                     continue
+                if info.get("dst_port") != DHCP_SERVER_PORT:
+                    continue
                 
-                log(f"rx client msg_type={info.get('msg_type')} xid={info.get('xid')} circuit_id={info.get('circuit_id')} remote_id={info.get('remote_id')}")
+                log(
+                    "rx client msg_type={msg_type} xid={xid} src_port={src_port} dst_port={dst_port} "
+                    "circuit_id={circuit_id} remote_id={remote_id}".format(
+                        msg_type=info.get("msg_type"),
+                        xid=info.get("xid"),
+                        src_port=info.get("src_port"),
+                        dst_port=info.get("dst_port"),
+                        circuit_id=info.get("circuit_id"),
+                        remote_id=info.get("remote_id"),
+                    )
+                )
                 
                 # Emit event for client packet
                 emit_event(info, emit_json)
@@ -348,11 +365,35 @@ def relay_loop(
                 opt_list = parse_options(payload[BOOTP_FIXED_LEN + len(DHCP_MAGIC) :])
                 new_opts = rebuild_options(opt_list, opt82)
                 new_payload = payload[: BOOTP_FIXED_LEN + len(DHCP_MAGIC)] + new_opts
-                new_payload = set_giaddr(new_payload, giaddr)
+                # Preserve existing giaddr if already set by upstream relay (e.g., SRL).
+                if info.get("giaddr") in (None, "0.0.0.0"):
+                    new_payload = set_giaddr(new_payload, giaddr)
 
                 uplink_sock.sendto(new_payload, (server_ip, DHCP_SERVER_PORT))
                 log("forwarded to server")
                 
+            elif s is raw_uplink:
+                # Server -> Relay packets via raw uplink (catches traffic not destined to local IP)
+                pkt, _ = raw_uplink.recvfrom(65535)
+                info, reason = decode_dhcp_with_reason(pkt)
+                if not info:
+                    log(f"drop: decode_dhcp none reason={reason}")
+                    continue
+                if info.get("src_port") != DHCP_SERVER_PORT:
+                    continue
+                data = info.get("payload")
+                if not data:
+                    continue
+                log(f"rx server msg_type={info.get('msg_type')} xid={info.get('xid')}")
+                emit_event(info, emit_json)
+
+                if info.get("giaddr") and info.get("giaddr") != "0.0.0.0":
+                    down_sock.sendto(data, (info.get("giaddr"), DHCP_SERVER_PORT))
+                    log(f"forwarded to relay giaddr={info.get('giaddr')}")
+                else:
+                    down_sock.sendto(data, ("255.255.255.255", DHCP_CLIENT_PORT))
+                    log("forwarded to clients")
+
             elif s is reply_sock:
                 # Server -> Relay packets (UDP socket receives DHCP replies)
                 data, _ = reply_sock.recvfrom(65535)
@@ -364,9 +405,15 @@ def relay_loop(
                     # Emit event for server packet
                     emit_event(info, emit_json)
                 
-                # Forward server replies to clients as broadcast.
-                down_sock.sendto(data, ("255.255.255.255", DHCP_CLIENT_PORT))
-                log("forwarded to clients")
+                # Forward server replies:
+                # - If giaddr is set, unicast to relay agent (giaddr) on port 67.
+                # - Otherwise broadcast to clients on port 68.
+                if info and info.get("giaddr") and info.get("giaddr") != "0.0.0.0":
+                    down_sock.sendto(data, (info.get("giaddr"), DHCP_SERVER_PORT))
+                    log(f"forwarded to relay giaddr={info.get('giaddr')}")
+                else:
+                    down_sock.sendto(data, ("255.255.255.255", DHCP_CLIENT_PORT))
+                    log("forwarded to clients")
 
 
 def main():

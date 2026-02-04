@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 
 import subprocess
+import shutil
 import time
+import builtins
+
+builtins.unicode = str
 
 from mininet.net import Containernet
 from mininet.node import OVSSwitch
@@ -11,6 +15,12 @@ from mininet.log import setLogLevel
 
 def run():
     net = Containernet(controller=None, switch=OVSSwitch)
+
+    sap = net.addExtSAP(
+        'i1',
+        sapIP="192.0.2.5/24",
+        NAT=True,
+    )
 
     # Canonical switch names so Mininet can derive DPIDs
     s2 = net.addSwitch('s2', failMode='standalone')  # upstream
@@ -24,6 +34,7 @@ def run():
         dcmd='sleep infinity',
         ip=None,
         privileged=True,
+        network_mode='none',
     )
     net.addLink(h1, relay)
     net.addLink(h2, relay)
@@ -34,16 +45,12 @@ def run():
         dcmd='sleep infinity',
         ip=None,
         privileged=True,
+        network_mode='none',
     )
     net.addLink(bng, relay)  # bng-eth0 subscriber side
     net.addLink(bng, s2)  # bng-eth1 upstream side
 
-    nat = net.addNAT(
-        name='nat',
-        connect=s2,
-        ip='192.0.2.5/24',
-        inNamespace=False,
-    )
+    net.addLink(s2, sap)
 
     radius = net.addDocker(
         'radius',
@@ -95,18 +102,37 @@ def run():
     net.start()
     net.waitConnected()
 
+    # Extra NAT for subscriber subnet behind BNG via SAP bridge
+    def ensure_ipt(rule_check, rule_add):
+        if subprocess.run(rule_check).returncode != 0:
+            subprocess.run(rule_add)
+
+    sap_if = sap.deployed_name
+    uplink = subprocess.check_output(
+        "ip route | awk '$1==\"default\" {print $5; exit}'",
+        shell=True,
+        text=True,
+    ).strip()
+    ipt = shutil.which("iptables-legacy") or "iptables"
+    subprocess.run(["ip", "route", "replace", "10.0.0.0/24", "via", "192.0.2.1", "dev", sap_if], check=False)
+    ensure_ipt(
+        [ipt, "-t", "nat", "-C", "POSTROUTING", "-s", "10.0.0.0/24", "-o", uplink, "-j", "MASQUERADE"],
+        [ipt, "-t", "nat", "-A", "POSTROUTING", "-s", "10.0.0.0/24", "-o", uplink, "-j", "MASQUERADE"],
+    )
+    ensure_ipt(
+        [ipt, "-C", "FORWARD", "-i", sap_if, "-j", "ACCEPT"],
+        [ipt, "-A", "FORWARD", "-i", sap_if, "-j", "ACCEPT"],
+    )
+    ensure_ipt(
+        [ipt, "-C", "FORWARD", "-o", sap_if, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
+        [ipt, "-A", "FORWARD", "-o", sap_if, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
+    )
+
+    bng.cmd('ip route add default via 192.0.2.5 dev bng-eth1')
+
     # Start relay + bng entrypoints after interfaces exist
     relay.cmd('/opt/relay/entrypoint.sh > /tmp/relay-entry.log 2>&1 &')
     bng.cmd('/opt/bng/entrypoint.sh >> /tmp/bng-entry.log 2>&1 &')
-
-    # Host-namespace NAT setup
-    nat.cmd('ip route add 10.0.0.0/24 via 192.0.2.1 dev nat-eth0')
-    nat.cmd('sysctl -w net.ipv4.ip_forward=1')
-    nat.cmd('iptables -t nat -F')
-    nat.cmd('iptables -F FORWARD')
-    nat.cmd('iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -o $(ip route | awk \'$1=="default" {print $5; exit}\') -j MASQUERADE')
-    nat.cmd('iptables -A FORWARD -i nat-eth0 -j ACCEPT')
-    nat.cmd('iptables -A FORWARD -o nat-eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT')
 
     radius.cmd('ip addr flush dev radius-eth0')
     radius.cmd('ip link set radius-eth0 up')
