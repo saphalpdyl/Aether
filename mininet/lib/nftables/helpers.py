@@ -99,10 +99,8 @@ def nft_get_counter_by_handle(nftables_json, handle: int) -> Tuple[int, int] | N
 
     return None
 
-def nft_allow_mac(mac: str):
-    m = mac.lower()
-    _cmd(f"nft add element inet aether_auth authed_macs {{ {m} }}")
+def nft_allow_ip(ip: str):
+    _cmd(f"nft add element inet aether_auth authed_ips {{ {ip} }}")
 
-def nft_remove_mac(mac: str):
-    m = mac.lower()
-    _cmd(f"nft delete element inet aether_auth authed_macs {{ {m} }}")
+def nft_remove_ip(ip: str):
+    _cmd(f"nft delete element inet aether_auth authed_ips {{ {ip} }}")

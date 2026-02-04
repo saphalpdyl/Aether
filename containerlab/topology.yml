@@ -14,6 +14,7 @@ topology:
       exec:
         - ip link set eth1 address 00:00:00:00:00:01
         - ip link set eth1 up
+        - sh -c "ip link set eth0 down || true"
 
     h2:
       kind: linux
@@ -21,18 +22,24 @@ topology:
       exec:
         - ip link set eth1 address 00:00:00:00:00:02
         - ip link set eth1 up
+        - sh -c "ip link set eth0 down || true"
 
     # Nokia SR Linux access node (DHCP Option 82 circuit-id/remote-id)
     srl:
       kind: nokia_srlinux
-      startup-config: srl-access.cli
-
+      type: ixr-d3
+      startup-config: srl-access.json
+      # binds:
+        # - ./srl-access.cli:/etc/opt/srlinux/srl-access.cli:ro
+      # exec:
+        # - bash -c "for i in $(seq 1 90); do /opt/srlinux/bin/sr_cli -d info from state system >/dev/null 2>&1 && break; sleep 1; done; /opt/srlinux/bin/sr_cli -e /etc/opt/srlinux/srl-access.cli"
     # BNG - Broadband Network Gateway
     bng:
       kind: linux
       image: lab-bng
       exec:
         - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done; python3 /opt/bng/bng_main.py &"
+        - sh -c "ip link set eth0 down || true"
         - ip route add 10.0.1.0/24 via 10.0.0.2 dev eth1
 
     # DHCP Server (Kea)
@@ -49,6 +56,7 @@ topology:
         - mkdir -p /run/kea && chmod 777 /run/kea
         - sh -c "KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf &"
         - sh -c "KEA_LOCKFILE_DIR=none kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf &"
+        - sh -c "ip link set eth0 down || true"
 
     # RADIUS server
     radius:
@@ -57,6 +65,7 @@ topology:
       image: lab-radius
       exec:
         - sh -c "/opt/radius/entrypoint.sh >/tmp/radius-entry.log 2>&1 &"
+        - sh -c "ip link set eth0 down || true"
 
     # RADIUS PostgreSQL
     radius_pg:
@@ -75,6 +84,7 @@ topology:
         - sh -c "for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U radius >/dev/null 2>&1 && break; sleep 0.5; done"
         - sh -c "/docker-entrypoint-initdb.d/00-radius-hba.sh || true"
         - sh -c "pg_ctl -D \"$PGDATA\" reload || true"
+        - sh -c "ip link set eth0 down || true"
 
     # Kea PostgreSQL (lease database)
     pg:
@@ -90,13 +100,16 @@ topology:
         - ip link set eth1 up
         - ip addr add 192.0.2.4/24 dev eth1
         - ip route replace default via 192.0.2.1
+        - sh -c "ip link set eth0 down || true"
 
     # Upstream router - provides internet access via macvlan
     upstream:
       kind: linux
       image: alpine:latest
       exec:
-        - apk add --no-cache iptables
+        - apk add --no-cache iptables dhcpcd curl 
+        - dhcpcd eth6
+        - sleep 5
         - sysctl -w net.ipv4.ip_forward=1
         - ip link set eth1 up
         - ip link set eth2 up
@@ -112,9 +125,10 @@ topology:
         - ip link set eth5 master br0
         - ip link set eth6 up
         - iptables -t nat -A POSTROUTING -s 192.0.2.0/24 -o eth6 -j MASQUERADE
-        - iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -o eth6 -j MASQUERADE
+        - iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -o eth6 -j MASQUERADE
         - ip addr add 192.0.2.5/24 dev br0
-        - ip route replace 10.0.0.0/24 via 192.0.2.1
+        - ip route replace 10.0.1.0/24 via 192.0.2.1
+        - sh -c "ip link set eth0 down || true"
 
   links:
     # Subscriber -> SR Linux

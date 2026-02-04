@@ -19,6 +19,8 @@ ip link set eth2 up
 ip addr add 10.0.0.1/24 dev eth1
 ip addr add 192.0.2.1/24 dev eth2
 ip route replace default via 192.0.2.5 dev eth2
+# Route client subnet behind SRL relay
+ip route replace 10.0.1.0/24 via 10.0.0.2 dev eth1
 sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
 
 # NAT FIRST - set up before any ct state rules
@@ -32,12 +34,12 @@ nft delete table inet aether_auth 2>/dev/null || true
 nft delete table inet bngacct 2>/dev/null || true
 nft add table inet aether_auth 2>/dev/null || true
 nft add table inet bngacct 2>/dev/null || true
-nft 'add set inet aether_auth authed_macs { type ether_addr; }' 2>/dev/null || true
+nft 'add set inet aether_auth authed_ips { type ipv4_addr; }' 2>/dev/null || true
 nft 'add chain inet aether_auth forward { type filter hook forward priority -10; policy drop; }' 2>/dev/null || true
 nft 'add rule inet aether_auth forward ct state established,related accept' 2>/dev/null || true
 nft 'add rule inet aether_auth forward iifname "eth1" udp sport 68 udp dport 67 accept' 2>/dev/null || true
 nft 'add rule inet aether_auth forward iifname "eth2" udp sport 67 udp dport 68 accept' 2>/dev/null || true
-nft 'add rule inet aether_auth forward iifname "eth1" ether saddr @authed_macs accept' 2>/dev/null || true
+nft 'add rule inet aether_auth forward iifname "eth1" ip saddr @authed_ips accept' 2>/dev/null || true
 # Reject unauthorized traffic (after authed_macs rule)
 nft 'add rule inet aether_auth forward iifname "eth1" reject' 2>/dev/null || true
 nft 'add chain inet bngacct sess { type filter hook forward priority 0; policy accept; }' 2>/dev/null || true

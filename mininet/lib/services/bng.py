@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from lib.dhcp.lease import DHCPLease
 from lib.dhcp.utils import parse_dhcp_leases, format_mac
-from lib.nftables.helpers import nft_add_subscriber_rules, nft_allow_mac, nft_delete_rule_by_handle, nft_get_counter_by_handle, nft_list_chain_rules, nft_remove_mac
+from lib.nftables.helpers import nft_add_subscriber_rules, nft_allow_ip, nft_delete_rule_by_handle, nft_get_counter_by_handle, nft_list_chain_rules, nft_remove_ip
 from lib.radius.packet_builders import build_access_request, build_acct_start, build_acct_stop, rad_acct_send_from_bng, rad_auth_send_from_bng
 from lib.radius.session import DHCPSession
 from lib.secrets import __RADIUS_SECRET, __KEA_CTRL_AGENT_PASSWORD
@@ -73,7 +73,8 @@ def _authorize_session(
         if ensure_rules and (s.nft_up_handle is None or s.nft_down_handle is None):
             _install_rules_and_baseline(s, ip, mac, iface)
         s.auth_state = "AUTHORIZED"
-        nft_allow_mac(mac)
+        if ip:
+            nft_allow_ip(ip)
         acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
         rad_acct_send_from_bng(acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
         print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
@@ -119,7 +120,8 @@ def terminate_session(
 
         # Remove rulesets allowing traffic 
         if s.mac is not None:
-            nft_remove_mac(s.mac)
+            if s.ip:
+                nft_remove_ip(s.ip)
 
         if delete_rules:
             if s.nft_up_handle is not None:
