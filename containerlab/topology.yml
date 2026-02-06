@@ -56,8 +56,8 @@ topology:
       exec:
         - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done; PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py >>/proc/1/fd/1 2>>/proc/1/fd/2 &"
         - sh -c "ip link set eth0 down || true"
-        - ip route add 10.0.1.0/24 via 10.0.0.2 dev eth1
-        - ip route append 10.0.1.0/24 via 10.0.0.3 dev eth1
+        - ip route add 10.0.1.1/32 via 10.0.0.2 dev eth1
+        - ip route add 10.0.1.2/32 via 10.0.0.3 dev eth1
 
     # DHCP Server (Kea)
     kea:

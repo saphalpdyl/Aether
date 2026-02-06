@@ -4,10 +4,11 @@ set -eu
 echo "Aggregation switch starting..."
 
 # Wait for interfaces
-for i in $(seq 1 30); do
+for i in $(seq 1 150); do
   if ip link show eth1 >/dev/null 2>&1 && \
      ip link show eth2 >/dev/null 2>&1 && \
      ip link show eth3 >/dev/null 2>&1; then
+    echo "Interfaces ready after $i attempts"
     break
   fi
   sleep 0.2
@@ -20,23 +21,30 @@ ip link add br0 type bridge 2>/dev/null || true
 ip link set br0 type bridge stp_state 0
 ip link set br0 type bridge forward_delay 0
 
-# Bring up interfaces
-ip link set eth1 up
-ip link set eth2 up
-ip link set eth3 up
+# Disable MAC ageing (keep learned MACs forever)
+ip link set br0 type bridge ageing_time 0
 
-# Add to bridge
-ip link set eth1 master br0
-ip link set eth2 master br0
-ip link set eth3 master br0
+# Bring up interfaces with promiscuous mode
+for iface in eth1 eth2 eth3; do
+  ip link set "$iface" up
+  ip link set "$iface" promisc on
+  ip link set "$iface" master br0
+  # Enable hairpin mode (allows frames to be sent back out the same port)
+  bridge link set dev "$iface" hairpin on 2>/dev/null || true
+  # Flood unknown unicast
+  bridge link set dev "$iface" flood on 2>/dev/null || true
+  # Enable learning
+  bridge link set dev "$iface" learning on 2>/dev/null || true
+done
 
 # Bring up bridge
 ip link set br0 up
+ip link set br0 promisc on
 
 # Disable management interface
 ip link set eth0 down 2>/dev/null || true
 
-echo "Bridge br0 ready with eth1, eth2, eth3"
+echo "Bridge br0 ready"
 ip link show br0
 bridge link show
 
