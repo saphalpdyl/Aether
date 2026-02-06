@@ -1,13 +1,34 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import threading
 import subprocess
 import time
 import uuid
 from queue import Queue
 
+import redis
+
 from lib.services.bng import bng_event_loop
+
+# Redis configuration
+REDIS_HOST = os.getenv("REDIS_HOST", "192.0.2.10")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
+
+def wait_for_redis(max_retries=30, delay=2) -> redis.Redis:
+    """Wait for Redis to be available."""
+    for i in range(max_retries):
+        try:
+            r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
+            r.ping()
+            print(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
+            return r
+        except redis.ConnectionError:
+            print(f"Waiting for Redis... ({i+1}/{max_retries})")
+            time.sleep(delay)
+    raise RuntimeError("Could not connect to Redis")
 
 
 def start_sniffer(
@@ -75,6 +96,9 @@ def main():
             break
         time.sleep(0.5)
 
+    # Connect to Redis for session events stream
+    redis_client = wait_for_redis()
+
     start_sniffer(bng_id=args.bng_id)
 
     q: Queue = Queue(maxsize=1000)
@@ -83,7 +107,15 @@ def main():
     t.start()
 
     print("Starting BNG event loop")
-    bng_event_loop(stop_event, q, "eth1", 30, bng_id=args.bng_id, bng_instance_id=bng_instance_id)
+    bng_event_loop(
+        stop_event, q,
+        iface="eth1",
+        nas_port_id="eth1",
+        interim_interval=30,
+        bng_id=args.bng_id,
+        bng_instance_id=bng_instance_id,
+        redis_conn=redis_client,
+    )
 
 
 if __name__ == "__main__":

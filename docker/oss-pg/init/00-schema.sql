@@ -1,51 +1,60 @@
--- OSS Session Events Schema
+CREATE TABLE session_events (
+    bng_id           TEXT        NOT NULL,
+    bng_instance_id  UUID        NOT NULL,
+    seq              BIGINT      NOT NULL,
 
-CREATE TABLE IF NOT EXISTS session_events (
-    id SERIAL PRIMARY KEY,
-    idempotency_key VARCHAR(64) UNIQUE,  -- For deduplication
-    event_type VARCHAR(50) NOT NULL,  -- SESSION_START, SESSION_UPDATE, SESSION_END
-    session_id VARCHAR(255) NOT NULL,
-    mac_address VARCHAR(17),
-    ip_address INET,
-    circuit_id TEXT,
-    remote_id TEXT,
-    relay_id TEXT,
-    username TEXT,
-    nas_ip INET,
-    input_octets BIGINT DEFAULT 0,
-    output_octets BIGINT DEFAULT 0,
-    input_packets BIGINT DEFAULT 0,
-    output_packets BIGINT DEFAULT 0,
-    session_time INTEGER DEFAULT 0,
-    event_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    raw_data JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    event_type       TEXT        NOT NULL,  -- SESSION_START | SESSION_UPDATE | SESSION_STOP | POLICY_APPLY
+    ts               TIMESTAMPTZ NOT NULL,
+
+    session_id       UUID        NOT NULL,
+
+    -- attachment identity
+    nas_ip           INET        NOT NULL,
+    circuit_id       TEXT        NOT NULL,
+    remote_id        TEXT        NOT NULL,
+
+    -- subscriber identity
+    mac_address      MACADDR,
+    ip_address       INET,
+    username         TEXT,
+
+    -- absolute counters since SESSION_START
+    input_octets     BIGINT, -- Relative to subscriber
+    output_octets    BIGINT, -- Relative to subscriber
+    input_packets    BIGINT,
+    output_packets   BIGINT,
+
+    raw_data         JSONB,
+
+    status           TEXT,       -- ACTIVE | IDLE | EXPIRED | PENDING
+    auth_state        TEXT,       -- AUTH_PENDING | AUTHORIZED | REJECTED
+
+    PRIMARY KEY (bng_id, bng_instance_id, seq)
 );
 
-CREATE INDEX idx_session_events_session_id ON session_events(session_id);
-CREATE INDEX idx_session_events_event_type ON session_events(event_type);
-CREATE INDEX idx_session_events_mac_address ON session_events(mac_address);
-CREATE INDEX idx_session_events_ip_address ON session_events(ip_address);
-CREATE INDEX idx_session_events_timestamp ON session_events(event_timestamp);
+CREATE TABLE active_sessions (
+    session_id       UUID        PRIMARY KEY,
 
--- Active sessions view
-CREATE TABLE IF NOT EXISTS active_sessions (
-    session_id VARCHAR(255) PRIMARY KEY,
-    mac_address VARCHAR(17),
-    ip_address INET,
-    circuit_id TEXT,
-    remote_id TEXT,
-    relay_id TEXT,
-    username TEXT,
-    nas_ip INET,
-    start_time TIMESTAMP WITH TIME ZONE,
-    last_update TIMESTAMP WITH TIME ZONE,
-    input_octets BIGINT DEFAULT 0,
-    output_octets BIGINT DEFAULT 0,
-    input_packets BIGINT DEFAULT 0,
-    output_packets BIGINT DEFAULT 0,
-    session_time INTEGER DEFAULT 0
+    bng_id           TEXT        NOT NULL,
+    bng_instance_id  UUID        NOT NULL,
+
+    nas_ip           INET        NOT NULL,
+    circuit_id       TEXT        NOT NULL,
+    remote_id        TEXT        NOT NULL,
+
+    mac_address      MACADDR     NOT NULL,
+    ip_address       INET,
+
+    username         TEXT,
+
+    start_time       TIMESTAMPTZ NOT NULL,
+    last_update      TIMESTAMPTZ NOT NULL,
+
+    input_octets     BIGINT      NOT NULL DEFAULT 0,
+    output_octets    BIGINT      NOT NULL DEFAULT 0,
+    input_packets    BIGINT      NOT NULL DEFAULT 0,
+    output_packets   BIGINT      NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_active_sessions_mac ON active_sessions(mac_address);
-CREATE INDEX idx_active_sessions_ip ON active_sessions(ip_address);
+CREATE UNIQUE INDEX uniq_active_attachment
+ON active_sessions (nas_ip, circuit_id, remote_id);

@@ -57,6 +57,7 @@
               "admin-state": "enable",
               "gi-address": "10.0.1.1",
               "use-gi-addr-as-src-ip-addr": true,
+              "relay-unicast-for-renew": true,
               "server": [
                 "10.0.0.1"
               ],

@@ -3,10 +3,14 @@ import re
 import time
 import threading
 from queue import Queue, Empty
-from typing import Dict, Tuple, List
+from typing import Callable, Dict, Tuple, List
 from dataclasses import dataclass
+import uuid
+
+import redis
 
 
+from lib.services.event_dispatcher import BNGEventDispatcher, BNGEventDispatcherConfig
 from lib.dhcp.lease import DHCPLease
 from lib.dhcp.utils import parse_dhcp_leases, format_mac
 from lib.nftables.helpers import nft_add_subscriber_rules, nft_allow_ip, nft_delete_rule_by_handle, nft_get_counter_by_handle, nft_list_chain_rules, nft_remove_ip
@@ -71,11 +75,14 @@ def _authorize_session(
 
     access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
     access_request_response = rad_auth_send_from_bng(access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
+
     if not access_request_response:
         raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
+
     if re.search(r'Access-Reject', access_request_response):
         s.auth_state = "REJECTED"
         return "REJECTED"
+
     if re.search(r'Access-Accept', access_request_response):
         if ensure_rules and (s.nft_up_handle is None or s.nft_down_handle is None):
             _install_rules_and_baseline(s, ip, mac, iface)
@@ -87,12 +94,38 @@ def _authorize_session(
                 nft_allow_ip(ip_clean)
             except Exception:
                 print(f"Skip nft allow: invalid ip={ip!r}")
+
         acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
         rad_acct_send_from_bng(acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+
         print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
         return "AUTHORIZED"
     return None
 
+def get_counters_for_session(s: DHCPSession, nftables_snapshot=None) -> Tuple[int,int,int,int]:
+    """
+        Get total in octets, out octets, in pkts, out pkts for the session by reading nftables counters and calculating deltas from baseline.
+        Returns:
+            (total_in_octets, total_out_octets, total_in_pkts, total_out_pkts)
+    """
+
+    if nftables_snapshot is None:
+        nftables_snapshot = nft_list_chain_rules()
+
+    up_bytes, up_pkts = 0, 0
+    down_bytes, down_pkts = 0, 0
+
+    if s.nft_up_handle is not None:
+        up_bytes, up_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_up_handle) or (0,0)
+    if s.nft_down_handle is not None:
+        down_bytes, down_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_down_handle) or (0,0)
+
+    total_in_octets = max(0, up_bytes - s.base_up_bytes)
+    total_out_octets = max(0, down_bytes - s.base_down_bytes)
+    total_in_pkts = max(0, up_pkts - s.base_up_pkts)
+    total_out_pkts = max(0, down_pkts - s.base_down_pkts)
+
+    return total_in_octets, total_out_octets, total_in_pkts, total_out_pkts
 
 def terminate_session(
     s: DHCPSession,
@@ -103,23 +136,13 @@ def terminate_session(
     nas_port_id: str,
     nftables_snapshot=None,
     delete_rules: bool = True,
-):
+    event_dispatcher: BNGEventDispatcher | None = None,
+) -> bool:
     try:
         if nftables_snapshot is None:
             nftables_snapshot = nft_list_chain_rules()
 
-        up_bytes, up_pkts = 0, 0
-        down_bytes, down_pkts = 0, 0
-
-        if s.nft_up_handle is not None:
-            up_bytes, up_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_up_handle) or (0,0)
-        if s.nft_down_handle is not None:
-            down_bytes, down_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_down_handle) or (0,0)
-
-        total_in_octets = max(0, up_bytes - s.base_up_bytes)
-        total_out_octets = max(0, down_bytes - s.base_down_bytes)
-        total_in_pkts = max(0, up_pkts - s.base_up_pkts)
-        total_out_pkts = max(0, down_pkts - s.base_down_pkts)
+        total_in_octets, total_out_octets, total_in_pkts, total_out_pkts = get_counters_for_session(s, nftables_snapshot)
 
         if s.auth_state == "AUTHORIZED":
             pkt = build_acct_stop(s, nas_ip=nas_ip, nas_port_id=nas_port_id, cause=cause, 
@@ -129,6 +152,7 @@ def terminate_session(
                 output_pkts=total_out_pkts,
             )
             rad_acct_send_from_bng(pkt, server_ip=radius_server_ip, secret=radius_secret)
+            s.auth_state = "PENDING_AUTH"
 
         # Remove rulesets allowing traffic 
         if s.mac is not None:
@@ -146,6 +170,17 @@ def terminate_session(
             if s.nft_down_handle is not None:
                 nft_delete_rule_by_handle(s.nft_down_handle)
 
+        # Dispatch event
+        if event_dispatcher is not None:
+            event_dispatcher.dispatch_session_stop(
+                s,
+                input_octets=total_in_octets,
+                output_octets=total_out_octets,
+                input_packets=total_in_pkts,
+                output_packets=total_out_pkts,
+                terminate_cause=cause,
+            )
+
         return True
     except Exception as e:
         print(f"RADIUS Acct-Stop failed for mac={s.mac} ip={s.ip}: {e}")
@@ -153,34 +188,35 @@ def terminate_session(
 
 
 def dhcp_lease_handler(
-    leasefile=DHCP_LEASE_FILE_PATH,
+    bng_id: str,
+    bng_instance_id: str,
+    event_dispatcher: BNGEventDispatcher,
     iface: str="eth0",
     radius_server_ip: str ="192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
     nas_port_id: str="eth0",
-    kea_ctrl_agent_auth_key: str = __KEA_CTRL_AGENT_PASSWORD
+    kea_ctrl_agent_auth_key: str = __KEA_CTRL_AGENT_PASSWORD,
 ):
     sessions: Dict[Tuple[str,str,str], DHCPSession] = {}
 
     # Multimap pointing to the same session by IP
     # DHCPRELEASE doesn't container opt82 information so we need lookup by IP
-    sessions_by_ip: Dict[str, DHCPSession] = {} 
+    sessions_by_ip: Dict[str, DHCPSession] = {}
 
     tombstones: Dict[Tuple[str,str,str], Tombstone] = {} # NOTE: Used only when ENABLE_IDLE_DISCONNECT = True
-    
+
     _kea_client = KeaClient(base_url=f"http://192.0.2.3:6772", auth_key=kea_ctrl_agent_auth_key)
-    _kea_lease_service = KeaLeaseService(_kea_client, bng_relay_id=nas_ip)
+    _kea_lease_service = KeaLeaseService(_kea_client, bng_relay_id=bng_id)
 
     def handle_dhcp_request(circuit_id: str, remote_id: str, chaddr: str, event: dict):
-        key = (nas_ip,circuit_id,remote_id)
+        key = (bng_id,circuit_id,remote_id)
         existing_sess = sessions.get(key)
         now = time.time()
         try:
             if chaddr is None or isinstance(chaddr, str) is False:
                 raise RuntimeError("DHCP ACK missing chaddr")
 
-            print(sessions.keys())
             if existing_sess is None:
                 # Creating an empty session for tracking
                 sessions[key] = DHCPSession(
@@ -205,7 +241,7 @@ def dhcp_lease_handler(
                     status="PENDING",
                     last_status_change_ts=now,
 
-                    relay_id=nas_ip,
+                    relay_id=bng_id,
                     remote_id=remote_id,
                     circuit_id=circuit_id,
 
@@ -220,7 +256,7 @@ def dhcp_lease_handler(
         ...
 
     def handle_dhcp_ack(circuit_id: str, remote_id: str, chaddr: str, event: dict):
-        key = (nas_ip,circuit_id,remote_id)
+        key = (bng_id,circuit_id,remote_id)
         now = time.time()
 
         try:
@@ -267,13 +303,14 @@ def dhcp_lease_handler(
                     if s.nft_down_handle is not None:
                         nft_delete_rule_by_handle(s.nft_down_handle)
 
-                    terminate_session(
+                    terminate_session( # Dispatches session stop automatically
                         s,
                         cause="IP-change",
                         radius_server_ip=radius_server_ip,
                         radius_secret=radius_secret,
                         nas_ip=nas_ip,
                         nas_port_id=nas_port_id,
+                        event_dispatcher=event_dispatcher
                     )
                     s.nft_up_handle = None
                     s.nft_down_handle = None
@@ -290,6 +327,9 @@ def dhcp_lease_handler(
 
                 # Create a by IP index
                 sessions_by_ip[s.ip] = s
+
+                # Dispatch event for session start before RADIUS auth
+                event_dispatcher.dispatch_session_start(s)
 
                 print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
 
@@ -309,6 +349,8 @@ def dhcp_lease_handler(
                         print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
                     elif result == "AUTHORIZED":
                         print(f"RADIUS Access-Accept received for mac={s.mac} ip={s.ip}")
+
+                    event_dispatcher.dispatch_policy_apply(s)
                 except Exception as e:
                     print(f"RADIUS Acct-Start failed for mac={s.mac} ip={s.ip}: {e}")
             else:
@@ -321,7 +363,7 @@ def dhcp_lease_handler(
 
 
     def handle_dhcp_nak(circuit_id: str, remote_id: str, chaddr: str, event: dict):
-        key = (nas_ip,circuit_id,remote_id)
+        key = (bng_id,circuit_id,remote_id)
         now = time.time()
         
         s = sessions.get(key)
@@ -370,6 +412,7 @@ def dhcp_lease_handler(
                 nftables_snapshot=nftables_snapshot,
             ):
                 print(f"RADIUS Acct-Stop sent for mac={s.mac} ip={s.ip}")
+
 
     dhcp_events = {
         1: handle_dhcp_discover,
@@ -444,6 +487,7 @@ def dhcp_lease_handler(
                     sessions_by_ip[l.ip] = sessions[key]
 
                     _install_rules_and_baseline(sessions[key], l.ip, l.mac, iface)
+                    event_dispatcher.dispatch_session_start(sessions[key])
 
                     print(f"Reconciler: DHCP SESSION START mac={l.mac} ip={l.ip} iface={iface} hostname={l.hostname}")
 
@@ -462,6 +506,8 @@ def dhcp_lease_handler(
                             print(f"RADIUS Access-Reject received for mac={l.mac} ip={l.ip}")
                         elif result == "AUTHORIZED":
                             print(f"RADIUS Access-Accept received for mac={l.mac} ip={l.ip}")
+
+                        event_dispatcher.dispatch_policy_apply(sessions[key])
                     except Exception as e:
                         print(f"Reconciler: RADIUS Acct-Start failed for mac={l.mac} ip={l.ip}: {e}")
 
@@ -480,6 +526,15 @@ def dhcp_lease_handler(
                         s.dhcp_nak_count = 0
 
                         if l.ip == s.ip: 
+                            # total_in_octets, total_out_octets, total_in_pkts, total_out_pkts = get_counters_for_session(s)
+
+                            # event_dispatcher.dispatch_session_update(
+                            #     s,
+                            #     input_octets=total_in_octets,
+                            #     output_octets=total_out_octets,
+                            #     input_packets=total_in_pkts,
+                            #     output_packets=total_out_pkts,
+                            # )
                             # Already have this lease assigned
                             continue
 
@@ -489,6 +544,7 @@ def dhcp_lease_handler(
                         s.last_status_change_ts = now
 
                         _install_rules_and_baseline(s, s.ip, s.mac, iface)
+                        event_dispatcher.dispatch_session_start(s)
 
                         print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
 
@@ -510,6 +566,8 @@ def dhcp_lease_handler(
                         except Exception as e:
                             print(f"RADIUS Acct-Start failed for mac={s.mac} ip={s.ip}: {e}")
 
+                        event_dispatcher.dispatch_policy_apply(s)
+
                         continue
 
                 # Case A: Lease renewed ( expiry extended ) but missed DHCP packet
@@ -518,10 +576,13 @@ def dhcp_lease_handler(
 
                 s.last_seen = now
 
+                total_in_octets, total_out_octets, total_in_pkts, total_out_pkts = get_counters_for_session(s)
+
                 # Case B: Lease changed ( IP changed )
                 if s.ip != l.ip:
-                    old_ip, old_expiry = s.ip, s.expiry
+                    old_ip, old_expiry, old_session_id = s.ip, s.expiry, s.session_id
                     s.ip, s.expiry, s.hostname = l.ip, l.expiry, l.hostname
+
 
                     # Remove idle status on renew
                     s.last_idle_ts = None
@@ -532,62 +593,83 @@ def dhcp_lease_handler(
 
                     print(f"DHCP SESSION RENEW mac={l.mac} old_ip={old_ip} new_ip={s.ip} old_expiry={old_expiry} new_expiry={s.expiry} iface={iface} hostname={l.hostname}")
 
-                    if old_ip != s.ip:
-                        old_session = DHCPSession(
-                            mac=s.mac,
-                            ip=old_ip,
-                            first_seen=s.first_seen,
-                            last_seen=s.last_seen,
-                            expiry=old_expiry,
-                            iface=s.iface,
-                            hostname=s.hostname,
-                            last_interim=s.last_interim,
+                    # Renew with IP change means a new session
+                    if old_ip:
+                        sessions_by_ip.pop(old_ip, None)
 
-                            relay_id=s.relay_id,
-                            remote_id=s.remote_id,
-                            circuit_id=s.circuit_id,
+                    old_session = DHCPSession(
+                        session_id=old_session_id, # New session ID will be generated for the updated session; keep old one for accurate event correlation in case of IP change
+                        mac=s.mac,
+                        ip=old_ip,
+                        first_seen=s.first_seen,
+                        last_seen=s.last_seen,
+                        expiry=old_expiry,
+                        iface=s.iface,
+                        hostname=s.hostname,
+                        last_interim=s.last_interim,
 
-                            status=s.status,
-                            auth_state=s.auth_state,
-                        )
+                        relay_id=s.relay_id,
+                        remote_id=s.remote_id,
+                        circuit_id=s.circuit_id,
 
-                        nftables_snapshot = nft_list_chain_rules()
+                        status=s.status,
+                        auth_state=s.auth_state,
 
-                        if old_ip:
-                            ip_clean = str(old_ip).replace("\x00", "")
-                            ipaddress.ip_address(ip_clean)
-                            nft_remove_ip(ip_clean)
+                        last_up_bytes=s.last_up_bytes,
+                        last_down_bytes=s.last_down_bytes,
+                        last_traffic_seen_ts=s.last_traffic_seen_ts,
+                    )
 
-                        if terminate_session(
-                            old_session,
-                            cause="IP-change",
-                            radius_server_ip=radius_server_ip,
-                            radius_secret=radius_secret,
-                            nas_ip=nas_ip,
-                            nas_port_id=nas_port_id,
-                            nftables_snapshot=nftables_snapshot,
-                        ):
-                            print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
-                        
-                        reauth_result = _authorize_session(
-                            s,
-                            s.ip,
-                            s.mac,
-                            iface,
-                            radius_server_ip,
-                            radius_secret,
-                            nas_ip,
-                            nas_port_id,
-                        )
+                    # Regenerating the session_id 
+                    s.session_id = str(uuid.uuid4())
 
-                        if reauth_result == "REJECTED":
-                            print(f"RADIUS Access-Reject received for mac={s.mac} new_ip={s.ip}")
-                        elif reauth_result == "AUTHORIZED":
-                            print(f"RADIUS Access-Accept received for mac={s.mac} new_ip={s.ip}")
+                    nftables_snapshot = nft_list_chain_rules()
+                    total_in_octets, total_out_octets, total_in_pkts, total_out_pkts = get_counters_for_session(old_session, nftables_snapshot)
+                    event_dispatcher.dispatch_session_stop(old_session, input_octets=total_in_octets, output_octets=total_out_octets, input_packets=total_in_pkts, output_packets=total_out_pkts, terminate_cause="IP-change")
+
+                    if old_ip:
+                        ip_clean = str(old_ip).replace("\x00", "")
+                        ipaddress.ip_address(ip_clean)
+                        nft_remove_ip(ip_clean)
+
+                    if terminate_session(
+                        old_session,
+                        cause="IP-change",
+                        radius_server_ip=radius_server_ip,
+                        radius_secret=radius_secret,
+                        nas_ip=nas_ip,
+                        nas_port_id=nas_port_id,
+                        nftables_snapshot=nftables_snapshot,
+                        event_dispatcher=event_dispatcher,
+                    ):
+                        print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
+
+                    # Reassign multimap with new IP
+                    sessions_by_ip[s.ip] = s    
+                    event_dispatcher.dispatch_session_start(s)
+                    
+                    reauth_result = _authorize_session(
+                        s,
+                        s.ip,
+                        s.mac,
+                        iface,
+                        radius_server_ip,
+                        radius_secret,
+                        nas_ip,
+                        nas_port_id,
+                    )
+
+                    if reauth_result == "REJECTED":
+                        print(f"RADIUS Access-Reject received for mac={s.mac} new_ip={s.ip}")
+                    elif reauth_result == "AUTHORIZED":
+                        print(f"RADIUS Access-Accept received for mac={s.mac} new_ip={s.ip}")
+
+                    event_dispatcher.dispatch_policy_apply(s)
 
         # Zombie sessions cleanup
         # ended = [key for key, l in sessions.items() if (key not in current and current[key])]
         ended = []
+        print(f"Session keys: {sessions.keys()} Current keys: {current.keys()}")
         for key, s in list(sessions.items()):
             l = current.get(key)
             if l is None:
@@ -611,17 +693,19 @@ def dhcp_lease_handler(
             if s.ip:
                 sessions_by_ip.pop(s.ip)
 
+
             dur = int(now - s.first_seen)
-            print(f"DHCP SESSION END mac={s.mac} ip={s.ip} iface={s.iface} hostname={s.hostname} duration={dur}s")
+            print(f"Reconciler: DHCP SESSION END mac={s.mac} ip={s.ip} iface={s.iface} hostname={s.hostname} duration={dur}s")
 
             if terminate_session(
                 s,
-                cause="User-Request",
+                cause="Reconcile-Timeout",
                 radius_server_ip=radius_server_ip,
                 radius_secret=radius_secret,
                 nas_ip=nas_ip,
                 nas_port_id=nas_port_id,
                 nftables_snapshot=nftables_snapshot,
+                event_dispatcher=event_dispatcher,
             ):
                 print(f"RADIUS Acct-Stop sent for mac={s.mac} ip={s.ip}")
 
@@ -633,7 +717,9 @@ def dhcp_lease_handler(
 def bng_event_loop(
     stop_event: threading.Event,
     event_queue: Queue,
-    iface: str = "eth0",
+    *,
+    redis_conn: redis.Redis | None = None,
+    iface: str = "eth1",
 
     # Intervals
     interim_interval: int = 30,
@@ -644,18 +730,31 @@ def bng_event_loop(
     radius_server_ip: str ="192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
-    nas_port_id: str="eth0",
+    nas_port_id: str="eth1",
 
     # BNG identification for distributed deployment
     bng_id: str = "bng-default",
     bng_instance_id: str = "",
 ):
+    event_dispatcher = BNGEventDispatcher(
+        config=BNGEventDispatcherConfig(
+            bng_id=bng_id,
+            bng_instance_id=bng_instance_id,
+            nas_ip=nas_ip,
+            redis_conn=redis_conn,
+            print_dispatched_events=True,
+        )
+    )
+
     dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(
+        bng_id,
+        bng_instance_id,
         iface=iface,
         radius_server_ip=radius_server_ip,
         radius_secret=radius_secret,
         nas_ip=nas_ip,
         nas_port_id=nas_port_id,
+        event_dispatcher=event_dispatcher,
     )
     next_interim = time.time() + interim_interval
     next_auth_retry = time.time() + auth_retry_interval
@@ -691,6 +790,7 @@ def bng_event_loop(
                     radius_secret=radius_secret,
                     nas_ip=nas_ip,
                     nas_port_id=nas_port_id,
+                    event_dispatcher=event_dispatcher
                 )
             except Exception as e:
                 print(f"BNG thread Interim-Update error: {e}")
@@ -747,6 +847,7 @@ def bng_event_loop(
                                 nas_ip=nas_ip,
                                 nas_port_id=nas_port_id,
                                 nftables_snapshot=nftables_snapshot,
+                                event_dispatcher=event_dispatcher,
                             )
                             tombstones[key] = Tombstone(
                                 ip_at_stop=s.ip or "",

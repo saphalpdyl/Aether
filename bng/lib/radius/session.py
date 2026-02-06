@@ -1,5 +1,6 @@
 from typing import Literal
-from dataclasses import dataclass 
+from dataclasses import dataclass, field
+import uuid
 
 @dataclass
 class DHCPSession:
@@ -13,9 +14,12 @@ class DHCPSession:
     last_interim: float | None # For Interim-Update tracking
 
     # opt82
-    relay_id: str;
-    remote_id: str;
-    circuit_id: str;
+    relay_id: str
+    remote_id: str
+    circuit_id: str
+
+    # Unique session ID for event tracking
+    session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     # nftables related data
     nft_up_handle: int | None = None
@@ -38,3 +42,7 @@ class DHCPSession:
 
 
     dhcp_nak_count: int = 0
+
+    def access_key(self) -> str:
+        """Generate a unique key for this session based on MAC, IP, and first seen timestamp."""
+        return f"{self.relay_id}/{self.circuit_id}/{self.remote_id}"

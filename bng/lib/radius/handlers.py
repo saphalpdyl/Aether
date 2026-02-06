@@ -1,6 +1,7 @@
 from typing import Dict, Tuple
 import time
 
+from lib.services.event_dispatcher import BNGEventDispatcher
 from lib.secrets import __RADIUS_SECRET
 from lib.nftables.helpers import nft_list_chain_rules , nft_get_counter_by_handle
 from lib.radius.packet_builders import build_acct_interim, rad_acct_send_from_bng
@@ -8,11 +9,13 @@ from lib.radius.session import DHCPSession
 from lib.constants import IDLE_GRACE_AFTER_CONNECT, MARK_IDLE_GRACE_SECONDS
 
 def radius_handle_interim_updates(
-        sessions: Dict[Tuple[str,str,str], DHCPSession],
-        radius_server_ip: str ="192.0.2.2",
-        radius_secret: str = __RADIUS_SECRET,
-        nas_ip: str="192.0.2.1",
-        nas_port_id: str="eth0"):
+    sessions: Dict[Tuple[str,str,str], DHCPSession],
+    radius_server_ip: str ="192.0.2.2",
+    radius_secret: str = __RADIUS_SECRET,
+    nas_ip: str="192.0.2.1",
+    nas_port_id: str="eth0",
+    event_dispatcher: BNGEventDispatcher | None = None,
+):
     now = time.time()
     try:
         if sessions is None or len(sessions) == 0:
@@ -80,6 +83,15 @@ def radius_handle_interim_updates(
             )
             rad_acct_send_from_bng(pkt, server_ip=radius_server_ip, secret=radius_secret)
             s.last_interim = now
+
+            if event_dispatcher:
+                event_dispatcher.dispatch_session_update(
+                    s,
+                    input_octets=total_out_octets,
+                    output_octets=total_in_octets,
+                    input_packets=total_out_pkts,
+                    output_packets=total_in_pkts,
+                )
             print(f"RADIUS Acct-Interim sent for mac={s.mac} ip={s.ip}")
         except Exception as e:
             print(f"RADIUS Acct-Interim failed for mac={s.mac} ip={s.ip}: {e}")

@@ -12,3 +12,6 @@ IDLE_GRACE_AFTER_CONNECT = 40 # To check for idle after initial connect where th
 ENABLE_IDLE_DISCONNECT = False
 TOMBSTONE_TTL_SECONDS = 600
 TOMBSTONE_EXPIRY_GRACE_SECONDS = 60
+
+# Event dispatcher settings
+EVENT_DISPATCHER_STREAM_ID = "bng_events"

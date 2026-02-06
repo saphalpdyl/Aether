@@ -41,7 +41,7 @@ def acct_session_id(mac: str, ip: str, first_seen: float) -> str:
 def acct_user_name(s: DHCPSession) -> str:
     if not s.remote_id or not s.circuit_id:
         raise RuntimeError("Missing required Option 82 fields for User-Name (remote_id/circuit_id).")
-    user = f"{s.remote_id}/{s.circuit_id}"
+    user = f"{s.relay_id}/{s.remote_id}/{s.circuit_id}"
     # Keep RADIUS User-Name consistent with SQL escaping (escape '|' and ':')
     return user.replace("|", "=7C")
 

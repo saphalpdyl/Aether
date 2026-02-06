@@ -16,7 +16,6 @@ def _cmd(command: str) -> str:
 # nftables helpers
 def nft_list_chain_rules():
     out = _cmd("nft -j list chain inet bngacct sess")
-    print("nft list chain output:", out)
 
     try:
 

@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     python3 \
     python3-requests \
+    python3-redis \
     tcpdump \
   && rm -rf /var/lib/apt/lists/*
 
