@@ -401,7 +401,7 @@ sql {
         #
         #  Set this option to yes to use the database driver provided escape
         #  function.
-#       auto_escape = no
+        auto_escape = yes
 
         # Read database-specific queries
         $INCLUDE ${modconfdir}/${.:name}/main/${dialect}/queries.conf

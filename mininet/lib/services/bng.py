@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from lib.dhcp.lease import DHCPLease
 from lib.dhcp.utils import parse_dhcp_leases, format_mac
 from lib.nftables.helpers import nft_add_subscriber_rules, nft_allow_ip, nft_delete_rule_by_handle, nft_get_counter_by_handle, nft_list_chain_rules, nft_remove_ip
+import ipaddress
 from lib.radius.packet_builders import build_access_request, build_acct_start, build_acct_stop, rad_acct_send_from_bng, rad_auth_send_from_bng
 from lib.radius.session import DHCPSession
 from lib.secrets import __RADIUS_SECRET, __KEA_CTRL_AGENT_PASSWORD
@@ -62,6 +63,12 @@ def _authorize_session(
     nas_port_id: str,
     ensure_rules: bool = False,
 ) -> str | None:
+    # Normalize remote_id if it looks like raw MAC bytes rendered as str with nulls.
+    if s.remote_id and any(ch == "\x00" for ch in s.remote_id):
+        raw = s.remote_id.encode("latin1", errors="ignore")
+        if len(raw) == 6:
+            s.remote_id = ":".join(f"{b:02x}" for b in raw)
+
     access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
     access_request_response = rad_auth_send_from_bng(access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
     if not access_request_response:
@@ -74,7 +81,12 @@ def _authorize_session(
             _install_rules_and_baseline(s, ip, mac, iface)
         s.auth_state = "AUTHORIZED"
         if ip:
-            nft_allow_ip(ip)
+            try:
+                ip_clean = str(ip).replace("\x00", "")
+                ipaddress.ip_address(ip_clean)
+                nft_allow_ip(ip_clean)
+            except Exception:
+                print(f"Skip nft allow: invalid ip={ip!r}")
         acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
         rad_acct_send_from_bng(acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
         print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
@@ -121,7 +133,12 @@ def terminate_session(
         # Remove rulesets allowing traffic 
         if s.mac is not None:
             if s.ip:
-                nft_remove_ip(s.ip)
+                try:
+                    ip_clean = str(s.ip).replace("\x00", "")
+                    ipaddress.ip_address(ip_clean)
+                    nft_remove_ip(ip_clean)
+                except Exception:
+                    print(f"Skip nft remove: invalid ip={s.ip!r}")
 
         if delete_rules:
             if s.nft_up_handle is not None:

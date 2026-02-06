@@ -58,6 +58,7 @@ def main():
     t = threading.Thread(target=tail_events, args=(q,), daemon=True)
     t.start()
 
+    print("Starting BNG event loop")
     bng_event_loop(stop_event, q, "eth1", 30)
 
 
