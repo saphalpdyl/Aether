@@ -53,8 +53,10 @@ topology:
     bng:
       kind: linux
       image: lab-bng
+      env:
+        BNG_IDENTIFIER: bng-01
       exec:
-        - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done; PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py >>/proc/1/fd/1 2>>/proc/1/fd/2 &"
+        - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done; PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py --bng-id $BNG_IDENTIFIER >>/proc/1/fd/1 2>>/proc/1/fd/2 &"
         - sh -c "ip link set eth0 down || true"
 
     # DHCP Server (Kea)
@@ -190,8 +192,8 @@ topology:
         - ip link set eth7 master br0
         - ip link set eth8 master br0
         - ip link set eth9 up
-        - iptables -t nat -A POSTROUTING -s 192.0.2.0/24 -o eth6 -j MASQUERADE
-        - iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -o eth6 -j MASQUERADE
+        - iptables -t nat -A POSTROUTING -s 192.0.2.0/24 -o eth9 -j MASQUERADE
+        - iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -o eth9 -j MASQUERADE
         - ip addr add 192.0.2.5/24 dev br0
         - ip route replace 10.0.1.0/24 via 192.0.2.1
         - sh -c "ip link set eth0 down || true"

@@ -1,5 +1,8 @@
 FROM debian:bookworm-slim
 
+# BNG identifier for distributed deployment (set at runtime)
+ENV BNG_IDENTIFIER=bng-default
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     freeradius-utils \

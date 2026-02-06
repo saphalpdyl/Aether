@@ -645,6 +645,10 @@ def bng_event_loop(
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
     nas_port_id: str="eth0",
+
+    # BNG identification for distributed deployment
+    bng_id: str = "bng-default",
+    bng_instance_id: str = "",
 ):
     dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(
         iface=iface,

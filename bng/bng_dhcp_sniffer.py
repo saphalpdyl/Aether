@@ -282,6 +282,7 @@ def relay_loop(
     dst_mac: bytes | None,
     emit_json: bool,
     log_path: str | None,
+    bng_id: str,
 ):
     logf = open(log_path, "a") if log_path else None
     def log(msg: str):
@@ -364,7 +365,7 @@ def relay_loop(
                 # - remote_id: from access switch (preserve) OR CLI override if specified
                 # - relay_id: from CLI args (add)
                 final_remote_id = remote_id.encode() if remote_id else existing_remote_id
-                relayid = relay_id.encode() if relay_id else None
+                relayid = bng_id.encode() if relay_id else None
                 
                 opt82 = build_option82(existing_circuit_id, final_remote_id, relayid)
                 
@@ -438,6 +439,7 @@ def main():
     parser.add_argument("--dst-mac", default=None)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--log", default=None)
+    parser.add_argument("--bng-id", required=True, help="BNG identifier for distributed deployment")
     args = parser.parse_args()
 
     src_mac = bytes.fromhex(args.src_mac.replace(":", "")) if args.src_mac else None
@@ -455,6 +457,7 @@ def main():
         dst_mac,
         args.json,
         args.log,
+        args.bng_id,
     )
 
 
