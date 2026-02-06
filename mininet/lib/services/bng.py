@@ -162,6 +162,11 @@ def dhcp_lease_handler(
     kea_ctrl_agent_auth_key: str = __KEA_CTRL_AGENT_PASSWORD
 ):
     sessions: Dict[Tuple[str,str,str], DHCPSession] = {}
+
+    # Multimap pointing to the same session by IP
+    # DHCPRELEASE doesn't container opt82 information so we need lookup by IP
+    sessions_by_ip: Dict[str, DHCPSession] = {} 
+
     tombstones: Dict[Tuple[str,str,str], Tombstone] = {} # NOTE: Used only when ENABLE_IDLE_DISCONNECT = True
     
     _kea_client = KeaClient(base_url=f"http://192.0.2.3:6772", auth_key=kea_ctrl_agent_auth_key)
@@ -275,11 +280,17 @@ def dhcp_lease_handler(
                     s.nft_down_handle = None
                     s.auth_state = "PENDING_AUTH"
 
+                if not leased_ip and (not isinstance(leased_ip, str) or leased_ip == "\x00") :
+                    raise RuntimeError(f"DHCP ACK with invalid leased IP: {leased_ip!r}")
+
+                # Create new session
                 s.ip = leased_ip
                 s.first_seen = now
                 s.status = "ACTIVE"
                 s.last_status_change_ts = now
 
+                # Create a by IP index
+                sessions_by_ip[s.ip] = s
 
                 print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
 
@@ -326,16 +337,19 @@ def dhcp_lease_handler(
             s.dhcp_nak_count += 1
             ...
 
-    def handle_dhcp_release(circuit_id: str, remote_id: str, chaddr: str, event: dict):
-        key = (nas_ip,circuit_id,remote_id)
+    def handle_dhcp_release(ip: str):
+        key = ip
         now = time.time()
         nftables_snapshot = nft_list_chain_rules()
 
-        s = sessions.pop(key, None)
+        s = sessions_by_ip.pop(key, None) # Lookup by IP
         if s is None:
-            print(f"DHCP RELEASE for unknown session circuit: {circuit_id} remote: {remote_id}")
+            print(f"DHCP RELEASE for unknown IP: {ip}")
             return
-        tombstones[key] = Tombstone(
+
+        sessions.pop((nas_ip, s.circuit_id, s.remote_id), None) # Remove reference from main sessions map
+
+        tombstones[(nas_ip, s.circuit_id, s.remote_id)] = Tombstone(
             ip_at_stop=s.ip or "",
             latest_state_update_ts_at_stop=s.expiry or int(time.time()),
             stopped_at=time.time(),
@@ -363,7 +377,7 @@ def dhcp_lease_handler(
         3: handle_dhcp_request,
         5: handle_dhcp_ack,
         6: handle_dhcp_nak,
-        7: handle_dhcp_release,
+        7: handle_dhcp_release, # SPECIAL CASE | No Option 82 parameters
     }
 
     def handle_dhcp_event(event: dict):
@@ -376,25 +390,20 @@ def dhcp_lease_handler(
         circuit_id = _decode_bytes(event.get("circuit_id"))
         remote_id = _decode_bytes(event.get("remote_id"))
         chaddr = _decode_bytes(event.get("chaddr"))
+        ip = _decode_bytes(event.get("ip"))
 
-        if event_handler is not None and circuit_id is not None and remote_id is not None and chaddr:
-            print(f"Handling DHCP event {event_handler.__name__} event: {event}")
-            event_handler(circuit_id, remote_id, chaddr, event)
+        if event_handler is not None:
+            if msg_type == 7 and ip is not None:
+                print(f"Hanling DHCP RELEASE event: {event}")
+                handle_dhcp_release(ip)
+
+            if circuit_id and remote_id and chaddr:
+                print(f"Handling DHCP event {event_handler.__name__} event: {event}")
+                event_handler(circuit_id, remote_id, chaddr, event)
+        else:
+            print(f"Dropped unsupported DHCP event: {event} msg_type={msg_type} circuit_id={circuit_id} remote_id={remote_id} chaddr={chaddr}")
 
     def reconcile_handler():
-        # raw = bng.cmd(f"cat {leasefile} 2>/dev/null || true")
-        # now = time.time()
-        # leases: List[DHCPLease] | None = []
-        #
-        # lease_parse_success = False
-        # lease_parse_err_message = "Unknown error"
-        # if raw and raw.strip():
-        #     leases, lease_parse_success, lease_parse_err_message = parse_dhcp_leases(raw)
-        #
-        #     if not lease_parse_success:
-        #         print(f"DHCP Lease parse error: {lease_parse_err_message}", leases, raw)
-        #         return
-
         now = time.time()
         leases = _kea_lease_service.get_all_leases()
 
@@ -433,6 +442,7 @@ def dhcp_lease_handler(
 
                         status="ACTIVE",
                     )
+                    sessions_by_ip[l.ip] = sessions[key]
 
                     _install_rules_and_baseline(sessions[key], l.ip, l.mac, iface)
 
@@ -611,6 +621,9 @@ def dhcp_lease_handler(
 
         for key in ended:
             s = sessions.pop(key)
+            if s.ip:
+                sessions_by_ip.pop(s.ip)
+
             dur = int(now - s.first_seen)
             print(f"DHCP SESSION END mac={s.mac} ip={s.ip} iface={s.iface} hostname={s.hostname} duration={dur}s")
 
