@@ -1,6 +1,6 @@
-# ISP lab (containerlab)
+# Aether
 
-This repository runs an ISP lab topology using containerlab. It replaces the previous Containernet/Mininet setup and is meant to be the single source of truth.
+Lightweight Network Operations System from scratch(almost) with custom BNG routers. Built as a personal project to learn the ins and outs of ISP infrastructure emulated by containerlab. 
 
 ## Prerequisites
 - Docker + Docker Compose
