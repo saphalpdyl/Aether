@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
   && rm -rf /var/lib/apt/lists/*
 
-COPY mininet/conf/kea-dhcp4.conf /etc/kea/kea-dhcp4.conf
-COPY mininet/conf/kea-ctrl-agent.conf /etc/kea/kea-ctrl-agent.conf
+COPY bng/conf/kea-dhcp4.conf /etc/kea/kea-dhcp4.conf
+COPY bng/conf/kea-ctrl-agent.conf /etc/kea/kea-ctrl-agent.conf
 
 ENTRYPOINT ["sleep", "infinity"]

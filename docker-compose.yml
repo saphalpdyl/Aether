@@ -42,3 +42,8 @@ services:
       POSTGRES_DB: radius
       POSTGRES_USER: radius
       POSTGRES_PASSWORD: test
+  agg:
+    build:
+      context: .
+      dockerfile: docker/agg/Dockerfile
+    image: lab-agg

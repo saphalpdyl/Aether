@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iputils-ping \
   && rm -rf /var/lib/apt/lists/*
 
-COPY mininet/relay_switch.py /opt/relay/relay_switch.py
+COPY bng/relay_switch.py /opt/relay/relay_switch.py
 COPY docker/relay/entrypoint.sh /opt/relay/entrypoint.sh
 RUN chmod +x /opt/relay/entrypoint.sh
 

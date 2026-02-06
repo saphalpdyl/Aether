@@ -24,15 +24,31 @@ topology:
         - ip link set eth1 up
         - sh -c "ip link set eth0 down || true"
 
+    h3:
+      kind: linux
+      image: lab-host
+      exec:
+        - ip link set eth1 address 00:00:00:00:00:03
+        - ip link set eth1 up
+        - sh -c "ip link set eth0 down || true"
+
     # Nokia SR Linux access node (DHCP Option 82 circuit-id/remote-id)
     srl:
       kind: nokia_srlinux
       type: ixr-d3
       startup-config: srl-access.json
-      # binds:
-        # - ./srl-access.cli:/etc/opt/srlinux/srl-access.cli:ro
-      # exec:
-        # - bash -c "for i in $(seq 1 90); do /opt/srlinux/bin/sr_cli -d info from state system >/dev/null 2>&1 && break; sleep 1; done; /opt/srlinux/bin/sr_cli -e /etc/opt/srlinux/srl-access.cli"
+
+    # Second Nokia SR Linux access node (different hostname for circuit-id)
+    srl2:
+      kind: nokia_srlinux
+      type: ixr-d3
+      startup-config: srl2-access.json
+
+    # Aggregation switch between SRLs and BNG
+    agg:
+      kind: linux
+      image: lab-agg
+
     # BNG - Broadband Network Gateway
     bng:
       kind: linux
@@ -41,6 +57,7 @@ topology:
         - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done; PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py >>/proc/1/fd/1 2>>/proc/1/fd/2 &"
         - sh -c "ip link set eth0 down || true"
         - ip route add 10.0.1.0/24 via 10.0.0.2 dev eth1
+        - ip route append 10.0.1.0/24 via 10.0.0.3 dev eth1
 
     # DHCP Server (Kea)
     kea:
@@ -132,12 +149,19 @@ topology:
         - sh -c "ip link set eth0 down || true"
 
   links:
-    # Subscriber -> SR Linux
+    # Subscriber -> SR Linux (srl)
     - endpoints: ["h1:eth1", "srl:e1-1"]
     - endpoints: ["h2:eth1", "srl:e1-2"]
 
-    # SR Linux -> BNG (subscriber side)
-    - endpoints: ["srl:e1-3", "bng:eth1"]
+    # Subscriber -> SR Linux (srl2)
+    - endpoints: ["h3:eth1", "srl2:e1-1"]
+
+    # SR Linux nodes -> Aggregation switch
+    - endpoints: ["srl:e1-3", "agg:eth1"]
+    - endpoints: ["srl2:e1-3", "agg:eth2"]
+
+    # Aggregation switch -> BNG (subscriber side)
+    - endpoints: ["agg:eth3", "bng:eth1"]
 
     # BNG -> Upstream network (192.0.2.0/24)
     - endpoints: ["bng:eth2", "upstream:eth1"]

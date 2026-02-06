@@ -13,9 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tcpdump \
   && rm -rf /var/lib/apt/lists/*
 
-COPY mininet/lib /opt/bng/lib
-COPY mininet/bng_main.py /opt/bng/bng_main.py
-COPY mininet/bng_dhcp_sniffer.py /opt/bng/bng_dhcp_sniffer.py
+COPY bng/lib /opt/bng/lib
+COPY bng/bng_main.py /opt/bng/bng_main.py
+COPY bng/bng_dhcp_sniffer.py /opt/bng/bng_dhcp_sniffer.py
 COPY docker/bng/entrypoint.sh /opt/bng/entrypoint.sh
 RUN chmod +x /opt/bng/entrypoint.sh
 

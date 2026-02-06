@@ -8,7 +8,7 @@ from lib.radius.session import DHCPSession
 from lib.radius.utils import split_bytes_to_gigawords_octets
 from lib.secrets import __RADIUS_SECRET
 
-# Future: Move to somewhere so that mininet code and bng code can separate
+# Future: Move to somewhere so that this can be reused
 def rad_acct_send_from_bng(
     packet: str,
     server_ip: str,

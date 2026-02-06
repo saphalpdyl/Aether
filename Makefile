@@ -4,7 +4,6 @@
 dev:
 	sudo docker compose build
 	sudo containerlab deploy -t containerlab/topology.yml
-	# $(MAKE) srl-post
 	$(MAKE) ips
 
 clean:
@@ -13,9 +12,6 @@ clean:
 debug:
 	sudo docker compose build
 	sudo containerlab deploy -t /home/test/lab/containerlab/topology.yml --log-level debug
-#
-# srl-post:
-# 	sudo docker exec -i clab-isp-lab-srl sr_cli -e < containerlab/srl-access.cli
 
 ips:
 	@printf "%-24s %-60s\n" "Name" "Interfaces"
