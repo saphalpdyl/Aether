@@ -118,13 +118,57 @@ topology:
         - ip route replace default via 192.0.2.1
         - sh -c "ip link set eth0 down || true"
 
+    # Redis for session events stream
+    redis:
+      kind: linux
+      image: lab-redis
+      exec:
+        - sh -c "ip addr flush dev eth1 || true"
+        - ip link set eth1 up
+        - ip addr add 192.0.2.10/24 dev eth1
+        - ip route replace default via 192.0.2.5
+        - sh -c "ip link set eth0 down || true"
+
+    # OSS PostgreSQL (session events database)
+    oss_pg:
+      kind: linux
+      image: lab-oss-pg
+      memory: 8Gb
+      env:
+        POSTGRES_DB: oss
+        POSTGRES_USER: oss
+        POSTGRES_PASSWORD: oss
+      exec:
+        - sh -c "ip addr flush dev eth1 || true"
+        - ip link set eth1 up
+        - ip addr add 192.0.2.11/24 dev eth1
+        - ip route replace default via 192.0.2.5
+        - sh -c "ip link set eth0 down || true"
+
+    # BNG Events Ingestor (Redis -> PostgreSQL)
+    bng_ingestor:
+      kind: linux
+      image: lab-bng-ingestor
+      env:
+        REDIS_HOST: 192.0.2.10
+        PG_HOST: 192.0.2.11
+        PG_DB: oss
+        PG_USER: oss
+        PG_PASSWORD: oss
+      exec:
+        - sh -c "ip addr flush dev eth1 || true"
+        - ip link set eth1 up
+        - ip addr add 192.0.2.12/24 dev eth1
+        - ip route replace default via 192.0.2.5
+        - sh -c "ip link set eth0 down || true"
+
     # Upstream router - provides internet access via macvlan
     upstream:
       kind: linux
       image: alpine:latest
       exec:
-        - apk add --no-cache iptables dhcpcd curl 
-        - dhcpcd eth6
+        - apk add --no-cache iptables dhcpcd curl
+        - dhcpcd eth9
         - sleep 5
         - sysctl -w net.ipv4.ip_forward=1
         - ip link set eth1 up
@@ -132,6 +176,9 @@ topology:
         - ip link set eth3 up
         - ip link set eth4 up
         - ip link set eth5 up
+        - ip link set eth6 up
+        - ip link set eth7 up
+        - ip link set eth8 up
         - ip link add br0 type bridge
         - ip link set br0 up
         - ip link set eth1 master br0
@@ -139,7 +186,10 @@ topology:
         - ip link set eth3 master br0
         - ip link set eth4 master br0
         - ip link set eth5 master br0
-        - ip link set eth6 up
+        - ip link set eth6 master br0
+        - ip link set eth7 master br0
+        - ip link set eth8 master br0
+        - ip link set eth9 up
         - iptables -t nat -A POSTROUTING -s 192.0.2.0/24 -o eth6 -j MASQUERADE
         - iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -o eth6 -j MASQUERADE
         - ip addr add 192.0.2.5/24 dev br0
@@ -169,7 +219,10 @@ topology:
     - endpoints: ["radius:eth1", "upstream:eth3"]
     - endpoints: ["radius_pg:eth1", "upstream:eth4"]
     - endpoints: ["dhcp_pg:eth1", "upstream:eth5"]
+    - endpoints: ["redis:eth1", "upstream:eth6"]
+    - endpoints: ["oss_pg:eth1", "upstream:eth7"]
+    - endpoints: ["bng_ingestor:eth1", "upstream:eth8"]
 
     # Upstream to internet (macvlan to host's interface)
     # Replace 'enp1s0' with your host's internet interface
-    - endpoints: ["upstream:eth6", "macvlan:enp1s0"]
+    - endpoints: ["upstream:eth9", "macvlan:enp1s0"]

@@ -47,3 +47,22 @@ services:
       context: .
       dockerfile: docker/agg/Dockerfile
     image: lab-agg
+  redis:
+    build:
+      context: .
+      dockerfile: docker/redis/Dockerfile
+    image: lab-redis
+  oss-pg:
+    build:
+      context: .
+      dockerfile: docker/oss-pg/Dockerfile
+    image: lab-oss-pg
+    environment:
+      POSTGRES_DB: oss
+      POSTGRES_USER: oss
+      POSTGRES_PASSWORD: oss
+  bng-ingestor:
+    build:
+      context: .
+      dockerfile: docker/bng-ingestor/Dockerfile
+    image: lab-bng-ingestor
