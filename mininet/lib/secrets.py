@@ -1,1 +1,2 @@
 __RADIUS_SECRET="testing123"
+__KEA_CTRL_AGENT_PASSWORD="test"

@@ -1,0 +1,44 @@
+services:
+  host:
+    build:
+      context: .
+      dockerfile: docker/host/Dockerfile
+    image: lab-host
+  bng:
+    build:
+      context: .
+      dockerfile: docker/bng/Dockerfile
+    image: lab-bng
+  kea:
+    build:
+      context: .
+      dockerfile: docker/kea/Dockerfile
+    image: lab-kea
+  relay:
+    build:
+      context: .
+      dockerfile: docker/relay/Dockerfile
+    image: lab-relay
+  pg:
+    build:
+      context: .
+      dockerfile: docker/pg/Dockerfile
+    image: lab-pg
+    environment:
+      POSTGRES_DB: kea_lease_db
+      POSTGRES_USER: kea
+      POSTGRES_PASSWORD: test
+  radius:
+    build:
+      context: .
+      dockerfile: docker/radius/Dockerfile
+    image: lab-radius
+  radius-pg:
+    build:
+      context: .
+      dockerfile: docker/radius-pg/Dockerfile
+    image: lab-radius-pg
+    environment:
+      POSTGRES_DB: radius
+      POSTGRES_USER: radius
+      POSTGRES_PASSWORD: test

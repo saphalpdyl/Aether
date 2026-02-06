@@ -1,8 +1,6 @@
 from typing import Dict, Tuple
 import time
 
-from mininet.node import Host
-
 from lib.secrets import __RADIUS_SECRET
 from lib.nftables.helpers import nft_list_chain_rules , nft_get_counter_by_handle
 from lib.radius.packet_builders import build_acct_interim, rad_acct_send_from_bng
@@ -10,15 +8,16 @@ from lib.radius.session import DHCPSession
 from lib.constants import IDLE_GRACE_AFTER_CONNECT, MARK_IDLE_GRACE_SECONDS
 
 def radius_handle_interim_updates(
-        bng: Host, 
-        sessions: Dict[Tuple[str,str], DHCPSession],
+        sessions: Dict[Tuple[str,str,str], DHCPSession],
         radius_server_ip: str ="192.0.2.2",
         radius_secret: str = __RADIUS_SECRET,
         nas_ip: str="192.0.2.1",
-        nas_port_id: str="bng-eth0"):
+        nas_port_id: str="eth0"):
     now = time.time()
     try:
-        nftables_snapshot = nft_list_chain_rules(bng)
+        if sessions is None or len(sessions) == 0:
+            return
+        nftables_snapshot = nft_list_chain_rules()
     except Exception as e:
         print(f"Failed to get nftables snapshot for Interim-Update: {e}")
         return
@@ -28,11 +27,16 @@ def radius_handle_interim_updates(
             if s.status == "EXPIRED":
                 continue
 
+            if s.auth_state != "AUTHORIZED":
+                continue
+
             up_bytes, up_pkts = 0, 0
             down_bytes, down_pkts = 0, 0
 
+            print(f"Process up handles: {s.nft_up_handle}, down handle: {s.nft_down_handle} for session mac={s.mac} ip={s.ip}")
             if s.nft_up_handle is not None:
                 up_bytes, up_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_up_handle) or (0,0)
+                print(f"Got up bytes: {up_bytes}, up pkts: {up_pkts} for session mac={s.mac} ip={s.ip}")
             if s.nft_down_handle is not None:
                 down_bytes, down_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_down_handle) or (0,0)
 
@@ -51,6 +55,7 @@ def radius_handle_interim_updates(
             if s.last_traffic_seen_ts is None and (now - s.first_seen) >= IDLE_GRACE_AFTER_CONNECT:
                 print(f"Session idle due to no traffic after connect: mac={s.mac} ip={s.ip}")
                 s.last_idle_ts = now
+                s.last_traffic_seen_ts = now
                 s.status = "IDLE"
 
             # If we have seen traffic before, check for idle based on last traffic seen
@@ -73,9 +78,8 @@ def radius_handle_interim_updates(
                 input_pkts=total_in_pkts,
                 output_pkts=total_out_pkts,
             )
-            rad_acct_send_from_bng(bng, pkt, server_ip=radius_server_ip, secret=radius_secret)
+            rad_acct_send_from_bng(pkt, server_ip=radius_server_ip, secret=radius_secret)
             s.last_interim = now
             print(f"RADIUS Acct-Interim sent for mac={s.mac} ip={s.ip}")
         except Exception as e:
             print(f"RADIUS Acct-Interim failed for mac={s.mac} ip={s.ip}: {e}")
-

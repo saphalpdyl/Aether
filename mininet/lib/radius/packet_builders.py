@@ -2,8 +2,7 @@
 
 import time
 import shlex
-
-from mininet.node import Host
+import subprocess
 
 from lib.radius.session import DHCPSession
 from lib.radius.utils import split_bytes_to_gigawords_octets
@@ -11,7 +10,6 @@ from lib.secrets import __RADIUS_SECRET
 
 # Future: Move to somewhere so that mininet code and bng code can separate
 def rad_acct_send_from_bng(
-    bng: Host,
     packet: str,
     server_ip: str,
     port: int = 1813,
@@ -21,10 +19,10 @@ def rad_acct_send_from_bng(
     pkt_q = shlex.quote(packet)
     secret_q = shlex.quote(secret)
     cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} acct {secret_q}"
-    return bng.cmd(cmd)
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    return result.stdout or ""
 
 def rad_auth_send_from_bng(
-    bng: Host,
     packet: str,
     server_ip: str,
     port: int = 1812,
@@ -34,16 +32,24 @@ def rad_auth_send_from_bng(
     pkt_q = shlex.quote(packet)
     secret_q = shlex.quote(secret)
     cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} auth {secret_q}"
-    return bng.cmd(cmd)
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    return result.stdout or ""
 
 def acct_session_id(mac: str, ip: str, first_seen: float) -> str:
     return f"{mac.lower()}-{ip}-{int(first_seen)}"
 
-def build_acct_start(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="bng-eth0") -> str:
+def acct_user_name(s: DHCPSession) -> str:
+    if not s.remote_id or not s.circuit_id:
+        raise RuntimeError("Missing required Option 82 fields for User-Name (remote_id/circuit_id).")
+    user = f"{s.remote_id}/{s.circuit_id}"
+    # Keep RADIUS User-Name consistent with SQL escaping (escape '|' and ':')
+    return user.replace("|", "=7C")
+
+def build_acct_start(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="eth0") -> str:
     now = int(time.time())
     return "\n".join([
         "Acct-Status-Type = Start",
-        f'User-Name = "mac:{s.mac.lower()}"',
+        f'User-Name = "{acct_user_name(s)}"',
         f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
@@ -61,7 +67,7 @@ def build_acct_stop(
     input_pkts: int,
     output_pkts: int,
     nas_ip: str = "192.0.2.1",
-    nas_port_id: str = "bng-eth0",
+    nas_port_id: str = "eth0",
     cause: str = "User-Request",
 ) -> str:
     now = int(time.time())
@@ -72,7 +78,7 @@ def build_acct_stop(
 
     return "\n".join([
         "Acct-Status-Type = Stop",
-        f'User-Name = "mac:{s.mac.lower()}"',
+        f'User-Name = "{acct_user_name(s)}"',
         f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
@@ -103,7 +109,7 @@ def build_acct_interim(
     input_pkts: int,
     output_pkts: int,
     nas_ip: str = "192.0.2.1",
-    nas_port_id: str = "bng-eth0",
+    nas_port_id: str = "eth0",
 ) -> str:
     now = int(time.time())
     session_time = max(0, int(time.time() - s.first_seen))
@@ -113,7 +119,7 @@ def build_acct_interim(
 
     return "\n".join([
         "Acct-Status-Type = Interim-Update",
-        f'User-Name = "mac:{s.mac.lower()}"',
+        f'User-Name = "{acct_user_name(s)}"',
         f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
@@ -139,7 +145,7 @@ def build_access_request(
     s: DHCPSession,
     user_password: str = "testing123",
     nas_ip: str = "192.0.2.1",
-    nas_port_id: str = "bng-eth0",
+    nas_port_id: str = "eth0",
 ) -> str:
     """
     Returns a radclient-compatible Access-Request attribute list.
@@ -148,9 +154,11 @@ def build_access_request(
     now = int(time.time())
     mac = s.mac.lower()
 
+    print(f"Building Access-Request for User-Name: {acct_user_name(s)}, MAC: {mac}, IP: {s.ip}")
+
     return "\n".join([
         # RADIUS auth type implied by radclient 'auth' (Access-Request)
-        f'User-Name = "mac:{mac}"',
+        f'User-Name = "{acct_user_name(s)}"',
         f'User-Password = "{user_password}"',          # lab-simple PAP
         f'Calling-Station-Id = "{mac}"',               # who is calling (subscriber MAC)
         f'Called-Station-Id = "{nas_port_id}"',        # optional; can be iface or BNG id

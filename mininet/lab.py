@@ -1,153 +1,192 @@
 #!/usr/bin/env python3
-from mininet.net import Mininet
+
+import subprocess
+import shutil
+import time
+import builtins
+
+builtins.unicode = str
+
+from mininet.net import Containernet
 from mininet.node import OVSSwitch
-from mininet.nodelib import NAT
 from mininet.cli import CLI
 from mininet.log import setLogLevel
 
-import time 
-import threading
-from queue import Queue
-from watchdog.observers import Observer
-
-from lib.constants import DHCP_LEASE_FILE_PATH, DHCP_LEASE_FILE_DIR_PATH, DHCP_LEASE_EXPIRY_SECONDS
-from lib.services.bng import bng_event_loop
-from lib.services.lease_watcher import LeaseObserver
 
 def run():
-    net = Mininet(controller=None, switch=OVSSwitch)
+    net = Containernet(controller=None, switch=OVSSwitch)
+
+    sap = net.addExtSAP(
+        'i1',
+        sapIP="192.0.2.5/24",
+        NAT=True,
+    )
 
     # Canonical switch names so Mininet can derive DPIDs
-    s1 = net.addSwitch('s1', failMode='standalone')  # access
     s2 = net.addSwitch('s2', failMode='standalone')  # upstream
 
     h1 = net.addHost('h1', ip=None, mac='00:00:00:00:00:01')
     h2 = net.addHost('h2', ip=None, mac='00:00:00:00:00:02')
-    net.addLink(h1, s1)
-    net.addLink(h2, s1)
 
-    bng = net.addHost('bng')
-    net.addLink(bng, s1)  # bng-eth0 subscriber side
+    relay = net.addDocker(
+        'relay',
+        dimage='lab-relay',
+        dcmd='sleep infinity',
+        ip=None,
+        privileged=True,
+        network_mode='none',
+    )
+    net.addLink(h1, relay)
+    net.addLink(h2, relay)
+
+    bng = net.addDocker(
+        'bng',
+        dimage='lab-bng',
+        dcmd='sleep infinity',
+        ip=None,
+        privileged=True,
+        network_mode='none',
+    )
+    net.addLink(bng, relay)  # bng-eth0 subscriber side
     net.addLink(bng, s2)  # bng-eth1 upstream side
 
-    nat = net.addHost('nat', cls=NAT, ip='192.0.2.2/24', inNamespace=False)
-    net.addLink(nat, s2)  # nat-eth0 on upstream segment
+    net.addLink(s2, sap)
 
-    kea = net.addHost('kea')
+    radius = net.addDocker(
+        'radius',
+        dimage='lab-radius',
+        ip=None,
+        dcmd="/bin/sh -c '/opt/radius/entrypoint.sh 2>&1 || sleep infinity'",
+        privileged=False,
+    )
+    net.addLink(radius, s2)  # radius-eth0 on upstream segment
+
+    radius_pg = net.addDocker(
+        'radius_pg',
+        dimage='lab-radius-pg',
+        ip=None,
+        privileged=False,
+        environment={
+            'POSTGRES_DB': 'radius',
+            'POSTGRES_USER': 'radius',
+            'POSTGRES_PASSWORD': 'test',
+        },
+        dcmd='docker-entrypoint.sh postgres -c listen_addresses=*'
+    )
+    net.addLink(radius_pg, s2)  # radius-pg-eth0 on upstream segment
+
+    pg = net.addDocker(
+        'pg',
+        dimage='lab-pg',
+        ip=None,
+        privileged=False,
+        environment={
+            'POSTGRES_DB': 'kea_lease_db',
+            'POSTGRES_USER': 'kea',
+            'POSTGRES_PASSWORD': 'test',
+        },
+        ports=[5432],
+        port_bindings={5432: 5432},
+        dcmd='docker-entrypoint.sh postgres -c listen_addresses=*'
+    )
+    net.addLink(pg, s2)  # pg-eth0 on upstream segment
+
+    kea = net.addDocker(
+        'kea',
+        dimage='lab-kea',
+        ip=None,
+        privileged=True,
+    )
     net.addLink(kea, s2)  # kea-eth0 on upstream segment
 
     net.start()
+    net.waitConnected()
 
-    # Deterministic BNG config
-    bng.cmd('ip addr flush dev bng-eth0')
-    bng.cmd('ip addr flush dev bng-eth1')
-    bng.cmd('ip link set bng-eth0 up')
-    bng.cmd('ip link set bng-eth1 up')
-    bng.cmd('ip addr add 10.0.0.1/24 dev bng-eth0')
-    bng.cmd('ip addr add 192.0.2.1/24 dev bng-eth1')
-    bng.cmd('ip route replace default via 192.0.2.2 dev bng-eth1')
-    bng.cmd('sysctl -w net.ipv4.ip_forward=1')
+    # Extra NAT for subscriber subnet behind BNG via SAP bridge
+    def ensure_ipt(rule_check, rule_add):
+        if subprocess.run(rule_check).returncode != 0:
+            subprocess.run(rule_add)
 
-    # Setting up nftables for BNG 
+    sap_if = sap.deployed_name
+    uplink = subprocess.check_output(
+        "ip route | awk '$1==\"default\" {print $5; exit}'",
+        shell=True,
+        text=True,
+    ).strip()
+    ipt = shutil.which("iptables-legacy") or "iptables"
+    subprocess.run(["ip", "route", "replace", "10.0.0.0/24", "via", "192.0.2.1", "dev", sap_if], check=False)
+    ensure_ipt(
+        [ipt, "-t", "nat", "-C", "POSTROUTING", "-s", "10.0.0.0/24", "-o", uplink, "-j", "MASQUERADE"],
+        [ipt, "-t", "nat", "-A", "POSTROUTING", "-s", "10.0.0.0/24", "-o", uplink, "-j", "MASQUERADE"],
+    )
+    ensure_ipt(
+        [ipt, "-C", "FORWARD", "-i", sap_if, "-j", "ACCEPT"],
+        [ipt, "-A", "FORWARD", "-i", sap_if, "-j", "ACCEPT"],
+    )
+    ensure_ipt(
+        [ipt, "-C", "FORWARD", "-o", sap_if, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
+        [ipt, "-A", "FORWARD", "-o", sap_if, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
+    )
 
-    bng.cmd("nft delete table inet aether_auth 2>/dev/null || true")
-    bng.cmd("nft delete table inet bngacct 2>/dev/null || true")
+    bng.cmd('ip route add default via 192.0.2.5 dev bng-eth1')
 
-    bng.cmd("nft add table inet aether_auth 2>/dev/null || true")
-    bng.cmd("nft add table inet bngacct 2>/dev/null || true")
+    # Start relay + bng entrypoints after interfaces exist
+    relay.cmd('/opt/relay/entrypoint.sh > /tmp/relay-entry.log 2>&1 &')
+    bng.cmd('/opt/bng/entrypoint.sh >> /tmp/bng-entry.log 2>&1 &')
 
-    bng.cmd("nft 'add set inet aether_auth authed_macs { type ether_addr; }' 2>/dev/null || true")
+    radius.cmd('ip addr flush dev radius-eth0')
+    radius.cmd('ip link set radius-eth0 up')
+    radius.cmd('ip addr add 192.0.2.2/24 dev radius-eth0')
+    radius.cmd('ip route replace default via 192.0.2.1 dev radius-eth0')
 
-    bng.cmd("nft 'add chain inet aether_auth forward { type filter hook forward priority -10; policy drop; }' 2>/dev/null || true")
+    radius_pg.cmd('ip addr flush dev radius_pg-eth0')
+    radius_pg.cmd('ip link set radius_pg-eth0 up')
+    radius_pg.cmd('ip addr add 192.0.2.6/24 dev radius_pg-eth0')
+    radius_pg.cmd('ip route replace default via 192.0.2.1 dev radius_pg-eth0')
 
-    bng.cmd("nft 'add rule inet aether_auth forward ct state established,related accept' 2>/dev/null || true")
+    radius.cmd(
+        "psql \"host=192.0.2.6 user=radius password=test dbname=radius\" "
+        "-tc \"SELECT to_regclass('public.radcheck');\" | grep -q radcheck || "
+        "psql \"host=192.0.2.6 user=radius password=test dbname=radius\" "
+        "-f /etc/freeradius/3.0/mods-config/sql/main/postgresql/schema.sql "
+        "2>/tmp/radius_schema.err || true"
+    )
+    radius.cmd(
+        "psql \"host=192.0.2.6 user=radius password=test dbname=radius\" "
+        "-tc \"SELECT to_regclass('public.radcheck');\" | grep -q radcheck || "
+        "psql \"host=192.0.2.6 user=radius password=test dbname=radius\" "
+        "-f /etc/freeradius/3.0/mods-config/sql/main/postgresql/setup.sql "
+        "2>/tmp/radius_setup.err || true"
+    )
 
-
-    bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth0\" ether saddr @authed_macs accept' 2>/dev/null || true")
-
-    # Reject rule for non-authenticated MACs
-    # For TCP traffic
-    bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth0\" ct state new tcp reject with tcp reset'")
-    # For non-TCP traffic
-    bng.cmd("nft 'add rule inet aether_auth forward iifname \"bng-eth0\" ct state new reject with icmpx type admin-prohibited'")
-
-    # Creating a chain in table 'bngacct' called 'sess'
-    # The chain hooks into the 'forward' hook with policy 'accept' meaning packets are allowed by default 
-    #   since we are only counting packets/bytes here and not enforcing any filtering
-    bng.cmd("nft 'add chain inet bngacct sess { type filter hook forward priority 0; policy accept; }' 2>/dev/null || true")
-
-    # Allow h1 for now ( TESTING ONLY )
-    # bng.cmd("nft add element inet aether_auth authed_macs { 00:00:00:00:00:01 } 2>/dev/null || true")
-
-    # Root-namespace NAT (known-good baseline)
-    nat.configDefault()
-    nat.cmd('ip route replace 10.0.0.0/24 via 192.0.2.1 dev nat-eth0')
-
+    time.sleep(3)
+    # PostgreSQL container for Kea leases
+    pg.cmd('ip addr flush dev pg-eth0')
+    pg.cmd('ip link set pg-eth0 up')
+    pg.cmd('ip addr add 192.0.2.4/24 dev pg-eth0')
+    pg.cmd('ip route replace default via 192.0.2.1 dev pg-eth0')
     # KEA DHCPv4 server host
     kea.cmd('ip addr flush dev kea-eth0')
     kea.cmd('ip link set kea-eth0 up')
     kea.cmd('ip addr add 192.0.2.3/24 dev kea-eth0')
     kea.cmd('ip route replace default via 192.0.2.1 dev kea-eth0')
-    kea.cmd('mkdir -p /tmp/kea')
-    kea.cmd('chmod 777 /tmp/kea')
+    kea.cmd('kea-admin db-init pgsql -u kea -p test -n kea_lease_db -h 192.0.2.4')
     kea.cmd('rm -f /tmp/kea/logger_lockfile 2>/dev/null || true')
+    kea.cmd('mkdir -p /run/kea')
+    kea.cmd('chmod 777 /run/kea')
     kea.cmd('KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf > /tmp/kea-dhcp4.log 2>&1 &')
 
-    bng.cmd(f'rm -f /tmp/dnsmasq-bng.pid 2>/dev/null || true')
-    bng.cmd(f'rm -f {DHCP_LEASE_FILE_PATH} 2>/dev/null || true')
+    kea.cmd('rm -f /run/kea/kea-ctrl-agent.*.pid')
+    kea.cmd('KEA_LOCKFILE_DIR=none kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf > /tmp/kea-ctrl-agent.log 2>&1 &')
 
-    # Create the DHCP lease file directory
-    bng.cmd('mkdir -p ' + DHCP_LEASE_FILE_DIR_PATH)
-    bng.cmd(
-        'dnsmasq '
-        '--port=0 ' # Disabled DNS 
-        '--interface=bng-eth0 '
-        '--dhcp-authoritative '
-        f'--dhcp-range=10.0.0.10,10.0.0.200,255.255.255.0,{DHCP_LEASE_EXPIRY_SECONDS}s '
-        '--dhcp-option=option:router,10.0.0.1 '
-        '--dhcp-option=option:dns-server,1.1.1.1,8.8.8.8 '
-        f'--dhcp-leasefile={DHCP_LEASE_FILE_PATH} '
-        '--pid-file=/tmp/dnsmasq-bng.pid '
-        '--log-dhcp '
-        '> /tmp/dnsmasq-bng.log 2>&1 & '
-    )
-
-    # Starting our DHCP Lease to Sessions watcher
-    time.sleep(0.2)
-    bng_event_queue: Queue = Queue(maxsize=1)
-    bng_stop_event = threading.Event()
-
-    def notify_bng_thread():
-        try:
-            bng_event_queue.put_nowait("lease_changed")
-        except Exception:
-            pass
-
-    dhcp_observer = Observer()
-    dhcp_observer.schedule(LeaseObserver(notify_bng_thread), path=DHCP_LEASE_FILE_DIR_PATH, recursive=False)
-    dhcp_observer.start()
-
-    bng_thread = threading.Thread(
-        target=bng_event_loop,
-        args=(bng, bng_stop_event, bng_event_queue, "bng-eth0", 30),
-        daemon=False,
-    )
-    bng_thread.start()
+    bng.cmd('pkill -f bng_main.py 2>/dev/null || true')
+    bng.cmd('nohup python3 /opt/bng/bng_main.py > /tmp/bng_main.log 2>&1 &')
 
     CLI(net)
 
-    # Stopping watcher thread
-    bng_stop_event.set()
-    try:
-        bng_event_queue.put_nowait("stop")
-    except Exception:
-        pass
-    bng_thread.join()
-    dhcp_observer.stop()
-    dhcp_observer.join()
-
-    bng.cmd('kill $(cat /tmp/dnsmasq-bng.pid) 2>/dev/null || true')
+    bng.cmd('pkill -f bng_main.py 2>/dev/null || true')
     kea.cmd('pkill -f "kea-dhcp4 -c /etc/kea/kea-dhcp4.conf" 2>/dev/null || true')
+    kea.cmd('pkill -f "kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf" 2>/dev/null || true')
     # Also remove the config file to avoid confusion on next run
     net.stop()
 
