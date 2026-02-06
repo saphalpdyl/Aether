@@ -252,7 +252,6 @@ def dhcp_lease_handler(
 
                 if leased_ip == s.ip:
                     # Renew with same IP
-
                     s.expiry = expiry
                     s.last_seen = now
                     s.status = "ACTIVE"
@@ -270,7 +269,7 @@ def dhcp_lease_handler(
 
                     terminate_session(
                         s,
-                        cause="Lost-Service",
+                        cause="IP-change",
                         radius_server_ip=radius_server_ip,
                         radius_secret=radius_secret,
                         nas_ip=nas_ip,
@@ -553,50 +552,38 @@ def dhcp_lease_handler(
                         )
 
                         nftables_snapshot = nft_list_chain_rules()
-                        up_bytes, up_pkts = 0, 0
-                        down_bytes, down_pkts = 0, 0
 
-                        if s.nft_up_handle is not None:
-                            up_bytes, up_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_up_handle) or (0,0)
-                        if s.nft_down_handle is not None:
-                            down_bytes, down_pkts = nft_get_counter_by_handle(nftables_snapshot, s.nft_down_handle) or (0,0)
+                        if old_ip:
+                            ip_clean = str(old_ip).replace("\x00", "")
+                            ipaddress.ip_address(ip_clean)
+                            nft_remove_ip(ip_clean)
 
-                        total_in_octets = max(0, up_bytes - s.base_up_bytes)
-                        total_out_octets = max(0, down_bytes - s.base_down_bytes)
-                        total_in_pkts = max(0, up_pkts - s.base_up_pkts)
-                        total_out_pkts = max(0, down_pkts - s.base_down_pkts)
-
-                        try:
-                            acct_start_pkt = build_acct_stop(old_session, nas_ip=nas_ip, nas_port_id=nas_port_id, cause="Lost-Service",
-                                input_bytes=total_in_octets,
-                                output_bytes=total_out_octets,
-                                input_pkts=total_in_pkts,
-                                output_pkts=total_out_pkts,
-                            )
-
-                            if s.nft_up_handle is not None:
-                                nft_delete_rule_by_handle(s.nft_up_handle)
-                                s.nft_up_handle = None
-                            if s.nft_down_handle is not None:
-                                nft_delete_rule_by_handle(s.nft_down_handle)
-                                s.nft_down_handle = None
-
-                            rad_acct_send_from_bng(acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
+                        if terminate_session(
+                            old_session,
+                            cause="IP-change",
+                            radius_server_ip=radius_server_ip,
+                            radius_secret=radius_secret,
+                            nas_ip=nas_ip,
+                            nas_port_id=nas_port_id,
+                            nftables_snapshot=nftables_snapshot,
+                        ):
                             print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
-                        except Exception as e:
-                            print(f"RADIUS Acct-Stop failed for mac={s.mac} old_ip={old_ip}: {e}")
+                        
+                        reauth_result = _authorize_session(
+                            s,
+                            s.ip,
+                            s.mac,
+                            iface,
+                            radius_server_ip,
+                            radius_secret,
+                            nas_ip,
+                            nas_port_id,
+                        )
 
-                        try:
-                            acct_start_pkt = build_acct_start(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
-
-                            _install_rules_and_baseline(s, l.ip, l.mac, iface)
-
-                            rad_acct_send_from_bng(acct_start_pkt, server_ip=radius_server_ip, secret=radius_secret)
-                            s.last_interim = now
-                            print(f"RADIUS Acct-Start sent for mac={s.mac} new_ip={s.ip}")
-                        except Exception as e:
-                            print(f"RADIUS Acct-Start failed for mac={s.mac} new_ip={s.ip}: {e}")
-
+                        if reauth_result == "REJECTED":
+                            print(f"RADIUS Access-Reject received for mac={s.mac} new_ip={s.ip}")
+                        elif reauth_result == "AUTHORIZED":
+                            print(f"RADIUS Access-Accept received for mac={s.mac} new_ip={s.ip}")
 
         # Zombie sessions cleanup
         # ended = [key for key, l in sessions.items() if (key not in current and current[key])]
