@@ -647,8 +647,13 @@ def bng_event_loop(
     stop_event: threading.Event,
     event_queue: Queue,
     iface: str = "eth0",
+
+    # Intervals
     interim_interval: int = 30,
     auth_retry_interval: int = 10,
+    disconnection_check_interval: int = 5,
+    reconciler_interval: int = 15,
+
     radius_server_ip: str ="192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
     nas_ip: str="192.0.2.1",
@@ -663,8 +668,8 @@ def bng_event_loop(
     )
     next_interim = time.time() + interim_interval
     next_auth_retry = time.time() + auth_retry_interval
-    next_disconnection_check = time.time() + 5
-    next_reconcile = time.time() + 15
+    next_disconnection_check = time.time() + disconnection_check_interval
+    next_reconcile = time.time() + reconciler_interval
 
     while not stop_event.is_set():
 
@@ -705,7 +710,7 @@ def bng_event_loop(
                 dhcp_reconciler()
             except Exception as e:
                 print(f"BNG thread Reconcile error: {e}")
-            next_reconcile = now + 15
+            next_reconcile = now + reconciler_interval
 
         if now >= next_auth_retry:
             try:
@@ -763,4 +768,4 @@ def bng_event_loop(
                             sessions.pop(key)
             except Exception as e:
                 print(f"BNG thread Disconnection check error: {e}")
-            next_disconnection_check = now + 5
+            next_disconnection_check = now + disconnection_check_interval

@@ -19,11 +19,11 @@ services:
       context: .
       dockerfile: docker/relay/Dockerfile
     image: lab-relay
-  pg:
+  dhcp-pg:
     build:
       context: .
-      dockerfile: docker/pg/Dockerfile
-    image: lab-pg
+      dockerfile: docker/dhcp-pg/Dockerfile
+    image: lab-dhcp-pg
     environment:
       POSTGRES_DB: kea_lease_db
       POSTGRES_USER: kea

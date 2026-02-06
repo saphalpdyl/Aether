@@ -46,8 +46,19 @@ def tail_events(q: Queue):
 
 
 def main():
+    # Wait for interfaces to exist
     for _ in range(20):
         if subprocess.call("ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1", shell=True) == 0:
+            break
+        time.sleep(0.5)
+
+    # Wait for IPs to be assigned (entrypoint.sh sets these)
+    for _ in range(30):
+        result = subprocess.run(
+            "ip -4 addr show eth1 | grep -q '10.0.0.1' && ip -4 addr show eth2 | grep -q '192.0.2.1'",
+            shell=True
+        )
+        if result.returncode == 0:
             break
         time.sleep(0.5)
 

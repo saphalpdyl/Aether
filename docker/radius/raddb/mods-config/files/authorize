@@ -2,13 +2,3 @@
 "00:00:00:00:00:01/srl-access=7Cdefault=7Cirb1=7C1:0" Cleartext-Password := "testing123"
         Filter-Id = "basic",
         Acct-Interim-Interval = 30
-
-# h3 via srl2 (e1-1)
-"00:00:00:00:00:03/srl2-access=7Cdefault=7Cirb1=7C1:0" Cleartext-Password := "testing123"
-        Filter-Id = "basic",
-        Acct-Interim-Interval = 30
-
-# Default - accept any subscriber (for testing)
-DEFAULT Cleartext-Password := "testing123"
-        Filter-Id = "basic",
-        Acct-Interim-Interval = 30

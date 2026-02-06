@@ -236,7 +236,12 @@ def decode_dhcp_with_reason(pkt: bytes):
         return None, "short_bootp"
     if payload[BOOTP_FIXED_LEN : BOOTP_FIXED_LEN + len(DHCP_MAGIC)] != DHCP_MAGIC:
         return None, "bad_magic"
-    return decode_dhcp(pkt), "ok, maybe failed on decode if you see this"
+    result = decode_dhcp(pkt)
+    if result:
+        # Add IP header src/dst for filtering
+        result["src_ip"] = socket.inet_ntoa(pkt[ip_off + 12 : ip_off + 16])
+        result["dst_ip"] = socket.inet_ntoa(pkt[ip_off + 16 : ip_off + 20])
+    return result, "ok"
 
 
 def _encode_event(info: dict) -> dict:
@@ -294,7 +299,8 @@ def relay_loop(
     uplink_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     uplink_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     uplink_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, uplink_if.encode())
-    uplink_sock.bind((src_ip, DHCP_SERVER_PORT))
+    # Bind to 0.0.0.0 - SO_BINDTODEVICE restricts to uplink_if, kernel picks src IP
+    uplink_sock.bind(("0.0.0.0", DHCP_SERVER_PORT))
 
     reply_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     reply_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -318,6 +324,9 @@ def relay_loop(
                     log(f"drop: decode_dhcp none reason={reason}")
                     continue
                 if info.get("dst_port") != DHCP_SERVER_PORT:
+                    continue
+                # Ignore server responses being routed out this interface (prevents loop)
+                if info.get("src_ip") == server_ip:
                     continue
                 
                 log(

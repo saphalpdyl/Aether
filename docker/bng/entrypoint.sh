@@ -19,10 +19,11 @@ ip link set eth2 up
 ip addr add 10.0.0.1/24 dev eth1
 ip addr add 192.0.2.1/24 dev eth2
 ip route replace default via 192.0.2.5 dev eth2
-# Client subnet routes are set via topology.yml exec commands
-# They use /32 routes for deterministic DHCP relay routing:
-#   10.0.1.1/32 via 10.0.0.2 (srl)
-#   10.0.1.2/32 via 10.0.0.3 (srl2)
+# Routes to DHCP relay gi-addresses and client subnets
+# srl: gi-addr 10.0.1.1, clients 10.0.1.0/26 -> via 10.0.0.2
+# srl2: gi-addr 10.0.1.2, clients 10.0.1.64/26 -> via 10.0.0.3
+ip route add 10.0.1.0/26 via 10.0.0.2 dev eth1 || true
+ip route add 10.0.1.64/26 via 10.0.0.3 dev eth1 || true
 sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
 
 # NAT FIRST - set up before any ct state rules

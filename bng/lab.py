@@ -75,9 +75,9 @@ def run():
     )
     net.addLink(radius_pg, s2)  # radius-pg-eth0 on upstream segment
 
-    pg = net.addDocker(
-        'pg',
-        dimage='lab-pg',
+    dhcp_pg = net.addDocker(
+        'dhcp_pg',
+        dimage='lab-dhcp-pg',
         ip=None,
         privileged=False,
         environment={
@@ -89,7 +89,7 @@ def run():
         port_bindings={5432: 5432},
         dcmd='docker-entrypoint.sh postgres -c listen_addresses=*'
     )
-    net.addLink(pg, s2)  # pg-eth0 on upstream segment
+    net.addLink(dhcp_pg, s2)  # dhcp_pg-eth0 on upstream segment
 
     kea = net.addDocker(
         'kea',
@@ -160,11 +160,11 @@ def run():
     )
 
     time.sleep(3)
-    # PostgreSQL container for Kea leases
-    pg.cmd('ip addr flush dev pg-eth0')
-    pg.cmd('ip link set pg-eth0 up')
-    pg.cmd('ip addr add 192.0.2.4/24 dev pg-eth0')
-    pg.cmd('ip route replace default via 192.0.2.1 dev pg-eth0')
+    # PostgreSQL container for DHCP leases
+    dhcp_pg.cmd('ip addr flush dev dhcp_pg-eth0')
+    dhcp_pg.cmd('ip link set dhcp_pg-eth0 up')
+    dhcp_pg.cmd('ip addr add 192.0.2.4/24 dev dhcp_pg-eth0')
+    dhcp_pg.cmd('ip route replace default via 192.0.2.1 dev dhcp_pg-eth0')
     # KEA DHCPv4 server host
     kea.cmd('ip addr flush dev kea-eth0')
     kea.cmd('ip link set kea-eth0 up')
