@@ -5,10 +5,14 @@ Network Operations System from scratch(almost) with custom BNG routers. Built as
 ## Prerequisites
 - Linux + Containerlab setup
 
-## Prototype Screenshots
-<img width="1274" height="1255" alt="image" src="https://github.com/user-attachments/assets/8e1eed83-ca80-4887-a6ed-90103d480a41" />
+## Architecture
+System architecture as of Feb 9th, 2025
+![System Architecture](https://github.com/saphalpdyl/Aether/blob/master/docs/architecture.png)
 
 ## Network topology
 Overview of the containerlab's network topology as of Feb 9th, 2026
 
 <img width="4836" height="3453" alt="topology(2)" src="https://github.com/user-attachments/assets/dc02de4b-da03-4261-a0b2-269cb02ef8d6" />
+
+## Prototype Screenshots
+<img width="1274" height="1255" alt="image" src="https://github.com/user-attachments/assets/8e1eed83-ca80-4887-a6ed-90103d480a41" />
