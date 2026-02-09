@@ -12,10 +12,11 @@ export const sessionSchema = z.object({
   username: z.string(),
   start_time: z.string(),
   last_update: z.string(),
-  input_octets: z.number(),
-  output_octets: z.number(),
-  input_packets: z.number(),
-  output_packets: z.number(),
+  // API returns octets/packets as strings; coerce to numbers
+  input_octets: z.preprocess((val) => (val === undefined || val === null ? 0 : Number(val)), z.number()),
+  output_octets: z.preprocess((val) => (val === undefined || val === null ? 0 : Number(val)), z.number()),
+  input_packets: z.preprocess((val) => (val === undefined || val === null ? 0 : Number(val)), z.number()),
+  output_packets: z.preprocess((val) => (val === undefined || val === null ? 0 : Number(val)), z.number()),
   status: z.string(),
   auth_state: z.string(),
 });

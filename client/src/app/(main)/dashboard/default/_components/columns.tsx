@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { CircleCheck, XCircle } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleCheck, XCircle } from "lucide-react";
 import type { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +45,20 @@ export const dashboardColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
     enableHiding: false,
   },
   {
+    accessorKey: "status",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+    cell: ({ row }) => {
+        const status = String(row.getValue("status") ?? "");
+        const isActive = status.toUpperCase() === "ACTIVE";
+        return (
+          <Badge variant={isActive ? "default" : "secondary"}>
+            {isActive ? <CircleCheck className="mr-1 h-3 w-3" /> : <XCircle className="mr-1 h-3 w-3" />}
+            {status}
+          </Badge>
+        );
+    },
+  },
+  {
     accessorKey: "username",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Username" />,
     cell: ({ row }) => <div className="font-medium">{row.getValue("username")}</div>,
@@ -60,21 +74,31 @@ export const dashboardColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
     cell: ({ row }) => <div className="font-mono text-sm">{row.getValue("mac_address")}</div>,
   },
   {
-    accessorKey: "status",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-    cell: ({ row }) => {
-      const status = row.getValue("status") as string;
-      return (
-        <Badge variant={status === "active" ? "default" : "secondary"}>
-          {status === "active" ? (
-            <CircleCheck className="mr-1 h-3 w-3" />
-          ) : (
-            <XCircle className="mr-1 h-3 w-3" />
-          )}
-          {status}
-        </Badge>
-      );
-    },
+    accessorKey: "start_time",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Start Time" />,
+    cell: ({ row }) => (
+      <div className="text-sm whitespace-nowrap">{formatDate(row.getValue("start_time"))}</div>
+    ),
+  },
+  {
+    accessorKey: "input_octets",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Download" />,
+    cell: ({ row }) => (
+      <div className="flex items-center gap-1 text-sm">
+        <ArrowDown className="h-3 w-3 text-blue-500" />
+        <span>{formatBytes(Number(row.getValue("input_octets") ?? 0))}</span>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "output_octets",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Upload" />,
+    cell: ({ row }) => (
+      <div className="flex items-center gap-1 text-sm">
+        <ArrowUp className="h-3 w-3 text-green-500" />
+        <span>{formatBytes(Number(row.getValue("output_octets") ?? 0))}</span>
+      </div>
+    ),
   },
   {
     accessorKey: "auth_state",
@@ -98,46 +122,31 @@ export const dashboardColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
   {
     accessorKey: "circuit_id",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Circuit ID" />,
-    cell: ({ row }) => <div className="text-sm truncate max-w-[150px]">{row.getValue("circuit_id")}</div>,
+    cell: ({ row }) => <div className="text-sm truncate max-w-37.5">{row.getValue("circuit_id")}</div>,
   },
   {
     accessorKey: "remote_id",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Remote ID" />,
-    cell: ({ row }) => <div className="text-sm truncate max-w-[150px]">{row.getValue("remote_id")}</div>,
-  },
-  {
-    accessorKey: "input_octets",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Download" />,
-    cell: ({ row }) => (
-      <div className="text-sm">{formatBytes(row.getValue("input_octets"))}</div>
-    ),
-  },
-  {
-    accessorKey: "output_octets",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Upload" />,
-    cell: ({ row }) => (
-      <div className="text-sm">{formatBytes(row.getValue("output_octets"))}</div>
-    ),
+    cell: ({ row }) => <div className="text-sm truncate max-w-37.5">{row.getValue("remote_id")}</div>,
   },
   {
     accessorKey: "input_packets",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Input Packets" />,
     cell: ({ row }) => (
-      <div className="text-sm">{(row.getValue("input_packets") as number).toLocaleString()}</div>
+      <div className="flex items-center gap-1 text-sm">
+        <ArrowDown className="h-3 w-3 text-blue-500/70" />
+        <span>{Number(row.getValue("input_packets") ?? 0).toLocaleString()}</span>
+      </div>
     ),
   },
   {
     accessorKey: "output_packets",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Output Packets" />,
     cell: ({ row }) => (
-      <div className="text-sm">{(row.getValue("output_packets") as number).toLocaleString()}</div>
-    ),
-  },
-  {
-    accessorKey: "start_time",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Start Time" />,
-    cell: ({ row }) => (
-      <div className="text-sm whitespace-nowrap">{formatDate(row.getValue("start_time"))}</div>
+      <div className="flex items-center gap-1 text-sm">
+        <ArrowUp className="h-3 w-3 text-green-500/70" />
+        <span>{Number(row.getValue("output_packets") ?? 0).toLocaleString()}</span>
+      </div>
     ),
   },
   {
@@ -151,7 +160,7 @@ export const dashboardColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
     accessorKey: "session_id",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Session ID" />,
     cell: ({ row }) => (
-      <div className="font-mono text-xs truncate max-w-[200px]" title={row.getValue("session_id")}>
+      <div className="font-mono text-xs truncate max-w-50" title={row.getValue("session_id")}>
         {row.getValue("session_id")}
       </div>
     ),
@@ -160,7 +169,7 @@ export const dashboardColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
     accessorKey: "bng_instance_id",
     header: ({ column }) => <DataTableColumnHeader column={column} title="BNG Instance ID" />,
     cell: ({ row }) => (
-      <div className="font-mono text-xs truncate max-w-[200px]" title={row.getValue("bng_instance_id")}>
+      <div className="font-mono text-xs truncate max-w-50" title={row.getValue("bng_instance_id")}>
         {row.getValue("bng_instance_id")}
       </div>
     ),

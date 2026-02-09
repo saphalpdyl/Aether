@@ -25,8 +25,13 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof sessionS
   const columns = withDndColumn(dashboardColumns);
   const table = useDataTableInstance({ data, columns, getRowId: (row) => row.session_id.toString() });
 
+  // Sync local state when initialData changes (from polling)
+  React.useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
+
   return (
-    <Tabs defaultValue="outline" className="w-full flex-col justify-start gap-6">
+    <Tabs defaultValue="outline" className="w-full flex-col justify-start gap-6">,
       <div className="flex items-center justify-between">
         <Label htmlFor="view-selector" className="sr-only">
           View
