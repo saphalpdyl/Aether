@@ -2,6 +2,7 @@ import { ChartAreaInteractive } from "./_components/chart-area-interactive";
 import SessionsTable from "./_components/sessions-table";
 import SessionsHistoryTable from "./_components/sessions-history-table";
 import SessionsEventsTable from "./_components/sessions-events-table";
+import RoutersTable from "./_components/routers-table";
 import { SectionCards } from "./_components/section-cards";
 import Logo from "@/components/logo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,6 +32,7 @@ export default function Page() {
           <SessionsEventsTable />
         </TabsContent>
       </Tabs>
+      <RoutersTable />
     </div>
   );
 }

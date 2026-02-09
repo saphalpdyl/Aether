@@ -11,6 +11,7 @@ import redis
 
 
 from lib.services.event_dispatcher import BNGEventDispatcher, BNGEventDispatcherConfig
+from lib.services.router_tracker import RouterTracker
 from lib.dhcp.lease import DHCPLease
 from lib.dhcp.utils import parse_dhcp_leases, format_mac
 from lib.nftables.helpers import nft_add_subscriber_rules, nft_allow_ip, nft_delete_rule_by_handle, nft_get_counter_by_handle, nft_list_chain_rules, nft_remove_ip
@@ -741,6 +742,8 @@ def bng_event_loop(
         )
     )
 
+    router_tracker = RouterTracker(bng_id=bng_id, event_dispatcher=event_dispatcher)
+
     dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(
         bng_id,
         bng_instance_id,
@@ -755,6 +758,7 @@ def bng_event_loop(
     next_auth_retry = time.time() + auth_retry_interval
     next_disconnection_check = time.time() + disconnection_check_interval
     next_reconcile = time.time() + reconciler_interval
+    next_router_ping = time.time() + 30
 
     while not stop_event.is_set():
 
@@ -772,6 +776,7 @@ def bng_event_loop(
         if isinstance(event, dict) and event.get("event") == "dhcp":
             try:
                 handle_dhcp_event(event)
+                router_tracker.on_dhcp_event(event)
                 next_reconcile = time.time() + 1
             except Exception as e:
                 print(f"BNG thread DHCP event processing error: {e}")
@@ -856,3 +861,10 @@ def bng_event_loop(
             except Exception as e:
                 print(f"BNG thread Disconnection check error: {e}")
             next_disconnection_check = now + disconnection_check_interval
+
+        if now >= next_router_ping:
+            try:
+                router_tracker.ping_all()
+            except Exception as e:
+                print(f"BNG thread Router-Ping error: {e}")
+            next_router_ping = now + 30

@@ -312,11 +312,38 @@ def handle_policy_apply(conn, event: dict):
     conn.commit()
 
 
+def handle_router_update(conn, event: dict):
+    """Handle ROUTER_UPDATE: Upsert access router in registry."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO access_routers (router_name, giaddr, bng_id, first_seen, last_seen, is_alive, last_ping)
+            VALUES (%(router_name)s, %(giaddr)s::inet, %(bng_id)s,
+                    %(first_seen)s, %(last_seen)s, %(is_alive)s, now())
+            ON CONFLICT (router_name) DO UPDATE SET
+                giaddr = EXCLUDED.giaddr,
+                last_seen = EXCLUDED.last_seen,
+                is_alive = EXCLUDED.is_alive,
+                last_ping = now()
+            """,
+            {
+                "router_name": event.get("router_name"),
+                "giaddr": event.get("giaddr"),
+                "bng_id": event.get("bng_id"),
+                "first_seen": ts_to_datetime(event.get("first_seen")),
+                "last_seen": ts_to_datetime(event.get("last_seen")),
+                "is_alive": event.get("is_alive") == "True",
+            },
+        )
+    conn.commit()
+
+
 EVENT_HANDLERS = {
     "SESSION_START": handle_session_start,
     "SESSION_UPDATE": handle_session_update,
     "SESSION_STOP": handle_session_stop,
     "POLICY_APPLY": handle_policy_apply,
+    "ROUTER_UPDATE": handle_router_update,
 }
 
 
@@ -327,6 +354,11 @@ def process_event(conn, event_data: dict) -> bool:
         event_type = event.get("event_type")
 
         print(f"Processing event: {event_type} session={event.get('session_id')}")
+
+        # ROUTER_UPDATE is not a session event — skip session_events table
+        if event_type == "ROUTER_UPDATE":
+            handle_router_update(conn, event)
+            return True
 
         # Store in events table (returns False if duplicate)
         if not insert_session_event(conn, event):

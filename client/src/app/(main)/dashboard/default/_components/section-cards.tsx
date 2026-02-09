@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Activity, History, Calendar } from "lucide-react";
+import { ArrowDown, ArrowUp, Activity, Server, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,13 @@ interface StatsData {
   };
 }
 
+interface RoutersData {
+  data: Array<{
+    is_alive: string;
+  }>;
+  count: number;
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -28,6 +35,7 @@ function formatBytes(bytes: number): string {
 
 export function SectionCards() {
   const [stats, setStats] = useState<StatsData | null>(null);
+  const [routers, setRouters] = useState<RoutersData | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -42,13 +50,29 @@ export function SectionCards() {
       }
     };
 
+    const fetchRouters = async () => {
+      try {
+        const response = await fetch('/api/routers');
+        if (response.ok) {
+          const data = await response.json();
+          setRouters(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch routers:', error);
+      }
+    };
+
     fetchStats();
-    const interval = setInterval(fetchStats, 2000); // Poll every 2 seconds
+    fetchRouters();
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchRouters();
+    }, 2000); // Poll every 2 seconds
 
     return () => clearInterval(interval);
   }, []);
 
-  if (!stats) {
+  if (!stats || !routers) {
     return (
       <div className="grid @5xl/main:grid-cols-4 @xl/main:grid-cols-2 grid-cols-1 gap-4">
         <Card className="@container/card animate-pulse">
@@ -60,6 +84,8 @@ export function SectionCards() {
       </div>
     );
   }
+
+  const onlineRouters = routers.data.filter(r => r.is_alive.toLowerCase() === 'true').length;
 
   return (
     <div className="grid @5xl/main:grid-cols-4 @xl/main:grid-cols-2 grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs dark:*:data-[slot=card]:bg-card">
@@ -86,22 +112,22 @@ export function SectionCards() {
       
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Session History</CardDescription>
+          <CardDescription>Routers Online</CardDescription>
           <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
-            {stats.history_sessions}
+            {onlineRouters} / {routers.count}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <History className="size-3" />
-              Total
+            <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">
+              <Server className="size-3" />
+              Active
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Historical sessions <History className="size-4" />
+            Network routers status <Server className="size-4" />
           </div>
-          <div className="text-muted-foreground">Completed session records</div>
+          <div className="text-muted-foreground">Online routers / Total routers</div>
         </CardFooter>
       </Card>
       

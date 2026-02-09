@@ -31,6 +31,7 @@ class BNGDispatcherEventType(Enum):
     SESSION_UPDATE = "SESSION_UPDATE"
     SESSION_STOP = "SESSION_STOP"
     POLICY_APPLY = "POLICY_APPLY"
+    ROUTER_UPDATE = "ROUTER_UPDATE"
 
 class BNGEventDispatcher:
     redis_conn: redis.Redis | None
@@ -163,6 +164,25 @@ class BNGEventDispatcher:
             "terminate_cause": terminate_cause,
             "session_end": str(time.time()),
         })
+
+    def dispatch_router_update(self, router_name: str, giaddr: str, is_alive: bool, first_seen: float, last_seen: float) -> None:
+        event_data = {
+            "bng_id": self.config.bng_id,
+            "bng_instance_id": self.config.bng_instance_id,
+            "seq": str(self._next_seq()),
+            "event_type": BNGDispatcherEventType.ROUTER_UPDATE.value,
+            "ts": str(time.time()),
+            "router_name": router_name,
+            "giaddr": giaddr,
+            "is_alive": str(is_alive),
+            "first_seen": str(first_seen),
+            "last_seen": str(last_seen),
+        }
+
+        if self.config.test_mode:
+            print(f"Dispatching event: ROUTER_UPDATE data={event_data}")
+        else:
+            self.__dispatch_event_to_redis(BNGDispatcherEventType.ROUTER_UPDATE, event_data)
 
     def dispatch_policy_apply(self, s: DHCPSession) -> None:
         if not s.mac:

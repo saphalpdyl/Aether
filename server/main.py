@@ -181,6 +181,22 @@ def list_events(
     return {"data": rows, "count": len(rows)}
 
 
+# --- Access Routers ---
+
+@app.get("/api/routers")
+def list_routers():
+    rows = query(
+        """
+        SELECT router_name, giaddr, bng_id,
+               first_seen, last_seen, is_alive, last_ping,
+               active_subscribers
+        FROM access_routers
+        ORDER BY router_name
+        """
+    )
+    return {"data": rows, "count": len(rows)}
+
+
 # --- Stats ---
 
 @app.get("/api/stats")
