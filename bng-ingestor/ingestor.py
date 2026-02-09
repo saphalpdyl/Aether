@@ -3,12 +3,13 @@
 BNG Session Events Ingestor
 
 Consumes session events from Redis Streams and stores them in PostgreSQL.
-Events: SESSION_START, SESSION_UPDATE, SESSION_END
+Events: SESSION_START, SESSION_UPDATE, SESSION_STOP, POLICY_APPLY
 """
 
 import json
 import os
 import time
+from datetime import datetime
 import redis
 import psycopg2
 from psycopg2.extras import Json
@@ -16,9 +17,10 @@ from psycopg2.extras import Json
 # Configuration from environment
 REDIS_HOST = os.getenv("REDIS_HOST", "192.0.2.10")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_STREAM = os.getenv("REDIS_STREAM", "bng:session_events")
-REDIS_CONSUMER_GROUP = os.getenv("REDIS_CONSUMER_GROUP", "oss_ingestors")
-REDIS_CONSUMER_NAME = os.getenv("REDIS_CONSUMER_NAME", "ingestor-1")
+REDIS_STREAM = os.getenv("REDIS_STREAM", "bng_events")
+
+REDIS_CONSUMER_GROUP = os.getenv("REDIS_CONSUMER_GROUP", "bng_ingestors")
+REDIS_CONSUMER_NAME = os.getenv("REDIS_CONSUMER_NAME", "bng-ingestor-1")
 
 PG_HOST = os.getenv("PG_HOST", "192.0.2.11")
 PG_PORT = int(os.getenv("PG_PORT", 5432))
@@ -72,121 +74,276 @@ def ensure_consumer_group(r: redis.Redis):
             raise
 
 
+def parse_event(event_data: dict) -> dict:
+    """Parse and decode event data from Redis."""
+    decoded = {}
+    for k, v in event_data.items():
+        key = k.decode() if isinstance(k, bytes) else k
+        val = v.decode() if isinstance(v, bytes) else v
+        decoded[key] = val
+    return decoded
+
+
+def ts_to_datetime(ts_str: str) -> datetime:
+    """Convert unix timestamp string to datetime."""
+    try:
+        return datetime.fromtimestamp(float(ts_str))
+    except (ValueError, TypeError):
+        return datetime.now()
+
+
 def insert_session_event(conn, event: dict) -> bool:
     """Insert session event into PostgreSQL. Returns False if duplicate."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO session_events (
+                    bng_id, bng_instance_id, seq,
+                    event_type, ts, session_id,
+                    nas_ip, circuit_id, remote_id,
+                    mac_address, ip_address, username,
+                    input_octets, output_octets, input_packets, output_packets,
+                    status, auth_state, raw_data, terminate_cause, session_start, session_last_update
+                ) VALUES (
+                    %(bng_id)s, %(bng_instance_id)s::uuid, %(seq)s,
+                    %(event_type)s, %(ts)s, %(session_id)s::uuid,
+                    %(nas_ip)s::inet, %(circuit_id)s, %(remote_id)s,
+                    %(mac_address)s::macaddr, %(ip_address)s::inet, %(username)s,
+                    %(input_octets)s, %(output_octets)s, %(input_packets)s, %(output_packets)s,
+                    %(status)s, %(auth_state)s, %(raw_data)s, %(terminate_cause)s, %(ts)s, %(ts)s
+                )
+                ON CONFLICT (bng_id, bng_instance_id, seq) DO NOTHING
+                """,
+                {
+                    "bng_id": event.get("bng_id"),
+                    "bng_instance_id": event.get("bng_instance_id"),
+                    "seq": int(event.get("seq", 0)),
+                    "event_type": event.get("event_type"),
+                    "ts": ts_to_datetime(event.get("ts")),
+                    "session_id": event.get("session_id"),
+                    "nas_ip": event.get("nas_ip"),
+                    "circuit_id": event.get("circuit_id"),
+                    "remote_id": event.get("remote_id"),
+                    "mac_address": event.get("mac_address"),
+                    "ip_address": event.get("ip_address") or None,
+                    "username": event.get("username"),
+                    "input_octets": int(event.get("input_octets", 0) or 0),
+                    "output_octets": int(event.get("output_octets", 0) or 0),
+                    "input_packets": int(event.get("input_packets", 0) or 0),
+                    "output_packets": int(event.get("output_packets", 0) or 0),
+                    "status": event.get("status"),
+                    "auth_state": event.get("auth_state"),
+                    "raw_data": Json(event),
+                    "terminate_cause": event.get("terminate_cause", ""),
+                },
+            )
+            inserted = cur.rowcount > 0
+        conn.commit()
+        return inserted
+    except Exception as e:
+        conn.rollback()
+        print(f"Error inserting session event: {e}")
+        return False
+
+
+def handle_session_start(conn, event: dict):
+    """Handle SESSION_START: Insert or update active session."""
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO session_events (
-                idempotency_key, event_type, session_id, mac_address, ip_address,
-                circuit_id, remote_id, relay_id, username, nas_ip,
+            INSERT INTO sessions_active (
+                session_id, bng_id, bng_instance_id,
+                nas_ip, circuit_id, remote_id,
+                mac_address, ip_address, username,
+                start_time, last_update,
                 input_octets, output_octets, input_packets, output_packets,
-                session_time, event_timestamp, raw_data
+                status, auth_state
             ) VALUES (
-                %(idempotency_key)s, %(event_type)s, %(session_id)s, %(mac_address)s, %(ip_address)s,
-                %(circuit_id)s, %(remote_id)s, %(relay_id)s, %(username)s, %(nas_ip)s,
-                %(input_octets)s, %(output_octets)s, %(input_packets)s, %(output_packets)s,
-                %(session_time)s, NOW(), %(raw_data)s
+                %(session_id)s::uuid, %(bng_id)s, %(bng_instance_id)s::uuid,
+                %(nas_ip)s::inet, %(circuit_id)s, %(remote_id)s,
+                %(mac_address)s::macaddr, %(ip_address)s::inet, %(username)s,
+                %(ts)s, %(ts)s,
+                0, 0, 0, 0,
+                %(status)s, %(auth_state)s
             )
-            ON CONFLICT (idempotency_key) DO NOTHING
+            ON CONFLICT (session_id) DO UPDATE SET
+                ip_address = EXCLUDED.ip_address,
+                last_update = EXCLUDED.last_update
             """,
             {
-                "idempotency_key": event.get("idempotency_key"),
-                "event_type": event.get("event_type"),
                 "session_id": event.get("session_id"),
-                "mac_address": event.get("mac_address"),
-                "ip_address": event.get("ip_address"),
+                "bng_id": event.get("bng_id"),
+                "bng_instance_id": event.get("bng_instance_id"),
+                "nas_ip": event.get("nas_ip"),
                 "circuit_id": event.get("circuit_id"),
                 "remote_id": event.get("remote_id"),
-                "relay_id": event.get("relay_id"),
+                "mac_address": event.get("mac_address"),
+                "ip_address": event.get("ip_address") or None,
                 "username": event.get("username"),
-                "nas_ip": event.get("nas_ip"),
-                "input_octets": event.get("input_octets", 0),
-                "output_octets": event.get("output_octets", 0),
-                "input_packets": event.get("input_packets", 0),
-                "output_packets": event.get("output_packets", 0),
-                "session_time": event.get("session_time", 0),
-                "raw_data": Json(event),
+                "ts": ts_to_datetime(event.get("ts")),
+                "status": event.get("status", "ACTIVE"),
+                "auth_state": event.get("auth_state", "PENDING_AUTH"),
             },
         )
-        inserted = cur.rowcount > 0
     conn.commit()
-    if not inserted:
-        print(f"Duplicate event skipped: {event.get('idempotency_key')}")
-    return inserted
 
 
-def upsert_active_session(conn, event: dict):
-    """Update or insert active session based on event type."""
-    event_type = event.get("event_type")
+def handle_session_update(conn, event: dict):
+    """Handle SESSION_UPDATE: Update counters on active session."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE sessions_active SET
+                input_octets = %(input_octets)s,
+                output_octets = %(output_octets)s,
+                input_packets = %(input_packets)s,
+                output_packets = %(output_packets)s,
+                status = %(status)s,
+                auth_state = %(auth_state)s,
+                last_update = %(ts)s
+            WHERE session_id = %(session_id)s::uuid
+            """,
+            {
+                "session_id": event.get("session_id"),
+                "input_octets": int(event.get("input_octets", 0) or 0),
+                "output_octets": int(event.get("output_octets", 0) or 0),
+                "input_packets": int(event.get("input_packets", 0) or 0),
+                "output_packets": int(event.get("output_packets", 0) or 0),
+                "status": event.get("status", "ACTIVE"),
+                "auth_state": event.get("auth_state", "PENDING_AUTH"),
+                "ts": ts_to_datetime(event.get("ts")),
+            },
+        )
+    conn.commit()
+
+
+def handle_session_stop(conn, event: dict):
+    session_id = event["session_id"]
+    session_end = event.get("ts")
+    terminate_cause = event.get("terminate_cause")
+    terminate_source = event.get("terminate_source")
 
     with conn.cursor() as cur:
-        if event_type == "SESSION_START":
-            cur.execute(
-                """
-                INSERT INTO active_sessions (
-                    session_id, mac_address, ip_address, circuit_id, remote_id,
-                    relay_id, username, nas_ip, start_time, last_update
-                ) VALUES (
-                    %(session_id)s, %(mac_address)s, %(ip_address)s, %(circuit_id)s,
-                    %(remote_id)s, %(relay_id)s, %(username)s, %(nas_ip)s, NOW(), NOW()
-                )
-                ON CONFLICT (session_id) DO UPDATE SET
-                    mac_address = EXCLUDED.mac_address,
-                    ip_address = EXCLUDED.ip_address,
-                    start_time = NOW(),
-                    last_update = NOW()
-                """,
-                event,
+        # 1. Update active session with final counters from the STOP event
+        cur.execute(
+            """
+            UPDATE sessions_active SET
+                input_octets = %(input_octets)s,
+                output_octets = %(output_octets)s,
+                input_packets = %(input_packets)s,
+                output_packets = %(output_packets)s,
+                status = 'STOPPED',
+                last_update = %(ts)s
+            WHERE session_id = %(session_id)s::uuid
+            """,
+            {
+                "session_id": session_id,
+                "input_octets": int(event.get("input_octets", 0) or 0),
+                "output_octets": int(event.get("output_octets", 0) or 0),
+                "input_packets": int(event.get("input_packets", 0) or 0),
+                "output_packets": int(event.get("output_packets", 0) or 0),
+                "ts": ts_to_datetime(session_end),
+            },
+        )
+
+        # 2. Move updated row from sessions_active to sessions_history
+        cur.execute(
+            """
+            WITH moved AS (
+              DELETE FROM sessions_active
+              WHERE session_id = %(session_id)s::uuid
+              RETURNING
+                session_id, bng_id, bng_instance_id,
+                nas_ip, circuit_id, remote_id,
+                mac_address, ip_address, username,
+                start_time, last_update,
+                input_octets, output_octets, input_packets, output_packets,
+                status, auth_state
             )
-        elif event_type == "SESSION_UPDATE":
-            cur.execute(
-                """
-                UPDATE active_sessions SET
-                    input_octets = %(input_octets)s,
-                    output_octets = %(output_octets)s,
-                    input_packets = %(input_packets)s,
-                    output_packets = %(output_packets)s,
-                    session_time = %(session_time)s,
-                    last_update = NOW()
-                WHERE session_id = %(session_id)s
-                """,
-                event,
+            INSERT INTO sessions_history (
+              session_id, bng_id, bng_instance_id,
+              nas_ip, circuit_id, remote_id,
+              mac_address, ip_address, username,
+              start_time, last_update,
+              input_octets, output_octets, input_packets, output_packets,
+              status, auth_state,
+              session_end, terminate_cause, terminate_source
             )
-        elif event_type == "SESSION_END":
-            cur.execute(
-                "DELETE FROM active_sessions WHERE session_id = %(session_id)s",
-                event,
-            )
+            SELECT
+              session_id, bng_id, bng_instance_id,
+              nas_ip, circuit_id, remote_id,
+              mac_address, ip_address, username,
+              start_time, last_update,
+              input_octets, output_octets, input_packets, output_packets,
+              status, auth_state,
+              %(session_end)s::timestamptz,
+              %(terminate_cause)s::text,
+              %(terminate_source)s::text
+            FROM moved;
+            """,
+            {
+                "session_id": session_id,
+                "session_end": ts_to_datetime(session_end),
+                "terminate_cause": terminate_cause,
+                "terminate_source": terminate_source,
+            },
+        )
     conn.commit()
 
 
-def process_event(conn, event_data: dict):
+def handle_policy_apply(conn, event: dict):
+    """Handle POLICY_APPLY: Update auth_state on active session."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE sessions_active SET
+                auth_state = %(auth_state)s,
+                last_update = %(ts)s
+            WHERE session_id = %(session_id)s::uuid
+            """,
+            {
+                "session_id": event.get("session_id"),
+                "auth_state": event.get("auth_state", "PENDING_AUTH"),
+                "ts": ts_to_datetime(event.get("ts")),
+            },
+        )
+    conn.commit()
+
+
+EVENT_HANDLERS = {
+    "SESSION_START": handle_session_start,
+    "SESSION_UPDATE": handle_session_update,
+    "SESSION_STOP": handle_session_stop,
+    "POLICY_APPLY": handle_policy_apply,
+}
+
+
+def process_event(conn, event_data: dict) -> bool:
     """Process a single event from Redis stream."""
     try:
-        # Decode bytes to string if needed
-        decoded = {}
-        for k, v in event_data.items():
-            key = k.decode() if isinstance(k, bytes) else k
-            val = v.decode() if isinstance(v, bytes) else v
-            decoded[key] = val
+        event = parse_event(event_data)
+        event_type = event.get("event_type")
 
-        # Parse JSON data field if present
-        if "data" in decoded:
-            event = json.loads(decoded["data"])
-        else:
-            event = decoded
-
-        print(f"Processing event: {event.get('event_type')} session={event.get('session_id')}")
+        print(f"Processing event: {event_type} session={event.get('session_id')}")
 
         # Store in events table (returns False if duplicate)
-        if insert_session_event(conn, event):
-            # Only update active sessions if event was new
-            upsert_active_session(conn, event)
+        if not insert_session_event(conn, event):
+            print(f"Duplicate event skipped: bng_id={event.get('bng_id')} seq={event.get('seq')}")
+            return True  # Still acknowledge, it's a duplicate
+
+        # Handle event-specific logic
+        handler = EVENT_HANDLERS.get(event_type)
+        if handler:
+            handler(conn, event)
+        else:
+            print(f"Unknown event type: {event_type}")
 
         return True
     except Exception as e:
         print(f"Error processing event: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 

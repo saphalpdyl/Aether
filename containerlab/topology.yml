@@ -144,8 +144,11 @@ topology:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
         - ip addr add 192.0.2.11/24 dev eth1
-        - ip route replace default via 192.0.2.5
-        - sh -c "ip link set eth0 down || true"
+        - ip route replace default via 192.0.2.1
+        - sh -c "for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U oss >/dev/null 2>&1 && break; sleep 0.5; done"
+        # - sh -c "/docker-entrypoint-initdb.d/00-radius-hba.sh || true"
+        - sh -c "pg_ctl -D \"$PGDATA\" reload || true"
+        # - sh -c "ip link set eth0 down || true"
 
     # BNG Events Ingestor (Redis -> PostgreSQL)
     bng_ingestor:

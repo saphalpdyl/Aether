@@ -244,13 +244,18 @@ def decode_dhcp_with_reason(pkt: bytes):
     return result, "ok"
 
 
+def _normalize_remote_id(remote_id: bytes) -> str:
+    """Convert raw remote_id bytes to hex string."""
+    return remote_id.hex()
+
+
 def _encode_event(info: dict) -> dict:
     out = dict(info)
     out.pop("payload", None)
     if isinstance(out.get("circuit_id"), (bytes, bytearray)):
         out["circuit_id"] = out["circuit_id"].decode(errors="replace")
     if isinstance(out.get("remote_id"), (bytes, bytearray)):
-        out["remote_id"] = out["remote_id"].decode(errors="replace")
+        out["remote_id"] = _normalize_remote_id(out["remote_id"])
     if isinstance(out.get("relay_id"), (bytes, bytearray)):
         out["relay_id"] = out["relay_id"].decode(errors="replace")
     if isinstance(out.get("chaddr"), (bytes, bytearray)):

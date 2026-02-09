@@ -1,4 +1,4 @@
 # h1 via srl (e1-1)
-"bng-01/00:00:00:00:00:01/srl-access=7Cdefault=7Cirb1=7C1:0" Cleartext-Password := "testing123"
+"bng-01/000000000001/srl-access=7Cdefault=7Cirb1=7C1:0" Cleartext-Password := "testing123"
         Filter-Id = "basic",
         Acct-Interim-Interval = 30

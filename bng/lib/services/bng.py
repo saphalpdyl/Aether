@@ -67,12 +67,6 @@ def _authorize_session(
     nas_port_id: str,
     ensure_rules: bool = False,
 ) -> str | None:
-    # Normalize remote_id if it looks like raw MAC bytes rendered as str with nulls.
-    if s.remote_id and any(ch == "\x00" for ch in s.remote_id):
-        raw = s.remote_id.encode("latin1", errors="ignore")
-        if len(raw) == 6:
-            s.remote_id = ":".join(f"{b:02x}" for b in raw)
-
     access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
     access_request_response = rad_auth_send_from_bng(access_request_pkt, server_ip=radius_server_ip, secret=radius_secret)
 
@@ -388,9 +382,9 @@ def dhcp_lease_handler(
             print(f"DHCP RELEASE for unknown IP: {ip}")
             return
 
-        sessions.pop((nas_ip, s.circuit_id, s.remote_id), None) # Remove reference from main sessions map
+        sessions.pop((bng_id, s.circuit_id, s.remote_id), None) # Remove reference from main sessions map
 
-        tombstones[(nas_ip, s.circuit_id, s.remote_id)] = Tombstone(
+        tombstones[(bng_id, s.circuit_id, s.remote_id)] = Tombstone(
             ip_at_stop=s.ip or "",
             latest_state_update_ts_at_stop=s.expiry or int(time.time()),
             stopped_at=time.time(),
@@ -410,6 +404,7 @@ def dhcp_lease_handler(
                 nas_ip=nas_ip,
                 nas_port_id=nas_port_id,
                 nftables_snapshot=nftables_snapshot,
+                event_dispatcher=event_dispatcher,
             ):
                 print(f"RADIUS Acct-Stop sent for mac={s.mac} ip={s.ip}")
 
@@ -449,7 +444,7 @@ def dhcp_lease_handler(
         now = time.time()
         leases = _kea_lease_service.get_all_leases()
 
-        current = {(l.relay_id, l.circuit_id , l.remote_id): l for l in leases}
+        current = {(bng_id, l.circuit_id, l.remote_id): l for l in leases}
 
         for key, t in list(tombstones.items()):
             expired_by_lease = t.latest_state_update_ts_at_stop and now >= (t.latest_state_update_ts_at_stop + TOMBSTONE_EXPIRY_GRACE_SECONDS)

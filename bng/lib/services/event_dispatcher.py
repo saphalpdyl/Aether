@@ -23,6 +23,9 @@ class BNGEventDispatcherConfig:
     test_mode: bool = False
     print_dispatched_events: bool = False
 
+def acct_user_name(s: DHCPSession) -> str:
+    return f"{s.relay_id}/{s.remote_id}/{s.circuit_id}"
+
 class BNGDispatcherEventType(Enum):
     SESSION_START = "SESSION_START"
     SESSION_UPDATE = "SESSION_UPDATE"
@@ -51,24 +54,49 @@ class BNGEventDispatcher:
         self.seq += 1
         return self.seq
 
-    def _dispatch_event(self, event_type: BNGDispatcherEventType, event_data: dict) -> None:
+    def __dispatch_event_to_redis(self, event_type: BNGDispatcherEventType, event_data: dict) -> None:
         """Dispatch an event to Redis stream."""
+
+        if self.config.print_dispatched_events:
+            print(f"Dispatching event to Redis: {event_type.value} data={event_data}")
+
+        assert self.redis_conn is not None
+
+        self.redis_conn.xadd(EVENT_DISPATCHER_STREAM_ID, event_data)
+
+    # Prepares common event data and dispatches to either stdout or streams
+    def _dispatch_event(self, event_type: BNGDispatcherEventType, s: DHCPSession,  event_data: dict) -> None:
         event_data["bng_id"] = self.config.bng_id
         event_data["bng_instance_id"] = self.config.bng_instance_id
+
         event_data["seq"] = str(self._next_seq())
+
         event_data["event_type"] = event_type.value
+
         event_data["ts"] = str(time.time())
+        event_data["session_last_update"] = str(time.time())
+
+        event_data["nas_ip"] = self.config.nas_ip
+
+        event_data["session_id"] = s.session_id
+        event_data["access_key"] = s.access_key()
+
+        # Opt 82
+        event_data["remote_id"] = s.remote_id
+        event_data["circuit_id"] = s.circuit_id
+
+        # Status
+        event_data["auth_state"] = s.auth_state
+        event_data["status"] = s.status
+
 
         if self.config.test_mode:
             print(f"Dispatching event: {event_type.value} data={event_data}")
         else:
-            if self.config.print_dispatched_events:
-                print(f"Dispatching event to Redis: {event_type.value} data={event_data}")
-            assert self.redis_conn is not None
-            self.redis_conn.xadd(EVENT_DISPATCHER_STREAM_ID, event_data)
+            self.__dispatch_event_to_redis(event_type, event_data)
 
     def _username(self, s: DHCPSession) -> str:
-        return f"{s.circuit_id}/{s.remote_id}"
+        return acct_user_name(s)
 
     def dispatch_session_start(self, s: DHCPSession) -> None:
         if not s.mac:
@@ -76,14 +104,7 @@ class BNGEventDispatcher:
         if not s.ip:
             raise ValueError("session ip address is required")
 
-        self._dispatch_event(BNGDispatcherEventType.SESSION_START, {
-            "session_id": s.session_id,
-            "bng_id": self.config.bng_id,
-            "bng_instance_id": self.config.bng_instance_id,
-            "nas_ip": self.config.nas_ip,
-            "circuit_id": s.circuit_id,
-            "remote_id": s.remote_id,
-            "access_key": s.access_key(),
+        self._dispatch_event(BNGDispatcherEventType.SESSION_START,s,  {
             "mac_address": s.mac,
             "ip_address": s.ip,
             "username": self._username(s),
@@ -91,6 +112,7 @@ class BNGEventDispatcher:
             "output_octets": "0",
             "input_packets": "0",
             "output_packets": "0",
+            "session_start": str(time.time()),
         })
 
     def dispatch_session_update(
@@ -106,11 +128,7 @@ class BNGEventDispatcher:
         if not s.ip:
             raise ValueError("session ip address is required")
 
-        self._dispatch_event(BNGDispatcherEventType.SESSION_UPDATE, {
-            "session_id": s.session_id,
-            "bng_id": self.config.bng_id,
-            "bng_instance_id": self.config.bng_instance_id,
-            "access_key": s.access_key(),
+        self._dispatch_event(BNGDispatcherEventType.SESSION_UPDATE, s, {
             "mac_address": s.mac,
             "ip_address": s.ip,
             "username": self._username(s),
@@ -134,11 +152,7 @@ class BNGEventDispatcher:
         if not s.ip:
             raise ValueError("session ip address is required")
 
-        self._dispatch_event(BNGDispatcherEventType.SESSION_STOP, {
-            "session_id": s.session_id,
-            "bng_id": self.config.bng_id,
-            "bng_instance_id": self.config.bng_instance_id,
-            "access_key": s.access_key(),
+        self._dispatch_event(BNGDispatcherEventType.SESSION_STOP, s, {
             "mac_address": s.mac,
             "ip_address": s.ip,
             "username": self._username(s),
@@ -147,22 +161,15 @@ class BNGEventDispatcher:
             "input_packets": str(input_packets),
             "output_packets": str(output_packets),
             "terminate_cause": terminate_cause,
+            "session_end": str(time.time()),
         })
 
     def dispatch_policy_apply(self, s: DHCPSession) -> None:
         if not s.mac:
             raise ValueError("session mac address is required")
 
-        self._dispatch_event(BNGDispatcherEventType.POLICY_APPLY, {
-            "session_id": s.session_id,
-            "bng_id": self.config.bng_id,
-            "bng_instance_id": self.config.bng_instance_id,
-            "nas_ip": self.config.nas_ip,
-            "circuit_id": s.circuit_id,
-            "remote_id": s.remote_id,
-            "access_key": s.access_key(),
+        self._dispatch_event(BNGDispatcherEventType.POLICY_APPLY, s, {
             "mac_address": s.mac,
             "ip_address": s.ip or "",
             "username": self._username(s),
-            "auth_state": s.auth_state,
         })

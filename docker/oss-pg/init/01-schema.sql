@@ -13,6 +13,11 @@ CREATE TABLE session_events (
     circuit_id       TEXT        NOT NULL,
     remote_id        TEXT        NOT NULL,
 
+    -- timestamps
+    session_start    TIMESTAMPTZ NOT NULL,
+    session_end       TIMESTAMPTZ, -- when event_type = SESSION_STOP
+    session_last_update  TIMESTAMPTZ NOT NULL,
+
     -- subscriber identity
     mac_address      MACADDR,
     ip_address       INET,
@@ -29,10 +34,13 @@ CREATE TABLE session_events (
     status           TEXT,       -- ACTIVE | IDLE | EXPIRED | PENDING
     auth_state        TEXT,       -- AUTH_PENDING | AUTHORIZED | REJECTED
 
+    -- Terminate cause
+    terminate_cause TEXT, -- when event_type = SESSION_STOP
+
     PRIMARY KEY (bng_id, bng_instance_id, seq)
 );
 
-CREATE TABLE active_sessions (
+CREATE TABLE sessions_active (
     session_id       UUID        PRIMARY KEY,
 
     bng_id           TEXT        NOT NULL,
@@ -53,8 +61,27 @@ CREATE TABLE active_sessions (
     input_octets     BIGINT      NOT NULL DEFAULT 0,
     output_octets    BIGINT      NOT NULL DEFAULT 0,
     input_packets    BIGINT      NOT NULL DEFAULT 0,
-    output_packets   BIGINT      NOT NULL DEFAULT 0
+    output_packets   BIGINT      NOT NULL DEFAULT 0,
+
+    status           TEXT        NOT NULL DEFAULT 'ACTIVE',
+    auth_state       TEXT        NOT NULL DEFAULT 'PENDING_AUTH'
 );
 
+CREATE TABLE sessions_history (
+    LIKE sessions_active INCLUDING DEFAULTS INCLUDING CONSTRAINTS,
+
+    session_end       TIMESTAMPTZ NOT NULL,
+    terminate_cause   TEXT,
+    terminate_source  TEXT
+);
+
+CREATE INDEX idx_sessions_history_start_time ON sessions_history (start_time);
+CREATE INDEX idx_sessions_history_session_end ON sessions_history (session_end);
+
+CREATE INDEX idx_sessions_history_range
+ON sessions_history
+USING GIST (tstzrange(start_time, session_end, '[)'));
+
 CREATE UNIQUE INDEX uniq_active_attachment
-ON active_sessions (nas_ip, circuit_id, remote_id);
+ON sessions_active (nas_ip, circuit_id, remote_id);
+

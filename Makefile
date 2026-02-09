@@ -2,6 +2,7 @@
 #
 
 dev:
+	$(MAKE) clean
 	sudo docker compose build
 	sudo containerlab deploy -t containerlab/topology.yml
 	$(MAKE) ips
