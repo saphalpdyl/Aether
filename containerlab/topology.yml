@@ -90,6 +90,7 @@ topology:
       kind: linux
       image: lab-radius-pg
       memory: 8Gb
+      mgmt-ipv4: 172.20.20.11
       env:
         POSTGRES_DB: radius
         POSTGRES_USER: radius
@@ -102,13 +103,14 @@ topology:
         - sh -c "for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U radius >/dev/null 2>&1 && break; sleep 0.5; done"
         - sh -c "/docker-entrypoint-initdb.d/00-radius-hba.sh || true"
         - sh -c "pg_ctl -D \"$PGDATA\" reload || true"
-        - sh -c "ip link set eth0 down || true"
+        # - sh -c "ip link set eth0 down || true"
 
     # Kea PostgreSQL (lease database)
     dhcp_pg:
       kind: linux
       image: lab-dhcp-pg
       memory: 8Gb
+      mgmt-ipv4: 172.20.20.12
       env:
         POSTGRES_DB: kea_lease_db
         POSTGRES_USER: kea
@@ -118,7 +120,7 @@ topology:
         - ip link set eth1 up
         - ip addr add 192.0.2.4/24 dev eth1
         - ip route replace default via 192.0.2.1
-        - sh -c "ip link set eth0 down || true"
+        # - sh -c "ip link set eth0 down || true"
 
     # Redis for session events stream
     redis:

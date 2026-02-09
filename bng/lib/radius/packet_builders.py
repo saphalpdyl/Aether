@@ -35,8 +35,8 @@ def rad_auth_send_from_bng(
     result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     return result.stdout or ""
 
-def acct_session_id(mac: str, ip: str, first_seen: float) -> str:
-    return f"{mac.lower()}-{ip}-{int(first_seen)}"
+def acct_session_id(session_id: str) -> str:
+    return f"{session_id}"
 
 def acct_user_name(s: DHCPSession) -> str:
     if not s.remote_id or not s.circuit_id:
@@ -50,7 +50,7 @@ def build_acct_start(s: DHCPSession, nas_ip="192.0.2.1", nas_port_id="eth0") -> 
     return "\n".join([
         "Acct-Status-Type = Start",
         f'User-Name = "{acct_user_name(s)}"',
-        f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
+        f'Acct-Session-Id = "{acct_session_id(s.session_id)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
         f"NAS-IP-Address = {nas_ip}",
@@ -79,7 +79,7 @@ def build_acct_stop(
     return "\n".join([
         "Acct-Status-Type = Stop",
         f'User-Name = "{acct_user_name(s)}"',
-        f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
+        f'Acct-Session-Id = "{acct_session_id(s.session_id)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
         f"NAS-IP-Address = {nas_ip}",
@@ -120,7 +120,7 @@ def build_acct_interim(
     return "\n".join([
         "Acct-Status-Type = Interim-Update",
         f'User-Name = "{acct_user_name(s)}"',
-        f'Acct-Session-Id = "{acct_session_id(s.mac, s.ip, s.first_seen)}"',
+        f'Acct-Session-Id = "{acct_session_id(s.session_id)}"',
         f"Framed-IP-Address = {s.ip}",
         f'Calling-Station-Id = "{s.mac.lower()}"',
         f"NAS-IP-Address = {nas_ip}",
