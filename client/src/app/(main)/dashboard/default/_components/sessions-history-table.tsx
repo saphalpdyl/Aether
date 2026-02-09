@@ -1,0 +1,59 @@
+"use client";
+
+import * as React from "react";
+
+import { DataTable } from "./data-table-history";
+import { sessionHistorySchema, type SessionHistory } from "./history-schema";
+
+export default function SessionsHistoryTable() {
+  const [data, setData] = React.useState<SessionHistory[]>([]);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    async function fetchData() {
+      try {
+        const res = await fetch("/api/sessions/history", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        console.log("[History] Received:", json);
+        const items = Array.isArray(json.data)
+          ? json.data
+              .map((s: any) => {
+                // normalize numeric fields that may come back as strings
+                const parsed = {
+                  ...s,
+                  input_octets: s.input_octets === undefined ? 0 : Number(s.input_octets),
+                  output_octets: s.output_octets === undefined ? 0 : Number(s.output_octets),
+                  input_packets: s.input_packets === undefined ? 0 : Number(s.input_packets),
+                  output_packets: s.output_packets === undefined ? 0 : Number(s.output_packets),
+                };
+                try {
+                  return sessionHistorySchema.parse(parsed) as SessionHistory;
+                } catch (e) {
+                  // validation failed for this row — skip it
+                  // eslint-disable-next-line no-console
+                  console.warn("[History] Session parse failed", e, parsed);
+                  return null;
+                }
+              })
+              .filter(Boolean)
+          : [];
+
+        if (mounted) setData(items as SessionHistory[]);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[History] Fetch error:", err);
+      }
+    }
+
+    fetchData();
+    const id = setInterval(fetchData, 2000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  return <DataTable data={data} />;
+}
