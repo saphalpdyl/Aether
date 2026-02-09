@@ -3,10 +3,12 @@ import time
 
 
 class RouterTracker:
-    def __init__(self, bng_id: str, event_dispatcher):
+    def __init__(self, bng_id: str, event_dispatcher, ping_interval: int = 30):
         self.bng_id = bng_id
         self.event_dispatcher = event_dispatcher
-        self.routers = {}  # {router_name: {"giaddr": str, "first_seen": float, "last_seen": float, "is_alive": bool}}
+        self.ping_interval = ping_interval
+        # {router_name: {"giaddr": str, "first_seen": float, "last_seen": float, "is_alive": bool, "next_ping": float}}
+        self.routers = {}
 
     def _extract_router_name(self, circuit_id: str) -> str | None:
         if not circuit_id:
@@ -31,11 +33,18 @@ class RouterTracker:
                 "first_seen": now,
                 "last_seen": now,
                 "is_alive": True,
+                "next_ping": now + self.ping_interval,
             }
             self._dispatch(name, self.routers[name])
         else:
-            self.routers[name]["last_seen"] = now
-            self.routers[name]["giaddr"] = giaddr
+            r = self.routers[name]
+            r["last_seen"] = now
+            r["giaddr"] = giaddr
+            # Router is relaying DHCP — it's alive, push next ping
+            if not r["is_alive"]:
+                r["is_alive"] = True
+                self._dispatch(name, r)
+            r["next_ping"] = now + self.ping_interval
 
     def _dispatch(self, name: str, info: dict):
         self.event_dispatcher.dispatch_router_update(
@@ -46,10 +55,15 @@ class RouterTracker:
             last_seen=info["last_seen"],
         )
 
-    def ping_all(self):
+    def check_routers(self):
+        """Ping only routers that are overdue for a check."""
+        now = time.time()
         for name, info in self.routers.items():
+            if now < info["next_ping"]:
+                continue
             alive = self._ping(info["giaddr"])
             info["is_alive"] = alive
+            info["next_ping"] = now + self.ping_interval
             self._dispatch(name, info)
 
     def _ping(self, ip: str) -> bool:

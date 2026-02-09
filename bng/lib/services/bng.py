@@ -875,10 +875,10 @@ def bng_event_loop(
 
         if now >= next_router_ping:
             try:
-                router_tracker.ping_all()
+                router_tracker.check_routers()
             except Exception as e:
                 print(f"BNG thread Router-Ping error: {e}")
-            next_router_ping = now + 30
+            next_router_ping = now + router_ping_interval
 
         if now >= next_bng_health_check:
             try:
