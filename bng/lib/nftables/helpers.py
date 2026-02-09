@@ -53,13 +53,19 @@ def nft_add_subscriber_rules(
 ):
     mac_l = mac.lower()
 
-    # Upload counter rule
+    # Upload counter rule (exclude DHCP udp 67/68)
+    _cmd(
+        f"nft \'add rule inet bngacct sess iif \"{sub_if}\" ip saddr {ip} meta l4proto udp udp sport {{ 67, 68 }} accept\'"
+    )
     _cmd(
         f"nft \'add rule inet bngacct sess iif \"{sub_if}\" ip saddr {ip} counter "
         f"comment \"sub;mac={mac_l};dir=up;ip={ip}\"\'"
     )
 
-    # Download counter rule
+    # Download counter rule (exclude DHCP udp 67/68)
+    _cmd(
+        f"nft \'add rule inet bngacct sess oif \"{sub_if}\" ip daddr {ip} meta l4proto udp udp dport {{ 67, 68 }} accept\'"
+    )
     _cmd(
         f"nft \'add rule inet bngacct sess oif \"{sub_if}\" ip daddr {ip} counter "
         f"comment \"sub;mac={mac_l};dir=down;ip={ip}\"\'"

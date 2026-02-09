@@ -33,6 +33,10 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof sessionS
   return (
     <Tabs defaultValue="outline" className="w-full flex-col justify-start gap-6">
       <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium">Session History</h3>
+          <Badge variant="secondary">{data.length}</Badge>
+        </div>
         <Label htmlFor="view-selector" className="sr-only">
           View
         </Label>
@@ -49,15 +53,6 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof sessionS
           <DataTableNew dndEnabled table={table} columns={columns} onReorder={setData} />
         </div>
         <DataTablePagination table={table} />
-      </TabsContent>
-      <TabsContent value="past-performance" className="flex flex-col">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed" />
-      </TabsContent>
-      <TabsContent value="key-personnel" className="flex flex-col">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed" />
-      </TabsContent>
-      <TabsContent value="focus-documents" className="flex flex-col">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed" />
       </TabsContent>
     </Tabs>
   );
