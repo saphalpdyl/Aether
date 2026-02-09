@@ -1,0 +1,233 @@
+direction: down
+
+title: {
+  label: OSS — BNG Operations Support System
+  near: top-center
+  shape: text
+  style: {
+    font-size: 28
+    bold: true
+  }
+}
+
+# ──────────────────────────────────────────
+#  SUBSCRIBERS & ACCESS
+# ──────────────────────────────────────────
+
+subscribers: Subscribers {
+  style: {
+    fill: "#f0f4ff"
+    stroke: "#7c8db5"
+    border-radius: 10
+  }
+  h1: "h1  00:...:01" { style: {fill: "#dbeafe"; stroke: "#3b82f6"; border-radius: 4; font-size: 11} }
+  h2: "h2  00:...:02" { style: {fill: "#dbeafe"; stroke: "#3b82f6"; border-radius: 4; font-size: 11} }
+  h3: "h3  00:...:03" { style: {fill: "#dbeafe"; stroke: "#3b82f6"; border-radius: 4; font-size: 11} }
+}
+
+access: Access Network {
+  style: {fill: "#fff8f0"; stroke: "#c4956a"; border-radius: 10}
+
+  srl: "srl-access (SR Linux)" {
+    shape: hexagon
+    style: {fill: "#fed7aa"; stroke: "#ea580c"; font-size: 12}
+  }
+  srl2: "srl2-access (SR Linux)" {
+    shape: hexagon
+    style: {fill: "#fed7aa"; stroke: "#ea580c"; font-size: 12}
+  }
+  agg: "agg (L2 Bridge)" {
+    shape: diamond
+    style: {font-size: 11}
+  }
+
+  srl -> agg: "+ Opt82" {style.stroke: "#c4956a"}
+  srl2 -> agg: "+ Opt82" {style.stroke: "#c4956a"}
+}
+
+subscribers.h1 -> access.srl {style.stroke-dash: 3; style.stroke: "#93c5fd"}
+subscribers.h2 -> access.srl {style.stroke-dash: 3; style.stroke: "#93c5fd"}
+subscribers.h3 -> access.srl2 {style.stroke-dash: 3; style.stroke: "#93c5fd"}
+
+# ──────────────────────────────────────────
+#  DATA PLANE
+# ──────────────────────────────────────────
+
+data_plane: "Data Plane  —  192.0.2.0/24" {
+  style: {fill: "#f0fff4"; stroke: "#5a9e6f"; border-radius: 10; font-size: 16; bold: true}
+
+  bng: "BNG  192.0.2.1" {
+    style: {fill: "#d4edda"; stroke: "#28a745"; border-radius: 8; bold: true}
+
+    sniffer: "DHCP Sniffer\n(raw AF_PACKET\neth1 + eth2)" {shape: parallelogram; style: {font-size: 11}}
+    event_loop: "Event Loop" {style: {font-size: 12; bold: true}}
+    nft: "nftables\nper-sub counters" {shape: cylinder; style: {font-size: 10}}
+    dispatcher: "Event\nDispatcher" {shape: queue; style: {font-size: 11; fill: "#b7e4c7"}}
+    rt: "Router\nTracker" {style: {font-size: 10; fill: "#b7e4c7"}}
+    ht: "Health\nTracker" {style: {font-size: 10; fill: "#b7e4c7"}}
+
+    sniffer -> event_loop: "Queue" {style.stroke: "#28a745"}
+    event_loop -> nft: "counters"
+    event_loop -> dispatcher: "session\nevents"
+    event_loop -> rt: "on_dhcp_event"
+    event_loop -> ht: "every 5s"
+    rt -> dispatcher: "ROUTER_UPDATE"
+    ht -> dispatcher: "BNG_HEALTH_UPDATE"
+  }
+
+  kea: "Kea DHCP  192.0.2.3" {
+    style: {fill: "#fff3cd"; stroke: "#ffc107"; border-radius: 8}
+    dhcp: ":67/68" {style: {font-size: 10}}
+    ctrl: "Control Agent :6772" {style: {font-size: 10}}
+  }
+
+  radius: "FreeRADIUS  192.0.2.2" {
+    style: {fill: "#f8d7da"; stroke: "#dc3545"; border-radius: 8}
+    auth: "Auth :1812" {style: {font-size: 10}}
+    acct: "Acct :1813" {style: {font-size: 10}}
+  }
+
+  upstream: "Upstream  192.0.2.5\nNAT → Internet" {
+    style: {fill: "#e2e3e5"; stroke: "#6c757d"; border-radius: 6; font-size: 11}
+  }
+}
+
+access.agg -> data_plane.bng.sniffer: "DHCP relay\neth1" {
+  style.stroke: "#28a745"
+  style.stroke-width: 2
+}
+
+data_plane.bng.sniffer -> data_plane.kea.dhcp: "relay → UDP :67" {style.stroke: "#ffc107"}
+data_plane.bng.event_loop -> data_plane.kea.ctrl: "HTTP lease4-get-all\n(reconciler 15s)" {style.stroke: "#ffc107"; style.stroke-dash: 3}
+data_plane.bng.event_loop -> data_plane.radius.auth: "Access-Request" {style.stroke: "#dc3545"}
+data_plane.bng.event_loop -> data_plane.radius.acct: "Acct-Start/Update/Stop" {style.stroke: "#dc3545"}
+data_plane.bng.rt -> access.srl: "ICMP ping" {style.stroke-dash: 5; style.stroke: "#ea580c"}
+data_plane.bng.rt -> access.srl2: "ICMP ping" {style.stroke-dash: 5; style.stroke: "#ea580c"}
+
+# ──────────────────────────────────────────
+#  EVENT PIPELINE
+# ──────────────────────────────────────────
+
+pipeline: "Event Pipeline" {
+  style: {fill: "#fff0f6"; stroke: "#d63384"; border-radius: 10; font-size: 16; bold: true}
+
+  redis: "Redis  192.0.2.10:6379" {
+    shape: queue
+    style: {fill: "#fce4ec"; stroke: "#e53935"; bold: true}
+  }
+
+  stream: |md
+    **Stream:** `bng_events`
+    **Group:** `bng_ingestors`
+
+    SESSION_START · SESSION_UPDATE · SESSION_STOP
+    POLICY_APPLY · ROUTER_UPDATE · BNG_HEALTH_UPDATE
+  | {
+    shape: page
+    style: {fill: "#fff"; stroke: "#d63384"; font-size: 10}
+  }
+
+  ingestor: "BNG Ingestor  192.0.2.12" {
+    style: {fill: "#f3e5f5"; stroke: "#9c27b0"; border-radius: 8; bold: true}
+  }
+
+  redis -> stream {style.stroke-dash: 5; style.stroke: "#ccc"}
+  redis -> ingestor: "XREADGROUP\nbatch=10  block=5s" {style.stroke: "#9c27b0"; style.stroke-width: 2}
+}
+
+data_plane.bng.dispatcher -> pipeline.redis: "XADD bng_events" {
+  style.stroke: "#e53935"
+  style.stroke-width: 3
+}
+
+# ──────────────────────────────────────────
+#  PERSISTENCE
+# ──────────────────────────────────────────
+
+persistence: "Persistence Layer" {
+  style: {fill: "#e8f4fd"; stroke: "#0d6efd"; border-radius: 10; font-size: 16; bold: true}
+
+  oss_pg: "OSS PostgreSQL  192.0.2.11:5432  (db: oss)" {
+    style: {fill: "#cfe2ff"; stroke: "#0d6efd"; border-radius: 8; bold: true; font-size: 12}
+
+    session_events: "session_events\nPK(bng_id, instance_id, seq)\nImmutable event log" {shape: cylinder; style: {font-size: 9}}
+    sessions_active: "sessions_active\nPK(session_id)\nLive sessions" {shape: cylinder; style: {font-size: 9}}
+    sessions_history: "sessions_history\n+ session_end, terminate_cause\nGiST time range index" {shape: cylinder; style: {font-size: 9}}
+    access_routers: "access_routers\nPK(router_name)\nDiscovered switches" {shape: cylinder; style: {font-size: 9}}
+    bng_registry: "bng_registry\nPK(bng_id)\nBNG health snapshot" {shape: cylinder; style: {font-size: 9}}
+    bng_health_events: "bng_health_events\nPK(bng_id, instance_id, ts)\nTime-series metrics" {shape: cylinder; style: {font-size: 9}}
+  }
+
+  dhcp_pg: "DHCP PG  192.0.2.4\n(kea_lease_db)" {
+    style: {fill: "#fff3cd"; stroke: "#ffc107"; border-radius: 6; font-size: 11}
+    lease4: "lease4" {shape: cylinder; style: {font-size: 9}}
+  }
+
+  radius_pg: "RADIUS PG  192.0.2.6\n(radius)" {
+    style: {fill: "#f8d7da"; stroke: "#dc3545"; border-radius: 6; font-size: 11}
+    radcheck: "radcheck\nradreply" {shape: cylinder; style: {font-size: 9}}
+    radacct: "radacct" {shape: cylinder; style: {font-size: 9}}
+  }
+}
+
+pipeline.ingestor -> persistence.oss_pg.session_events: "INSERT (idempotent)" {style.stroke: "#0d6efd"; style.font-size: 10}
+pipeline.ingestor -> persistence.oss_pg.sessions_active: "INSERT / UPDATE / DELETE" {style.stroke: "#0d6efd"; style.font-size: 10}
+pipeline.ingestor -> persistence.oss_pg.sessions_history: "INSERT (SESSION_STOP)" {style.stroke: "#0d6efd"; style.font-size: 10}
+pipeline.ingestor -> persistence.oss_pg.access_routers: "UPSERT" {style.stroke: "#0d6efd"; style.font-size: 10}
+pipeline.ingestor -> persistence.oss_pg.bng_registry: "UPSERT" {style.stroke: "#0d6efd"; style.font-size: 10}
+pipeline.ingestor -> persistence.oss_pg.bng_health_events: "INSERT" {style.stroke: "#0d6efd"; style.font-size: 10}
+
+data_plane.kea.dhcp -> persistence.dhcp_pg.lease4: "lease storage" {style.stroke: "#ffc107"; style.stroke-dash: 3}
+data_plane.radius.auth -> persistence.radius_pg.radcheck: "user lookup" {style.stroke: "#dc3545"; style.stroke-dash: 3}
+data_plane.radius.acct -> persistence.radius_pg.radacct: "accounting log" {style.stroke: "#dc3545"; style.stroke-dash: 3}
+
+# ──────────────────────────────────────────
+#  PRESENTATION
+# ──────────────────────────────────────────
+
+presentation: "Presentation Layer" {
+  style: {fill: "#f5f0ff"; stroke: "#6f42c1"; border-radius: 10; font-size: 16; bold: true}
+
+  backend: "Backend API  192.0.2.21\nFastAPI :8000" {
+    style: {fill: "#e0cffc"; stroke: "#6f42c1"; border-radius: 8; bold: true; font-size: 12}
+    ep: |md
+      `/api/sessions/active`  `/api/sessions/history`
+      `/api/events`  `/api/routers`
+      `/api/bngs`  `/api/bngs/:id/health/:iid`
+      `/api/stats`
+    | {shape: page; style: {font-size: 9; fill: "#fff"}}
+  }
+
+  frontend: "Frontend  192.0.2.20\nNext.js :3000" {
+    style: {fill: "#d5c5f5"; stroke: "#6f42c1"; border-radius: 8; bold: true; font-size: 12}
+  }
+
+  frontend -> backend: "HTTP REST / JSON" {style.stroke: "#6f42c1"}
+}
+
+persistence.oss_pg -> presentation.backend: "SELECT (read-only pool)" {
+  style.stroke: "#6f42c1"
+  style.stroke-width: 2
+}
+
+# ──────────────────────────────────────────
+#  MANAGEMENT
+# ──────────────────────────────────────────
+
+mgmt: "Management  (172.20.20.0/24  clab mgmt)" {
+  style: {fill: "#e9ecef"; stroke: "#6c757d"; border-radius: 10; stroke-dash: 5; font-size: 14; bold: true}
+
+  host: "Host Machine" {
+    style: {fill: "#f1f5f9"; stroke: "#475569"; border-radius: 6}
+  }
+  tunnels: |md
+    **SSH Tunnels:**
+    `-L 3000` → `172.20.20.20:3000` (Frontend)
+    `-L 8000` → `172.20.20.21:8000` (Backend)
+    `-L 5432` → `172.20.20.10:5432` (PostgreSQL)
+  | {shape: page; style: {fill: "#fff"; stroke: "#6c757d"; font-size: 10}}
+}
+
+mgmt.host -> presentation.frontend: "SSH -L 3000" {style.stroke: "#6c757d"; style.stroke-dash: 5}
+mgmt.host -> presentation.backend: "SSH -L 8000" {style.stroke: "#6c757d"; style.stroke-dash: 5}
+mgmt.host -> persistence.oss_pg: "SSH -L 5432" {style.stroke: "#6c757d"; style.stroke-dash: 5}
