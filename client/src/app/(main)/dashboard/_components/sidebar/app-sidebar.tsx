@@ -21,6 +21,7 @@ import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
+import Logo from "@/components/logo";
 
 const _data = {
   navSecondary: [
@@ -78,8 +79,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
               <Link prefetch={false} href="/dashboard/default">
-                <Command />
-                <span className="font-semibold text-base">{APP_CONFIG.name}</span>
+                <Logo width={300} height={100} className="dark:invert" />
+                {/* <Command /> */}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

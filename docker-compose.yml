@@ -71,3 +71,8 @@ services:
       context: .
       dockerfile: docker/frontend/Dockerfile
     image: lab-frontend
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: lab-backend

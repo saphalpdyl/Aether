@@ -18,12 +18,12 @@ import { DataTablePagination } from "../../../../../components/data-table/data-t
 import { DataTableViewOptions } from "../../../../../components/data-table/data-table-view-options";
 import { withDndColumn } from "../../../../../components/data-table/table-utils";
 import { dashboardColumns } from "./columns";
-import type { sectionSchema } from "./schema";
+import type { sessionSchema } from "./schema";
 
-export function DataTable({ data: initialData }: { data: z.infer<typeof sectionSchema>[] }) {
+export function DataTable({ data: initialData }: { data: z.infer<typeof sessionSchema>[] }) {
   const [data, setData] = React.useState(() => initialData);
   const columns = withDndColumn(dashboardColumns);
-  const table = useDataTableInstance({ data, columns, getRowId: (row) => row.id.toString() });
+  const table = useDataTableInstance({ data, columns, getRowId: (row) => row.session_id.toString() });
 
   return (
     <Tabs defaultValue="outline" className="w-full flex-col justify-start gap-6">

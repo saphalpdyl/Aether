@@ -22,7 +22,7 @@ ips:
 	done
 
 dev-ssh:
-	ssh -L 3000:172.20.20.20:3000 test@192.168.122.216
+	ssh -L 3000:172.20.20.20:3000 -L 8000:172.20.20.21:8000 test@192.168.122.216
 
 # IMPORTANT: If in VM, go to /etc/fuse.conf and uncomment "user_allow_other" in the VM
 dev-unmount:

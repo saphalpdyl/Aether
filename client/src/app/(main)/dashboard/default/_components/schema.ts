@@ -1,11 +1,23 @@
 import { z } from "zod";
 
-export const sectionSchema = z.object({
-  id: z.number(),
-  header: z.string(),
-  type: z.string(),
+export const sessionSchema = z.object({
+  session_id: z.string(),
+  bng_id: z.string(),
+  bng_instance_id: z.string(),
+  nas_ip: z.string(),
+  circuit_id: z.string(),
+  remote_id: z.string(),
+  mac_address: z.string(),
+  ip_address: z.string(),
+  username: z.string(),
+  start_time: z.string(),
+  last_update: z.string(),
+  input_octets: z.number(),
+  output_octets: z.number(),
+  input_packets: z.number(),
+  output_packets: z.number(),
   status: z.string(),
-  target: z.string(),
-  limit: z.string(),
-  reviewer: z.string(),
+  auth_state: z.string(),
 });
+
+export type Session = z.infer<typeof sessionSchema>;
