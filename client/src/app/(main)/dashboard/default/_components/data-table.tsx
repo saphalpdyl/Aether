@@ -34,7 +34,7 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof sessionS
     <Tabs defaultValue="outline" className="w-full flex-col justify-start gap-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium">Session History</h3>
+          <h3 className="text-sm font-medium">Active Sessions</h3>
           <Badge variant="secondary">{data.length}</Badge>
         </div>
         <Label htmlFor="view-selector" className="sr-only">

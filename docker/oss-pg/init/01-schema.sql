@@ -96,3 +96,31 @@ CREATE TABLE access_routers (
     active_subscribers INTEGER     NOT NULL DEFAULT 0
 );
 
+-- BNG Registry
+CREATE TABLE bng_registry (
+    bng_id             TEXT        PRIMARY KEY,
+    bng_instance_id    UUID        NOT NULL,
+    first_seen         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    is_alive           BOOLEAN     DEFAULT true,
+    
+    -- Latest health status
+    mem_usage            FLOAT,
+    mem_max               FLOAT,
+    cpu_usage            FLOAT
+);
+
+CREATE UNIQUE INDEX uniq_bng_instance ON bng_registry (bng_id, bng_instance_id);
+
+CREATE TABLE bng_health_events (
+    bng_id             TEXT        NOT NULL,
+    bng_instance_id    UUID        NOT NULL,
+    ts                 TIMESTAMPTZ NOT NULL,
+    mem_usage            FLOAT NOT NULL,
+    mem_max               FLOAT NOT NULL,
+    cpu_usage            FLOAT NOT NULL,
+
+    PRIMARY KEY (bng_id, bng_instance_id, ts)
+);
+
+CREATE INDEX idx_bng_health_events_ts ON bng_health_events (ts);

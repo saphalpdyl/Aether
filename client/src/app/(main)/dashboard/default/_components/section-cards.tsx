@@ -158,12 +158,12 @@ export function SectionCards() {
           <CardTitle className="font-semibold @[250px]/card:text-xl text-lg tabular-nums flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <ArrowDown className="size-4 text-blue-500" />
-              <span>{formatBytes(stats.active_traffic.input_octets)}</span>
+              <span className="text-sm">{formatBytes(stats.active_traffic.input_octets)}</span>
               <span className="text-sm text-muted-foreground">({stats.active_traffic.input_packets} pkts)</span>
             </div>
             <div className="flex items-center gap-2">
               <ArrowUp className="size-4 text-green-500" />
-              <span>{formatBytes(stats.active_traffic.output_octets)}</span>
+              <span className="text-sm">{formatBytes(stats.active_traffic.output_octets)}</span>
               <span className="text-sm text-muted-foreground">({stats.active_traffic.output_packets} pkts)</span>
             </div>
           </CardTitle>

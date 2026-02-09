@@ -32,6 +32,7 @@ class BNGDispatcherEventType(Enum):
     SESSION_STOP = "SESSION_STOP"
     POLICY_APPLY = "POLICY_APPLY"
     ROUTER_UPDATE = "ROUTER_UPDATE"
+    BNG_HEALTH_UPDATE = "BNG_HEALTH_UPDATE"
 
 class BNGEventDispatcher:
     redis_conn: redis.Redis | None
@@ -193,3 +194,24 @@ class BNGEventDispatcher:
             "ip_address": s.ip or "",
             "username": self._username(s),
         })
+
+    # BNG Health
+    def dispatch_bng_health_update(self, cpu_usage: float, mem_usage: float, mem_max: float, first_seen: bool = False) -> None:
+        event_data = {
+            "bng_id": self.config.bng_id,
+            "bng_instance_id": self.config.bng_instance_id,
+            "seq": str(self._next_seq()),
+            "event_type": "BNG_HEALTH_UPDATE",
+            "ts": str(time.time()),
+            "cpu_usage": str(cpu_usage),
+            "mem_usage": str(mem_usage),
+            "mem_max": str(mem_max),
+        }
+
+        if first_seen:
+            event_data["first_seen"] = str(time.time());
+
+        if self.config.test_mode:
+            print(f"Dispatching event: BNG_HEALTH_UPDATE data={event_data}")
+        else:
+            self.__dispatch_event_to_redis(BNGDispatcherEventType.BNG_HEALTH_UPDATE, event_data)

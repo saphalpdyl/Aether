@@ -337,6 +337,50 @@ def handle_router_update(conn, event: dict):
         )
     conn.commit()
 
+def handle_bng_health_update(conn, event: dict):
+    # Upsert to BNG Registry with latest health info
+    with conn.cursor() as cur:
+        first_seen_value = ts_to_datetime(event.get("first_seen", "")) if event.get("first_seen") else None
+        
+        # Upsert to bng_registry
+        cur.execute(
+            """
+            INSERT INTO bng_registry (bng_id, bng_instance_id, cpu_usage, mem_usage, mem_max, last_seen, first_seen)
+            VALUES (%(bng_id)s, %(bng_instance_id)s, %(cpu_usage)s, %(mem_usage)s, %(mem_max)s, now(), COALESCE(%(first_seen)s, now()))
+            ON CONFLICT (bng_id) DO UPDATE SET
+                bng_instance_id = EXCLUDED.bng_instance_id,
+                cpu_usage = EXCLUDED.cpu_usage,
+                mem_usage = EXCLUDED.mem_usage,
+                mem_max = EXCLUDED.mem_max,
+                last_seen = now(),
+                first_seen = COALESCE(EXCLUDED.first_seen, bng_registry.first_seen)
+            """,
+            {
+                "bng_id": event.get("bng_id"),
+                "bng_instance_id": event.get("bng_instance_id"),
+                "cpu_usage": float(event.get("cpu_usage", 0)),
+                "mem_usage": float(event.get("mem_usage", 0)),
+                "mem_max": float(event.get("mem_max", 0)),
+                "first_seen": first_seen_value,
+            },
+        )
+        
+        # Insert into bng_health_events
+        cur.execute(
+            """
+            INSERT INTO bng_health_events (bng_id, bng_instance_id, ts, cpu_usage, mem_usage, mem_max)
+            VALUES (%(bng_id)s, %(bng_instance_id)s, now(), %(cpu_usage)s, %(mem_usage)s, %(mem_max)s)
+            ON CONFLICT (bng_id, bng_instance_id, ts) DO NOTHING
+            """,
+            {
+                "bng_id": event.get("bng_id"),
+                "bng_instance_id": event.get("bng_instance_id"),
+                "cpu_usage": float(event.get("cpu_usage", 0)),
+                "mem_usage": float(event.get("mem_usage", 0)),
+                "mem_max": float(event.get("mem_max", 0)),
+            },
+        )
+    conn.commit()
 
 EVENT_HANDLERS = {
     "SESSION_START": handle_session_start,
@@ -344,6 +388,7 @@ EVENT_HANDLERS = {
     "SESSION_STOP": handle_session_stop,
     "POLICY_APPLY": handle_policy_apply,
     "ROUTER_UPDATE": handle_router_update,
+    "BNG_HEALTH_UPDATE": handle_bng_health_update,
 }
 
 
@@ -358,6 +403,11 @@ def process_event(conn, event_data: dict) -> bool:
         # ROUTER_UPDATE is not a session event — skip session_events table
         if event_type == "ROUTER_UPDATE":
             handle_router_update(conn, event)
+            return True
+
+        # BNG_HEALTH_UPDATE is not a session event — skip session_events table
+        if event_type == "BNG_HEALTH_UPDATE":
+            handle_bng_health_update(conn, event)
             return True
 
         # Store in events table (returns False if duplicate)

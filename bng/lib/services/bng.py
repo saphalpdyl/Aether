@@ -10,6 +10,7 @@ import uuid
 import redis
 
 
+from lib.services.bng_health_tracker import BNGHealthTracker
 from lib.services.event_dispatcher import BNGEventDispatcher, BNGEventDispatcherConfig
 from lib.services.router_tracker import RouterTracker
 from lib.dhcp.lease import DHCPLease
@@ -169,10 +170,10 @@ def terminate_session(
         if event_dispatcher is not None:
             event_dispatcher.dispatch_session_stop(
                 s,
-                input_octets=total_in_octets,
-                output_octets=total_out_octets,
-                input_packets=total_in_pkts,
-                output_packets=total_out_pkts,
+                input_octets=total_out_octets,
+                output_octets=total_in_octets,
+                input_packets=total_out_pkts,
+                output_packets=total_in_pkts,
                 terminate_cause=cause,
             )
 
@@ -621,7 +622,12 @@ def dhcp_lease_handler(
 
                     nftables_snapshot = nft_list_chain_rules()
                     total_in_octets, total_out_octets, total_in_pkts, total_out_pkts = get_counters_for_session(old_session, nftables_snapshot)
-                    event_dispatcher.dispatch_session_stop(old_session, input_octets=total_in_octets, output_octets=total_out_octets, input_packets=total_in_pkts, output_packets=total_out_pkts, terminate_cause="IP-change")
+                    event_dispatcher.dispatch_session_stop(old_session,
+                                                          input_octets=total_out_octets,
+                                                          output_octets=total_in_octets,
+                                                          input_packets=total_out_pkts,
+                                                          output_packets=total_in_pkts,
+                                                          terminate_cause="IP-change")
 
                     if old_ip:
                         ip_clean = str(old_ip).replace("\x00", "")
@@ -722,6 +728,8 @@ def bng_event_loop(
     auth_retry_interval: int = 10,
     disconnection_check_interval: int = 5,
     reconciler_interval: int = 15,
+    router_ping_interval: int = 30,
+    bng_health_check_interval: int = 5,
 
     radius_server_ip: str ="192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
@@ -743,6 +751,8 @@ def bng_event_loop(
     )
 
     router_tracker = RouterTracker(bng_id=bng_id, event_dispatcher=event_dispatcher)
+    bng_health_tracker = BNGHealthTracker(bng_id=bng_id, event_dispatcher=event_dispatcher)
+    bng_health_tracker.check_and_dispatch()
 
     dhcp_reconciler, sessions, tombstones, handle_dhcp_event = dhcp_lease_handler(
         bng_id,
@@ -758,7 +768,8 @@ def bng_event_loop(
     next_auth_retry = time.time() + auth_retry_interval
     next_disconnection_check = time.time() + disconnection_check_interval
     next_reconcile = time.time() + reconciler_interval
-    next_router_ping = time.time() + 30
+    next_router_ping = time.time() + router_ping_interval
+    next_bng_health_check = time.time() + bng_health_check_interval
 
     while not stop_event.is_set():
 
@@ -868,3 +879,10 @@ def bng_event_loop(
             except Exception as e:
                 print(f"BNG thread Router-Ping error: {e}")
             next_router_ping = now + 30
+
+        if now >= next_bng_health_check:
+            try:
+                bng_health_tracker.check_and_dispatch()
+            except Exception as e:
+                print(f"BNG thread BNG-Health check error: {e}")
+            next_bng_health_check = now + bng_health_check_interval

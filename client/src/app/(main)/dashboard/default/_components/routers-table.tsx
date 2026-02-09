@@ -28,7 +28,6 @@ export default function RoutersTable() {
             })
             .filter((router: Router | null): router is Router => router !== null);
 
-          console.log("Validated routers:", validatedRouters);
           setRouters(validatedRouters);
         } else {
           console.error("Failed to fetch routers, status:", response.status);
@@ -44,7 +43,6 @@ export default function RoutersTable() {
     return () => clearInterval(interval);
   }, []);
 
-  console.log("RoutersTable rendering with routers:", routers);
 
   return <DataTableRouters data={routers} />;
 }

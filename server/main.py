@@ -197,6 +197,51 @@ def list_routers():
     return {"data": rows, "count": len(rows)}
 
 
+# --- BNG Registry & Health ---
+
+@app.get("/api/bngs")
+def list_bngs():
+    rows = query(
+        """
+        SELECT bng_id, bng_instance_id, first_seen, last_seen, is_alive,
+               cpu_usage, mem_usage, mem_max
+        FROM bng_registry
+        ORDER BY bng_id
+        """
+    )
+    return {"data": rows, "count": len(rows)}
+
+
+@app.get("/api/bngs/{bng_id}")
+def get_bng(bng_id: str):
+    rows = query(
+        "SELECT * FROM bng_registry WHERE bng_id = %(bng_id)s",
+        {"bng_id": bng_id},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="BNG not found")
+    return {"data": rows[0]}
+
+
+@app.get("/api/bngs/{bng_id}/health/{bng_instance_id}")
+def get_bng_health(
+    bng_id: str,
+    bng_instance_id: UUID,
+    limit: int = Query(100, ge=1, le=1000),
+):
+    rows = query(
+        """
+        SELECT bng_id, bng_instance_id, ts, cpu_usage, mem_usage, mem_max
+        FROM bng_health_events
+        WHERE bng_id = %(bng_id)s AND bng_instance_id = %(bng_instance_id)s
+        ORDER BY ts DESC
+        LIMIT %(limit)s
+        """,
+        {"bng_id": bng_id, "bng_instance_id": str(bng_instance_id), "limit": limit},
+    )
+    return {"data": rows, "count": len(rows)}
+
+
 # --- Stats ---
 
 @app.get("/api/stats")
