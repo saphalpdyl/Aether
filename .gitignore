@@ -6,8 +6,9 @@ __pycache__/
 *.pyc
 .env
 .idea/
-.vscode/
 .DS_Store
+
+.vscode/settings.json
 
 
 # Client dependencies
