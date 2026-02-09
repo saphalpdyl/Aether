@@ -104,14 +104,14 @@ def insert_session_event(conn, event: dict) -> bool:
                     nas_ip, circuit_id, remote_id,
                     mac_address, ip_address, username,
                     input_octets, output_octets, input_packets, output_packets,
-                    status, auth_state, raw_data, terminate_cause, session_start, session_last_update
+                    status, auth_state, raw_data, terminate_cause, session_start, session_last_update, session_end
                 ) VALUES (
                     %(bng_id)s, %(bng_instance_id)s::uuid, %(seq)s,
                     %(event_type)s, %(ts)s, %(session_id)s::uuid,
                     %(nas_ip)s::inet, %(circuit_id)s, %(remote_id)s,
                     %(mac_address)s::macaddr, %(ip_address)s::inet, %(username)s,
                     %(input_octets)s, %(output_octets)s, %(input_packets)s, %(output_packets)s,
-                    %(status)s, %(auth_state)s, %(raw_data)s, %(terminate_cause)s, %(ts)s, %(ts)s
+                    %(status)s, %(auth_state)s, %(raw_data)s, %(terminate_cause)s, %(ts)s, %(ts)s, %(session_end)s
                 )
                 ON CONFLICT (bng_id, bng_instance_id, seq) DO NOTHING
                 """,
@@ -136,6 +136,7 @@ def insert_session_event(conn, event: dict) -> bool:
                     "auth_state": event.get("auth_state"),
                     "raw_data": Json(event),
                     "terminate_cause": event.get("terminate_cause", ""),
+                    "session_end": ts_to_datetime(event.get("ts")) if event.get("event_type") == "SESSION_STOP" else None,
                 },
             )
             inserted = cur.rowcount > 0
