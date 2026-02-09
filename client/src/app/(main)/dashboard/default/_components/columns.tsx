@@ -103,11 +103,19 @@ export const dashboardColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
   {
     accessorKey: "auth_state",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Auth State" />,
-    cell: ({ row }) => (
-      <Badge variant="outline" className="capitalize">
-        {row.getValue("auth_state")}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const authState = String(row.getValue("auth_state") ?? "").toLowerCase();
+      const isRejected = authState === "rejected";
+      
+      return (
+        <Badge 
+          variant={isRejected ? "destructive" : "outline"} 
+          className="capitalize"
+        >
+          {row.getValue("auth_state")}
+        </Badge>
+      );
+    },
   },
   {
     accessorKey: "bng_id",
