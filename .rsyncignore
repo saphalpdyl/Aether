@@ -1,2 +1,5 @@
 .git/
 .venv/
+
+# Ignore node_modules
+client/node_modules/

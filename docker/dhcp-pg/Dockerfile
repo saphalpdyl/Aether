@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tcpdump \
   && rm -rf /var/lib/apt/lists/*
 
-COPY docker/pg/init/00-kea-hba.sh /docker-entrypoint-initdb.d/00-kea-hba.sh
+COPY docker/dhcp-pg/init/00-kea-hba.sh /docker-entrypoint-initdb.d/00-kea-hba.sh
 RUN chmod +x /docker-entrypoint-initdb.d/00-kea-hba.sh
 
 # Let the default entrypoint handle everything
