@@ -1,3 +1,12 @@
+# Golang stage
+FROM golang:1.25-bookworm AS coad-build
+WORKDIR /src
+COPY bng/coad/go.mod bng/coad/go.sum ./
+RUN go mod download
+COPY bng/coad/ .
+RUN CGO_ENABLED=0 go build -o /coad .
+
+# BNG stage
 FROM debian:bookworm-slim
 
 # BNG identifier for distributed deployment (set at runtime)
@@ -17,6 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-psutil \
     tcpdump \
   && rm -rf /var/lib/apt/lists/*
+
+# Go CoA/DM daemon
+COPY --from=coad-build /coad /usr/local/bin/coad
 
 COPY bng/lib /opt/bng/lib
 COPY bng/bng_main.py /opt/bng/bng_main.py
