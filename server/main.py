@@ -9,12 +9,19 @@ import psycopg2.pool
 import psycopg2.extras
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pyrad.client import Client
+from pyrad.dictionary import Dictionary
+from pyrad.packet import DisconnectACK, DisconnectNAK, DisconnectRequest
+from pyrad.client import Timeout as PyradTimeout
 
 PG_HOST = os.getenv("PG_HOST", "192.0.2.11")
 PG_PORT = int(os.getenv("PG_PORT", 5432))
 PG_DB = os.getenv("PG_DB", "oss")
 PG_USER = os.getenv("PG_USER", "oss")
 PG_PASSWORD = os.getenv("PG_PASSWORD", "oss")
+COA_PORT = int(os.getenv("COA_PORT", 3799))
+COA_SECRET = os.getenv("RADIUS_SECRET", "testing123").encode()
+COA_DICTIONARY = os.getenv("COA_DICTIONARY", "/opt/backend/radius/dictionary")
 
 pool: psycopg2.pool.SimpleConnectionPool | None = None
 
@@ -73,6 +80,39 @@ def _serialize_row(row: dict) -> dict:
     return out
 
 
+def send_disconnect_request(nas_ip: str, session_id: str, username: Optional[str] = None) -> dict:
+    if not os.path.exists(COA_DICTIONARY):
+        raise HTTPException(status_code=500, detail=f"RADIUS dictionary not found: {COA_DICTIONARY}")
+
+    client = Client(
+        server=nas_ip,
+        coaport=COA_PORT,
+        secret=COA_SECRET,
+        dict=Dictionary(COA_DICTIONARY),
+        retries=1,
+        timeout=2,
+    )
+
+    req = client.CreateCoAPacket(code=DisconnectRequest)
+    req["Acct-Session-Id"] = session_id
+    req["NAS-IP-Address"] = nas_ip
+    if username:
+        req["User-Name"] = username
+
+    try:
+        reply = client.SendPacket(req)
+    except PyradTimeout:
+        raise HTTPException(status_code=504, detail="CoA disconnect timeout")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"CoA disconnect send failed: {e}")
+
+    if reply.code == DisconnectACK:
+        return {"success": True, "reply_code": "Disconnect-ACK"}
+    if reply.code == DisconnectNAK:
+        return {"success": False, "reply_code": "Disconnect-NAK"}
+    return {"success": False, "reply_code": f"Unexpected-{reply.code}"}
+
+
 # --- Active Sessions ---
 
 @app.get("/api/sessions/active")
@@ -100,6 +140,23 @@ def get_active_session(session_id: UUID):
     if not rows:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"data": rows[0]}
+
+
+@app.post("/api/sessions/active/{session_id}/disconnect")
+def disconnect_active_session(session_id: UUID):
+    rows = query(
+        "SELECT session_id, nas_ip, username FROM sessions_active WHERE session_id = %(sid)s",
+        {"sid": str(session_id)},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    row = rows[0]
+    return send_disconnect_request(
+        nas_ip=row["nas_ip"],
+        session_id=row["session_id"],
+        username=row.get("username"),
+    )
 
 
 # --- Session History ---

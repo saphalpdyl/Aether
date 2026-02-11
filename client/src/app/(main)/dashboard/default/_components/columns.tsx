@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import { DataTableColumnHeader } from "../../../../../components/data-table/data-table-column-header";
+import { DisconnectButton } from "./disconnect-button";
 import type { sessionSchema } from "./schema";
 
 function formatBytes(bytes: number): string {
@@ -38,6 +39,20 @@ export const dashboardColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
           aria-label="Select row"
+        />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    id: "actions",
+    header: () => <div className="text-center">Actions</div>,
+    cell: ({ row }) => (
+      <div className="flex items-center justify-center">
+        <DisconnectButton
+          sessionId={row.original.session_id}
+          username={row.original.username}
         />
       </div>
     ),
