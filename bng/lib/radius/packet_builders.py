@@ -1,15 +1,15 @@
 # COMMENT: All packet builders AI-generated because I didn't want to bother myself
 
+import asyncio
 import time
 import shlex
-import subprocess
 
 from lib.radius.session import DHCPSession
 from lib.radius.utils import split_bytes_to_gigawords_octets
 from lib.secrets import __RADIUS_SECRET
 
 # Future: Move to somewhere so that this can be reused
-def rad_acct_send_from_bng(
+async def rad_acct_send_from_bng(
     packet: str,
     server_ip: str,
     port: int = 1813,
@@ -19,10 +19,15 @@ def rad_acct_send_from_bng(
     pkt_q = shlex.quote(packet)
     secret_q = shlex.quote(secret)
     cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} acct {secret_q}"
-    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    return result.stdout or ""
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    stdout, _ = await proc.communicate()
+    return stdout.decode() if stdout else ""
 
-def rad_auth_send_from_bng(
+async def rad_auth_send_from_bng(
     packet: str,
     server_ip: str,
     port: int = 1812,
@@ -32,8 +37,13 @@ def rad_auth_send_from_bng(
     pkt_q = shlex.quote(packet)
     secret_q = shlex.quote(secret)
     cmd = f"printf %s {pkt_q} | radclient -x -t {timeout} {server_ip}:{port} auth {secret_q}"
-    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    return result.stdout or ""
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    stdout, _ = await proc.communicate()
+    return stdout.decode() if stdout else ""
 
 def acct_session_id(session_id: str) -> str:
     return f"{session_id}"

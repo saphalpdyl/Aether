@@ -1,21 +1,20 @@
+import asyncio
 import json
-import subprocess
 from typing import Tuple
 
 
-def _cmd(command: str) -> str:
-    result = subprocess.run(
+async def _cmd(command: str) -> str:
+    proc = await asyncio.create_subprocess_shell(
         command,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
     )
-    return result.stdout or ""
+    stdout, _ = await proc.communicate()
+    return stdout.decode() if stdout else ""
 
 # nftables helpers
-def nft_list_chain_rules():
-    out = _cmd("nft -j list chain inet bngacct sess")
+async def nft_list_chain_rules():
+    out = await _cmd("nft -j list chain inet bngacct sess")
 
     try:
 
@@ -44,34 +43,34 @@ def nft_find_rule_handle(nft_json: dict, comment_match: str):
 
     return None
 
-def nft_add_subscriber_rules(
+async def nft_add_subscriber_rules(
     ip: str,
     mac: str,
     sub_if: str = "eth0", # if = interface
-    # NOTE: We have eth0 as the default iface because we want to measure on subscriber facing interface 
+    # NOTE: We have eth0 as the default iface because we want to measure on subscriber facing interface
     #   We could have measured on eth1 ( upstream facing ) but that would not capture traffic that is dropped by BNG itself
 ):
     mac_l = mac.lower()
 
     # Upload counter rule (exclude DHCP udp 67/68)
-    _cmd(
+    await _cmd(
         f"nft \'add rule inet bngacct sess iif \"{sub_if}\" ip saddr {ip} meta l4proto udp udp sport {{ 67, 68 }} accept\'"
     )
-    _cmd(
+    await _cmd(
         f"nft \'add rule inet bngacct sess iif \"{sub_if}\" ip saddr {ip} counter "
         f"comment \"sub;mac={mac_l};dir=up;ip={ip}\"\'"
     )
 
     # Download counter rule (exclude DHCP udp 67/68)
-    _cmd(
+    await _cmd(
         f"nft \'add rule inet bngacct sess oif \"{sub_if}\" ip daddr {ip} meta l4proto udp udp dport {{ 67, 68 }} accept\'"
     )
-    _cmd(
+    await _cmd(
         f"nft \'add rule inet bngacct sess oif \"{sub_if}\" ip daddr {ip} counter "
         f"comment \"sub;mac={mac_l};dir=down;ip={ip}\"\'"
     )
 
-    nftables_data = nft_list_chain_rules()
+    nftables_data = await nft_list_chain_rules()
     up_rule_handle = nft_find_rule_handle(nftables_data, f"sub;mac={mac_l};dir=up;ip={ip}")
     down_rule_handle = nft_find_rule_handle(nftables_data, f"sub;mac={mac_l};dir=down;ip={ip}")
 
@@ -80,8 +79,8 @@ def nft_add_subscriber_rules(
 
     return up_rule_handle, down_rule_handle
 
-def nft_delete_rule_by_handle(handle: int):
-    _cmd(f"nft delete rule inet bngacct sess handle {handle} 2>/dev/null || true")
+async def nft_delete_rule_by_handle(handle: int):
+    await _cmd(f"nft delete rule inet bngacct sess handle {handle} 2>/dev/null || true")
 
 
 def nft_get_counter_by_handle(nftables_json, handle: int) -> Tuple[int, int] | None:
@@ -104,8 +103,8 @@ def nft_get_counter_by_handle(nftables_json, handle: int) -> Tuple[int, int] | N
 
     return None
 
-def nft_allow_ip(ip: str):
-    _cmd(f"nft add element inet aether_auth authed_ips {{ {ip} }}")
+async def nft_allow_ip(ip: str):
+    await _cmd(f"nft add element inet aether_auth authed_ips {{ {ip} }}")
 
-def nft_remove_ip(ip: str):
-    _cmd(f"nft delete element inet aether_auth authed_ips {{ {ip} }}")
+async def nft_remove_ip(ip: str):
+    await _cmd(f"nft delete element inet aether_auth authed_ips {{ {ip} }}")

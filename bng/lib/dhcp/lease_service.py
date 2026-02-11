@@ -1,3 +1,5 @@
+import asyncio
+import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Tuple
@@ -9,7 +11,7 @@ from lib.dhcp.utils import parse_network_tlv
 
 class LeaseService(ABC):
     @abstractmethod
-    def get_all_leases(self) -> list[DHCPLease]:
+    async def get_all_leases(self) -> list[DHCPLease]:
         ...
 
     def get_lease_by_id(self, lease_id: str) -> DHCPLease | None:
@@ -20,22 +22,26 @@ class KeaClient:
         self.base_url = base_url
         self.auth_key = auth_key
 
-    def get_leases(self) -> Tuple[list[dict], bool]:
-        url = f"{self.base_url}/leases"
-        headers = {
-            "Content-Type": "application/json"
-        }
-        response = requests.post(
-            url, 
-            headers=headers,
-            auth=('bng', self.auth_key),
-            json={
-                "command": "lease4-get-all",
-                "service": ["dhcp4"]
+    async def get_leases(self) -> Tuple[list[dict], bool]:
+        loop = asyncio.get_running_loop()
+        def _sync_get():
+            url = f"{self.base_url}/leases"
+            headers = {
+                "Content-Type": "application/json"
             }
-        )
-        response.raise_for_status()
-        response = response.json()
+            response = requests.post(
+                url,
+                headers=headers,
+                auth=('bng', self.auth_key),
+                json={
+                    "command": "lease4-get-all",
+                    "service": ["dhcp4"]
+                }
+            )
+            response.raise_for_status()
+            return response.json()
+
+        response = await loop.run_in_executor(None, _sync_get)
 
         try:
             leases = response[0]["arguments"]["leases"]
@@ -50,8 +56,8 @@ class KeaLeaseService(LeaseService):
         self.kea_client = kea_client
         self.relay_id = bng_relay_id
 
-    def get_all_leases(self) -> list[DHCPLease]:
-        leases_data, success = self.kea_client.get_leases()
+    async def get_all_leases(self) -> list[DHCPLease]:
+        leases_data, success = await self.kea_client.get_leases()
         if not success:
             raise Exception("Failed to get leases from Kea")
 

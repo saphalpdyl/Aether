@@ -1,6 +1,6 @@
 from enum import Enum
 import time
-import redis
+import redis.asyncio as aioredis
 from dataclasses import dataclass
 
 from lib.radius.session import DHCPSession
@@ -19,7 +19,7 @@ class BNGEventDispatcherConfig:
     bng_id: str
     bng_instance_id: str
     nas_ip: str # bng_ip
-    redis_conn: redis.Redis | None = None
+    redis_conn: aioredis.Redis | None = None
     test_mode: bool = False
     print_dispatched_events: bool = False
 
@@ -35,7 +35,7 @@ class BNGDispatcherEventType(Enum):
     BNG_HEALTH_UPDATE = "BNG_HEALTH_UPDATE"
 
 class BNGEventDispatcher:
-    redis_conn: redis.Redis | None
+    redis_conn: aioredis.Redis | None
     config: BNGEventDispatcherConfig
     seq: int # Used for idempotency and ordering gurantees in event dispatch for ingestor
 
@@ -56,7 +56,7 @@ class BNGEventDispatcher:
         self.seq += 1
         return self.seq
 
-    def __dispatch_event_to_redis(self, event_type: BNGDispatcherEventType, event_data: dict) -> None:
+    async def __dispatch_event_to_redis(self, event_type: BNGDispatcherEventType, event_data: dict) -> None:
         """Dispatch an event to Redis stream."""
 
         if self.config.print_dispatched_events:
@@ -64,10 +64,10 @@ class BNGEventDispatcher:
 
         assert self.redis_conn is not None
 
-        self.redis_conn.xadd(EVENT_DISPATCHER_STREAM_ID, event_data)
+        await self.redis_conn.xadd(EVENT_DISPATCHER_STREAM_ID, event_data)
 
     # Prepares common event data and dispatches to either stdout or streams
-    def _dispatch_event(self, event_type: BNGDispatcherEventType, s: DHCPSession,  event_data: dict) -> None:
+    async def _dispatch_event(self, event_type: BNGDispatcherEventType, s: DHCPSession,  event_data: dict) -> None:
         event_data["bng_id"] = self.config.bng_id
         event_data["bng_instance_id"] = self.config.bng_instance_id
 
@@ -95,18 +95,18 @@ class BNGEventDispatcher:
         if self.config.test_mode:
             print(f"Dispatching event: {event_type.value} data={event_data}")
         else:
-            self.__dispatch_event_to_redis(event_type, event_data)
+            await self.__dispatch_event_to_redis(event_type, event_data)
 
     def _username(self, s: DHCPSession) -> str:
         return acct_user_name(s)
 
-    def dispatch_session_start(self, s: DHCPSession) -> None:
+    async def dispatch_session_start(self, s: DHCPSession) -> None:
         if not s.mac:
             raise ValueError("session mac address is required")
         if not s.ip:
             raise ValueError("session ip address is required")
 
-        self._dispatch_event(BNGDispatcherEventType.SESSION_START,s,  {
+        await self._dispatch_event(BNGDispatcherEventType.SESSION_START,s,  {
             "mac_address": s.mac,
             "ip_address": s.ip,
             "username": self._username(s),
@@ -117,7 +117,7 @@ class BNGEventDispatcher:
             "session_start": str(time.time()),
         })
 
-    def dispatch_session_update(
+    async def dispatch_session_update(
         self,
         s: DHCPSession,
         input_octets: int,
@@ -130,7 +130,7 @@ class BNGEventDispatcher:
         if not s.ip:
             raise ValueError("session ip address is required")
 
-        self._dispatch_event(BNGDispatcherEventType.SESSION_UPDATE, s, {
+        await self._dispatch_event(BNGDispatcherEventType.SESSION_UPDATE, s, {
             "mac_address": s.mac,
             "ip_address": s.ip,
             "username": self._username(s),
@@ -140,7 +140,7 @@ class BNGEventDispatcher:
             "output_packets": str(output_packets),
         })
 
-    def dispatch_session_stop(
+    async def dispatch_session_stop(
         self,
         s: DHCPSession,
         input_octets: int,
@@ -154,7 +154,7 @@ class BNGEventDispatcher:
         if not s.ip:
             raise ValueError("session ip address is required")
 
-        self._dispatch_event(BNGDispatcherEventType.SESSION_STOP, s, {
+        await self._dispatch_event(BNGDispatcherEventType.SESSION_STOP, s, {
             "mac_address": s.mac,
             "ip_address": s.ip,
             "username": self._username(s),
@@ -166,7 +166,7 @@ class BNGEventDispatcher:
             "session_end": str(time.time()),
         })
 
-    def dispatch_router_update(self, router_name: str, giaddr: str, is_alive: bool, first_seen: float, last_seen: float) -> None:
+    async def dispatch_router_update(self, router_name: str, giaddr: str, is_alive: bool, first_seen: float, last_seen: float) -> None:
         event_data = {
             "bng_id": self.config.bng_id,
             "bng_instance_id": self.config.bng_instance_id,
@@ -183,20 +183,20 @@ class BNGEventDispatcher:
         if self.config.test_mode:
             print(f"Dispatching event: ROUTER_UPDATE data={event_data}")
         else:
-            self.__dispatch_event_to_redis(BNGDispatcherEventType.ROUTER_UPDATE, event_data)
+            await self.__dispatch_event_to_redis(BNGDispatcherEventType.ROUTER_UPDATE, event_data)
 
-    def dispatch_policy_apply(self, s: DHCPSession) -> None:
+    async def dispatch_policy_apply(self, s: DHCPSession) -> None:
         if not s.mac:
             raise ValueError("session mac address is required")
 
-        self._dispatch_event(BNGDispatcherEventType.POLICY_APPLY, s, {
+        await self._dispatch_event(BNGDispatcherEventType.POLICY_APPLY, s, {
             "mac_address": s.mac,
             "ip_address": s.ip or "",
             "username": self._username(s),
         })
 
     # BNG Health
-    def dispatch_bng_health_update(self, cpu_usage: float, mem_usage: float, mem_max: float, first_seen: bool = False) -> None:
+    async def dispatch_bng_health_update(self, cpu_usage: float, mem_usage: float, mem_max: float, first_seen: bool = False) -> None:
         event_data = {
             "bng_id": self.config.bng_id,
             "bng_instance_id": self.config.bng_instance_id,
@@ -214,4 +214,4 @@ class BNGEventDispatcher:
         if self.config.test_mode:
             print(f"Dispatching event: BNG_HEALTH_UPDATE data={event_data}")
         else:
-            self.__dispatch_event_to_redis(BNGDispatcherEventType.BNG_HEALTH_UPDATE, event_data)
+            await self.__dispatch_event_to_redis(BNGDispatcherEventType.BNG_HEALTH_UPDATE, event_data)

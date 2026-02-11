@@ -1,4 +1,4 @@
-import subprocess
+import asyncio
 import time
 
 
@@ -16,7 +16,7 @@ class RouterTracker:
         parts = circuit_id.split("|")
         return parts[0] if parts[0] else None
 
-    def on_dhcp_event(self, event: dict):
+    async def on_dhcp_event(self, event: dict):
         circuit_id = event.get("circuit_id")
         giaddr = event.get("giaddr")
         if not circuit_id or not giaddr or giaddr == "0.0.0.0":
@@ -35,7 +35,7 @@ class RouterTracker:
                 "is_alive": True,
                 "next_ping": now + self.ping_interval,
             }
-            self._dispatch(name, self.routers[name])
+            await self._dispatch(name, self.routers[name])
         else:
             r = self.routers[name]
             r["last_seen"] = now
@@ -43,11 +43,11 @@ class RouterTracker:
             # Router is relaying DHCP — it's alive, push next ping
             if not r["is_alive"]:
                 r["is_alive"] = True
-                self._dispatch(name, r)
+                await self._dispatch(name, r)
             r["next_ping"] = now + self.ping_interval
 
-    def _dispatch(self, name: str, info: dict):
-        self.event_dispatcher.dispatch_router_update(
+    async def _dispatch(self, name: str, info: dict):
+        await self.event_dispatcher.dispatch_router_update(
             router_name=name,
             giaddr=info["giaddr"],
             is_alive=info["is_alive"],
@@ -55,24 +55,25 @@ class RouterTracker:
             last_seen=info["last_seen"],
         )
 
-    def check_routers(self):
+    async def check_routers(self):
         """Ping only routers that are overdue for a check."""
         now = time.time()
         for name, info in self.routers.items():
             if now < info["next_ping"]:
                 continue
-            alive = self._ping(info["giaddr"])
+            alive = await self._ping(info["giaddr"])
             info["is_alive"] = alive
             info["next_ping"] = now + self.ping_interval
-            self._dispatch(name, info)
+            await self._dispatch(name, info)
 
-    def _ping(self, ip: str) -> bool:
+    async def _ping(self, ip: str) -> bool:
         try:
-            result = subprocess.run(
-                ["ping", "-c", "1", "-W", "1", ip],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            proc = await asyncio.create_subprocess_exec(
+                "ping", "-c", "1", "-W", "1", ip,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
             )
-            return result.returncode == 0
+            returncode = await proc.wait()
+            return returncode == 0
         except Exception:
             return False

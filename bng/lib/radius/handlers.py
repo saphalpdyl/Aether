@@ -8,7 +8,7 @@ from lib.radius.packet_builders import build_acct_interim, rad_acct_send_from_bn
 from lib.radius.session import DHCPSession
 from lib.constants import IDLE_GRACE_AFTER_CONNECT, MARK_IDLE_GRACE_SECONDS
 
-def radius_handle_interim_updates(
+async def radius_handle_interim_updates(
     sessions: Dict[Tuple[str,str,str], DHCPSession],
     radius_server_ip: str ="192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
@@ -20,7 +20,7 @@ def radius_handle_interim_updates(
     try:
         if sessions is None or len(sessions) == 0:
             return
-        nftables_snapshot = nft_list_chain_rules()
+        nftables_snapshot = await nft_list_chain_rules()
     except Exception as e:
         print(f"Failed to get nftables snapshot for Interim-Update: {e}")
         return
@@ -75,17 +75,17 @@ def radius_handle_interim_updates(
             s.last_up_bytes = total_in_octets
             s.last_down_bytes = total_out_octets
 
-            pkt = build_acct_interim(s, nas_ip=nas_ip, nas_port_id=nas_port_id, 
+            pkt = build_acct_interim(s, nas_ip=nas_ip, nas_port_id=nas_port_id,
                 input_bytes=total_in_octets,
                 output_bytes=total_out_octets,
                 input_pkts=total_in_pkts,
                 output_pkts=total_out_pkts,
             )
-            rad_acct_send_from_bng(pkt, server_ip=radius_server_ip, secret=radius_secret)
+            await rad_acct_send_from_bng(pkt, server_ip=radius_server_ip, secret=radius_secret)
             s.last_interim = now
 
             if event_dispatcher:
-                event_dispatcher.dispatch_session_update(
+                await event_dispatcher.dispatch_session_update(
                     s,
                     input_octets=total_out_octets,
                     output_octets=total_in_octets,
