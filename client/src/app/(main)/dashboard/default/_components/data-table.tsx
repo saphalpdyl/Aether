@@ -33,9 +33,14 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof sessionS
   return (
     <Tabs defaultValue="outline" className="w-full flex-col justify-start gap-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium">Active Sessions</h3>
-          <Badge variant="secondary">{data.length}</Badge>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium">Active Sessions</h3>
+            <Badge variant="secondary">{data.length}</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Real-time monitoring of active subscriber sessions
+          </p>
         </div>
         <Label htmlFor="view-selector" className="sr-only">
           View

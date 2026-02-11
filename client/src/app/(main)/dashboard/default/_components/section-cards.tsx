@@ -112,7 +112,7 @@ export function SectionCards() {
       
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Routers Online</CardDescription>
+          <CardDescription>Access nodes online</CardDescription>
           <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
             {onlineRouters} / {routers.count}
           </CardTitle>
@@ -125,9 +125,9 @@ export function SectionCards() {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Network routers status <Server className="size-4" />
+            Access nodes status <Server className="size-4" />
           </div>
-          <div className="text-muted-foreground">Online routers / Total routers</div>
+          <div className="text-muted-foreground">Online nodes / Total nodes</div>
         </CardFooter>
       </Card>
       

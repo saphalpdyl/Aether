@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PowerOff } from "lucide-react";
+import { Unplug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -51,13 +51,13 @@ export function DisconnectButton({ sessionId, username }: DisconnectButtonProps)
   return (
     <>
       <Button
-        variant="destructive"
+        variant="link"
         size="icon"
-        className="h-7 w-7"
+        className="h-7 w-7 text-red-500"
         onClick={() => setIsOpen(true)}
         title="Disconnect session"
       >
-        <PowerOff className="h-3 w-3" />
+        <Unplug className="h-3 w-3" />
       </Button>
 
       <AlertDialog open={isOpen} onOpenChange={setIsOpen}>

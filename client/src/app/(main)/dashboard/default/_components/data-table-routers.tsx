@@ -3,7 +3,6 @@
 
 import * as React from "react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { DataTableViewOptions } from "@/components/data-table/data-table-view-options";
@@ -34,27 +33,25 @@ export function DataTableRouters({ data: initialData }: DataTableRoutersProps) {
   }, [initialData]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Access Routers</CardTitle>
-            <CardDescription>
-              Identified access node routers and their active subscriber counts
-            </CardDescription>
+    <div className="w-full flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium">Access Nodes</h3>
+            <Badge variant="secondary">{data.length}</Badge>
           </div>
-          <Badge variant="secondary">{data.length}</Badge>
+          <p className="text-sm text-muted-foreground">
+            Identified access node routers and their active subscriber counts
+          </p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-end">
+        <div className="flex items-center gap-2">
           <DataTableViewOptions table={table} />
         </div>
-        <div className="overflow-hidden rounded-lg border">
-          <DataTable dndEnabled table={table} columns={columns} onReorder={setData} />
-        </div>
-        <DataTablePagination table={table} />
-      </CardContent>
-    </Card>
+      </div>
+      <div className="overflow-hidden rounded-lg border">
+        <DataTable dndEnabled table={table} columns={columns} onReorder={setData} />
+      </div>
+      <DataTablePagination table={table} />
+    </div>
   );
 }
