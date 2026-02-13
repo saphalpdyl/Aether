@@ -3,6 +3,7 @@ import SessionsTable from "./_components/sessions-table";
 import SessionsHistoryTable from "./_components/sessions-history-table";
 import SessionsEventsTable from "./_components/sessions-events-table";
 import RoutersTable from "./_components/routers-table";
+import CustomersTable from "./_components/customers-table";
 import { SectionCards } from "./_components/section-cards";
 import { BngHealthCards } from "./_components/bng-health-cards";
 import Logo from "@/components/logo";
@@ -17,6 +18,7 @@ export default function Page() {
         <span className="text-lg font-light">| OSS Dashboard</span>
       </div>
       <SectionCards />
+      <CustomersTable />
       <span className="text-2xl font-bold inline-flex items-center gap-2">
         <Server className="inline-block h-5 w-5 mr-1" />
         Broadband Network Gateways ( BNGs )

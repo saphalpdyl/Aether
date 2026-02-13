@@ -81,14 +81,23 @@ async def authorize_session(
         access_request_pkt, server_ip=radius_server_ip, secret=radius_secret
     )
 
-    if not access_request_response:
-        raise RuntimeError(f"RADIUS Access-Request unexpected response: {access_request_response}")
+    if not access_request_response or not access_request_response.strip():
+        raise RuntimeError("RADIUS Access-Request returned empty response")
 
-    if re.search(r"Access-Reject", access_request_response):
+    response_text = access_request_response.strip()
+    print(
+        f"RADIUS Access-Request response user={s.relay_id}/{s.remote_id}/{s.circuit_id}: "
+        f"{response_text}"
+    )
+
+    if re.search(r"No reply from server", response_text, re.IGNORECASE):
+        raise RuntimeError("RADIUS Access-Request got no reply from server")
+
+    if re.search(r"Access-Reject", response_text):
         s.auth_state = "REJECTED"
         return "REJECTED"
 
-    if re.search(r"Access-Accept", access_request_response):
+    if re.search(r"Access-Accept", response_text):
         if ensure_rules and (s.nft_up_handle is None or s.nft_down_handle is None):
             await install_rules_and_baseline(s, ip, mac, iface)
         s.auth_state = "AUTHORIZED"
@@ -105,7 +114,8 @@ async def authorize_session(
 
         print(f"RADIUS Acct-Start sent for mac={s.mac} ip={s.ip}")
         return "AUTHORIZED"
-    return None
+
+    raise RuntimeError(f"RADIUS Access-Request unexpected response: {response_text}")
 
 
 async def get_counters_for_session(s: DHCPSession, nftables_snapshot=None) -> Tuple[int, int, int, int]:

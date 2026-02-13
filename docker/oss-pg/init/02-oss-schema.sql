@@ -31,7 +31,7 @@ CREATE TABLE customers (
 CREATE TABLE services (
     id               SERIAL      PRIMARY KEY,
     customer_id      INTEGER     NOT NULL REFERENCES customers(id),
-    plan_id          INTEGER     NOT NULL REFERENCES plans(id),
+    plan_id          INTEGER     NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
 
     -- Network binding: identifies the subscriber's physical attachment on the BNG
     circuit_id       TEXT        NOT NULL,
@@ -50,7 +50,26 @@ CREATE INDEX idx_services_customer_id ON services (customer_id);
 CREATE INDEX idx_services_plan_id ON services (plan_id);
 CREATE INDEX idx_services_status ON services (status);
 
+-- Seed example plans (no services attached by default)
+INSERT INTO plans (name, download_speed, upload_speed, price, is_active) VALUES
+    ('Bronze 25/10', 25000, 10000, 29.99, true),
+    ('Silver 100/30', 100000, 30000, 49.99, true),
+    ('Gold 300/100', 300000, 100000, 79.99, true),
+    ('Legacy 10/5', 10000, 5000, 19.99, false);
+
+-- Seed example customers (OSS-side entities)
+INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
+    ('Acme Bakery', 'ops@acmebakery.example', '+1-555-0100', '101 Market St', 'Springfield', '01103', 'MA'),
+    ('Northside Clinic', 'it@northsideclinic.example', '+1-555-0101', '22 Health Ave', 'Hartford', '06103', 'CT'),
+    ('River Apartments', 'manager@riverapts.example', '+1-555-0102', '78 River Rd', 'Providence', '02903', 'RI'),
+    ('Maya Patel', 'maya.patel@example.com', '+1-555-0103', '14 Oak Lane', 'Nashua', '03060', 'NH');
+
 -- Seed access routers
 INSERT INTO access_routers (router_name, giaddr, bng_id) VALUES
     ('srl-access',  '10.0.0.2', 'bng-01'),
     ('srl2-access', '10.0.0.3', 'bng-01');
+
+-- Seed default service: Acme Bakery on srl-access, Silver plan
+-- RADIUS username: bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0
+INSERT INTO services (customer_id, plan_id, circuit_id, remote_id) VALUES
+    (1, 2, 'srl-access|default|irb1|1:0', '000000000002');

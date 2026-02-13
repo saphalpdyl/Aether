@@ -30,6 +30,32 @@ else
     -f /etc/freeradius/3.0/mods-config/sql/main/postgresql/setup.sql || true
 fi
 
+# Seed default plan policies into group reply attributes (idempotent).
+psql "host=192.0.2.6 user=radius password=test dbname=radius" <<'SQL'
+DELETE FROM radgroupreply
+WHERE groupname IN ('Bronze 25/10', 'Silver 100/30', 'Gold 300/100', 'Legacy 10/5')
+  AND attribute IN ('OSS-Download-Speed', 'OSS-Upload-Speed');
+
+INSERT INTO radgroupreply (groupname, attribute, op, value) VALUES
+  ('Bronze 25/10', 'OSS-Download-Speed', ':=', '25000'),
+  ('Bronze 25/10', 'OSS-Upload-Speed',   ':=', '10000'),
+  ('Silver 100/30', 'OSS-Download-Speed', ':=', '100000'),
+  ('Silver 100/30', 'OSS-Upload-Speed',   ':=', '30000'),
+  ('Gold 300/100', 'OSS-Download-Speed',  ':=', '300000'),
+  ('Gold 300/100', 'OSS-Upload-Speed',    ':=', '100000'),
+  ('Legacy 10/5', 'OSS-Download-Speed',   ':=', '10000'),
+  ('Legacy 10/5', 'OSS-Upload-Speed',     ':=', '5000');
+
+-- Seed default subscriber: Acme Bakery on srl-access (Silver 100/30)
+DELETE FROM radcheck WHERE username = 'bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0';
+INSERT INTO radcheck (username, attribute, op, value) VALUES
+  ('bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0', 'Cleartext-Password', ':=', 'testing123');
+
+DELETE FROM radusergroup WHERE username = 'bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0';
+INSERT INTO radusergroup (username, groupname, priority) VALUES
+  ('bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0', 'Silver 100/30', 1);
+SQL
+
 #ln -sf /etc/freeradius/3.0/mods-available/files /etc/freeradius/3.0/mods-enabled/files
 ln -sf /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-enabled/sql
 

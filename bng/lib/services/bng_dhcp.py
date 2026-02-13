@@ -259,13 +259,23 @@ def dhcp_lease_handler(
         chaddr = decode_bytes(event.get("chaddr"))
         ip = decode_bytes(event.get("ip"))
 
-        if event_handler is not None:
-            if msg_type == 7 and ip is not None:
-                print(f"Hanling DHCP RELEASE event: {event}")
+        if msg_type == 7:
+            if ip is not None:
+                print(f"Handling DHCP RELEASE event: {event}")
                 await handle_dhcp_release(ip)
+            else:
+                print(f"Dropped DHCP RELEASE without IP: {event}")
+            return
+
+        if event_handler is not None:
             if circuit_id and remote_id and chaddr:
                 print(f"Handling DHCP event {event_handler.__name__} event: {event}")
                 await event_handler(circuit_id, remote_id, chaddr, event)
+            else:
+                print(
+                    f"Dropped DHCP event missing required fields: msg_type={msg_type} "
+                    f"circuit_id={circuit_id} remote_id={remote_id} chaddr={chaddr}"
+                )
         else:
             print(
                 f"Dropped unsupported DHCP event: {event} msg_type={msg_type} "
@@ -328,6 +338,7 @@ def dhcp_lease_handler(
                             radius_secret,
                             nas_ip,
                             nas_port_id,
+                            ensure_rules=True,
                         )
                         if result == "REJECTED":
                             print(f"RADIUS Access-Reject received for mac={l.mac} ip={l.ip}")
@@ -368,6 +379,7 @@ def dhcp_lease_handler(
                             radius_secret,
                             nas_ip,
                             nas_port_id,
+                            ensure_rules=True,
                         )
                         if result == "REJECTED":
                             print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
@@ -401,59 +413,59 @@ def dhcp_lease_handler(
                     if old_ip:
                         sessions_by_ip.pop(old_ip, None)
 
-                    old_session = DHCPSession(
-                        session_id=old_session_id,
-                        mac=s.mac,
-                        ip=old_ip,
-                        first_seen=s.first_seen,
-                        last_seen=s.last_seen,
-                        expiry=old_expiry,
-                        iface=s.iface,
-                        hostname=s.hostname,
-                        last_interim=s.last_interim,
-                        relay_id=s.relay_id,
-                        remote_id=s.remote_id,
-                        circuit_id=s.circuit_id,
-                        status=s.status,
-                        auth_state=s.auth_state,
-                        last_up_bytes=s.last_up_bytes,
-                        last_down_bytes=s.last_down_bytes,
-                        last_traffic_seen_ts=s.last_traffic_seen_ts,
-                    )
-
                     sessions_by_session_id.pop(old_session_id, None)
                     s.session_id = str(uuid.uuid4())
                     sessions_by_session_id[s.session_id] = s
 
-                    nftables_snapshot = await nft_list_chain_rules()
-                    old_in, old_out, old_in_pkts, old_out_pkts = await get_counters_for_session(
-                        old_session, nftables_snapshot
-                    )
-                    await event_dispatcher.dispatch_session_stop(
-                        old_session,
-                        input_octets=old_out,
-                        output_octets=old_in,
-                        input_packets=old_out_pkts,
-                        output_packets=old_in_pkts,
-                        terminate_cause="IP-change",
-                    )
-
                     if old_ip:
+                        old_session = DHCPSession(
+                            session_id=old_session_id,
+                            mac=s.mac,
+                            ip=old_ip,
+                            first_seen=s.first_seen,
+                            last_seen=s.last_seen,
+                            expiry=old_expiry,
+                            iface=s.iface,
+                            hostname=s.hostname,
+                            last_interim=s.last_interim,
+                            relay_id=s.relay_id,
+                            remote_id=s.remote_id,
+                            circuit_id=s.circuit_id,
+                            status=s.status,
+                            auth_state=s.auth_state,
+                            last_up_bytes=s.last_up_bytes,
+                            last_down_bytes=s.last_down_bytes,
+                            last_traffic_seen_ts=s.last_traffic_seen_ts,
+                        )
+
+                        nftables_snapshot = await nft_list_chain_rules()
+                        old_in, old_out, old_in_pkts, old_out_pkts = await get_counters_for_session(
+                            old_session, nftables_snapshot
+                        )
+                        await event_dispatcher.dispatch_session_stop(
+                            old_session,
+                            input_octets=old_out,
+                            output_octets=old_in,
+                            input_packets=old_out_pkts,
+                            output_packets=old_in_pkts,
+                            terminate_cause="IP-change",
+                        )
+
                         ip_clean = str(old_ip).replace("\x00", "")
                         ipaddress.ip_address(ip_clean)
                         await nft_remove_ip(ip_clean)
 
-                    if await terminate_session(
-                        old_session,
-                        cause="IP-change",
-                        radius_server_ip=radius_server_ip,
-                        radius_secret=radius_secret,
-                        nas_ip=nas_ip,
-                        nas_port_id=nas_port_id,
-                        nftables_snapshot=nftables_snapshot,
-                        event_dispatcher=event_dispatcher,
-                    ):
-                        print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
+                        if await terminate_session(
+                            old_session,
+                            cause="IP-change",
+                            radius_server_ip=radius_server_ip,
+                            radius_secret=radius_secret,
+                            nas_ip=nas_ip,
+                            nas_port_id=nas_port_id,
+                            nftables_snapshot=nftables_snapshot,
+                            event_dispatcher=event_dispatcher,
+                        ):
+                            print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
 
                     sessions_by_ip[s.ip] = s
                     await event_dispatcher.dispatch_session_start(s)
@@ -467,6 +479,7 @@ def dhcp_lease_handler(
                         radius_secret,
                         nas_ip,
                         nas_port_id,
+                        ensure_rules=True,
                     )
 
                     if reauth_result == "REJECTED":
