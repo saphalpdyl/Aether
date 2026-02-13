@@ -23,6 +23,7 @@ from lib.services.event_dispatcher import BNGEventDispatcher, BNGEventDispatcher
 from lib.services.router_tracker import RouterTracker
 
 COA_IPC_SOCKET = os.getenv("COA_IPC_SOCKET", "/tmp/coad.sock")
+OSS_API_URL = os.getenv("OSS_API_URL", "http://192.0.2.21:8000")
 
 
 async def bng_event_loop(
@@ -53,7 +54,9 @@ async def bng_event_loop(
         )
     )
 
-    router_tracker = RouterTracker(bng_id=bng_id, event_dispatcher=event_dispatcher)
+    router_tracker = RouterTracker(bng_id=bng_id, event_dispatcher=event_dispatcher, oss_api_url=OSS_API_URL)
+    router_tracker.load_routers()
+
     bng_health_tracker = BNGHealthTracker(bng_id=bng_id, event_dispatcher=event_dispatcher)
     await bng_health_tracker.check_and_dispatch()
 
@@ -206,6 +209,13 @@ async def bng_event_loop(
                 print(f"BNG Disconnection check error: {e}")
             return
 
+        if command == "router_config_refresh":
+            try:
+                router_tracker.load_routers()
+            except Exception as e:
+                print(f"BNG Router-Config-Refresh error: {e}")
+            return
+
         if command == "router_ping":
             try:
                 await router_tracker.check_routers()
@@ -243,6 +253,7 @@ async def bng_event_loop(
         asyncio.create_task(periodic_enqueue("reconcile", reconciler_interval)),
         asyncio.create_task(periodic_enqueue("auth_retry", auth_retry_interval)),
         asyncio.create_task(periodic_enqueue("disconnection_check", disconnection_check_interval)),
+        asyncio.create_task(periodic_enqueue("router_config_refresh", 60)),
         asyncio.create_task(periodic_enqueue("router_ping", router_ping_interval)),
         asyncio.create_task(periodic_enqueue("bng_health", bng_health_check_interval)),
     ]

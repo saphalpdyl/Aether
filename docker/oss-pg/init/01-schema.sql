@@ -88,12 +88,13 @@ ON sessions_active (nas_ip, circuit_id, remote_id);
 CREATE TABLE access_routers (
     router_name        TEXT        PRIMARY KEY,
     giaddr             INET        NOT NULL,
-    bng_id             TEXT        NOT NULL,
-    first_seen         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_seen          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    is_alive           BOOLEAN     NOT NULL DEFAULT true,
-    last_ping          TIMESTAMPTZ,
-    active_subscribers INTEGER     NOT NULL DEFAULT 0
+    bng_id             TEXT,                          -- nullable until assigned
+    is_alive           BOOLEAN     NOT NULL DEFAULT false,
+    last_seen          TIMESTAMPTZ,                   -- nullable (never seen yet)
+    last_ping          TIMESTAMPTZ,                   -- nullable
+    active_subscribers INTEGER     NOT NULL DEFAULT 0,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- BNG Registry

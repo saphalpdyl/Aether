@@ -2,6 +2,7 @@
 "use no memo";
 
 import * as React from "react";
+import { Plus } from "lucide-react";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
@@ -9,17 +10,24 @@ import { DataTableViewOptions } from "@/components/data-table/data-table-view-op
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
 import { withDndColumn } from "@/components/data-table/table-utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
-import { routersColumns } from "./routers-columns";
+import { createRoutersColumns } from "./routers-columns";
 import type { Router } from "./routers-schema";
 
 interface DataTableRoutersProps {
   data: Router[];
+  onNewRouter?: () => void;
+  onEdit?: (routerName: string) => void;
+  onDelete?: (routerName: string) => void;
 }
 
-export function DataTableRouters({ data: initialData }: DataTableRoutersProps) {
+export function DataTableRouters({ data: initialData, onNewRouter, onEdit, onDelete }: DataTableRoutersProps) {
   const [data, setData] = React.useState(() => initialData);
-  const columns = withDndColumn(routersColumns);
+  const columns = React.useMemo(
+    () => withDndColumn(createRoutersColumns({ onEdit, onDelete })),
+    [onEdit, onDelete],
+  );
   const table = useDataTableInstance({
     data,
     columns,
@@ -41,10 +49,14 @@ export function DataTableRouters({ data: initialData }: DataTableRoutersProps) {
             <Badge variant="secondary">{data.length}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Identified access node routers and their active subscriber counts
+            Pre-configured access node routers and their status
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" onClick={onNewRouter}>
+            <Plus className="mr-1 h-4 w-4" />
+            New Router
+          </Button>
           <DataTableViewOptions table={table} />
         </div>
       </div>

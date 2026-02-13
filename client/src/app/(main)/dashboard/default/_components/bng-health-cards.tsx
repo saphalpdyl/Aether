@@ -211,6 +211,7 @@ export function BngHealthCards() {
                         }
                       />
                       <Area
+                        
                         dataKey="cpu"
                         fill="#8884d8"
                         fillOpacity={0.2}
@@ -219,6 +220,7 @@ export function BngHealthCards() {
                         type="monotone"
                       />
                       <Area
+                        
                         dataKey="memory"
                         fill="#82ca9d"
                         fillOpacity={0.2}

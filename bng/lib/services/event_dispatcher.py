@@ -166,7 +166,7 @@ class BNGEventDispatcher:
             "session_end": str(time.time()),
         })
 
-    async def dispatch_router_update(self, router_name: str, giaddr: str, is_alive: bool, first_seen: float, last_seen: float) -> None:
+    async def dispatch_router_update(self, router_name: str, is_alive: bool, last_seen: float) -> None:
         event_data = {
             "bng_id": self.config.bng_id,
             "bng_instance_id": self.config.bng_instance_id,
@@ -174,9 +174,7 @@ class BNGEventDispatcher:
             "event_type": BNGDispatcherEventType.ROUTER_UPDATE.value,
             "ts": str(time.time()),
             "router_name": router_name,
-            "giaddr": giaddr,
             "is_alive": str(is_alive),
-            "first_seen": str(first_seen),
             "last_seen": str(last_seen),
         }
 

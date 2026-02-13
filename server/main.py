@@ -9,6 +9,7 @@ import psycopg2.pool
 import psycopg2.extras
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from pyrad.client import Client
 from pyrad.dictionary import Dictionary
 from pyrad.packet import DisconnectACK, DisconnectNAK, DisconnectRequest
@@ -64,6 +65,19 @@ def query(sql: str, params: dict | None = None) -> list[dict]:
             rows = cur.fetchall()
         conn.commit()
         return [_serialize_row(r) for r in rows]
+    finally:
+        put_conn(conn)
+
+
+def execute(sql: str, params: dict | None = None) -> int:
+    """Execute a non-SELECT statement. Returns rowcount."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rowcount = cur.rowcount
+        conn.commit()
+        return rowcount
     finally:
         put_conn(conn)
 
@@ -240,18 +254,105 @@ def list_events(
 
 # --- Access Routers ---
 
+
+class RouterCreate(BaseModel):
+    router_name: str
+    giaddr: str
+    bng_id: str | None = None
+
+
+class RouterUpdate(BaseModel):
+    giaddr: str | None = None
+    bng_id: str | None = None
+
+
 @app.get("/api/routers")
-def list_routers():
-    rows = query(
-        """
-        SELECT router_name, giaddr, bng_id,
-               first_seen, last_seen, is_alive, last_ping,
-               active_subscribers
-        FROM access_routers
-        ORDER BY router_name
-        """
-    )
+def list_routers(bng_id: Optional[str] = Query(None)):
+    if bng_id:
+        rows = query(
+            """
+            SELECT router_name, giaddr, bng_id,
+                   is_alive, last_seen, last_ping,
+                   active_subscribers, created_at, updated_at
+            FROM access_routers
+            WHERE bng_id = %(bng_id)s
+            ORDER BY router_name
+            """,
+            {"bng_id": bng_id},
+        )
+    else:
+        rows = query(
+            """
+            SELECT router_name, giaddr, bng_id,
+                   is_alive, last_seen, last_ping,
+                   active_subscribers, created_at, updated_at
+            FROM access_routers
+            ORDER BY router_name
+            """
+        )
     return {"data": rows, "count": len(rows)}
+
+
+@app.post("/api/routers", status_code=201)
+def create_router(body: RouterCreate):
+    existing = query(
+        "SELECT router_name FROM access_routers WHERE router_name = %(name)s",
+        {"name": body.router_name},
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Router already exists")
+    execute(
+        """
+        INSERT INTO access_routers (router_name, giaddr, bng_id)
+        VALUES (%(router_name)s, %(giaddr)s::inet, %(bng_id)s)
+        """,
+        {"router_name": body.router_name, "giaddr": body.giaddr, "bng_id": body.bng_id},
+    )
+    rows = query(
+        "SELECT * FROM access_routers WHERE router_name = %(name)s",
+        {"name": body.router_name},
+    )
+    return {"data": rows[0]}
+
+
+@app.put("/api/routers/{router_name}")
+def update_router(router_name: str, body: RouterUpdate):
+    existing = query(
+        "SELECT router_name FROM access_routers WHERE router_name = %(name)s",
+        {"name": router_name},
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    sets = ["updated_at = now()"]
+    params: dict = {"name": router_name}
+    if body.giaddr is not None:
+        sets.append("giaddr = %(giaddr)s::inet")
+        params["giaddr"] = body.giaddr
+    if body.bng_id is not None:
+        sets.append("bng_id = %(bng_id)s")
+        params["bng_id"] = body.bng_id
+
+    execute(
+        f"UPDATE access_routers SET {', '.join(sets)} WHERE router_name = %(name)s",
+        params,
+    )
+    rows = query(
+        "SELECT * FROM access_routers WHERE router_name = %(name)s",
+        {"name": router_name},
+    )
+    return {"data": rows[0]}
+
+
+@app.delete("/api/routers/{router_name}")
+def delete_router(router_name: str):
+    rowcount = execute(
+        "DELETE FROM access_routers WHERE router_name = %(name)s",
+        {"name": router_name},
+    )
+    if rowcount == 0:
+        raise HTTPException(status_code=404, detail="Router not found")
+    return {"ok": True}
 
 
 # --- BNG Registry & Health ---

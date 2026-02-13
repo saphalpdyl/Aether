@@ -313,28 +313,30 @@ def handle_policy_apply(conn, event: dict):
 
 
 def handle_router_update(conn, event: dict):
-    """Handle ROUTER_UPDATE: Upsert access router in registry."""
+    """Handle ROUTER_UPDATE: Update status on existing pre-configured router."""
+    router_name = event.get("router_name")
+    last_seen_val = event.get("last_seen")
+    # last_seen of 0 means never seen — store as NULL
+    last_seen_dt = ts_to_datetime(last_seen_val) if last_seen_val and float(last_seen_val) > 0 else None
+
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO access_routers (router_name, giaddr, bng_id, first_seen, last_seen, is_alive, last_ping)
-            VALUES (%(router_name)s, %(giaddr)s::inet, %(bng_id)s,
-                    %(first_seen)s, %(last_seen)s, %(is_alive)s, now())
-            ON CONFLICT (router_name) DO UPDATE SET
-                giaddr = EXCLUDED.giaddr,
-                last_seen = EXCLUDED.last_seen,
-                is_alive = EXCLUDED.is_alive,
-                last_ping = now()
+            UPDATE access_routers
+            SET is_alive  = %(is_alive)s,
+                last_seen = %(last_seen)s,
+                last_ping = now(),
+                updated_at = now()
+            WHERE router_name = %(router_name)s
             """,
             {
-                "router_name": event.get("router_name"),
-                "giaddr": event.get("giaddr"),
-                "bng_id": event.get("bng_id"),
-                "first_seen": ts_to_datetime(event.get("first_seen")),
-                "last_seen": ts_to_datetime(event.get("last_seen")),
+                "router_name": router_name,
                 "is_alive": event.get("is_alive") == "True",
+                "last_seen": last_seen_dt,
             },
         )
+        if cur.rowcount == 0:
+            print(f"ROUTER_UPDATE: router '{router_name}' not found in access_routers, skipping")
     conn.commit()
 
 def handle_bng_health_update(conn, event: dict):
