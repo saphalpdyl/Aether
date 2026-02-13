@@ -22,7 +22,7 @@ def list_customers_listing():
             CASE
                 WHEN COALESCE(act.active_count, 0) > 0 THEN 'online'
                 WHEN COALESCE(hist.recent_count, 0) > 0 THEN 'recent'
-                WHEN c.created_at > now() - interval '7 days' THEN 'new'
+                WHEN svc.service_count = 0 THEN 'new'
                 ELSE 'offline'
             END AS status
         FROM customers c

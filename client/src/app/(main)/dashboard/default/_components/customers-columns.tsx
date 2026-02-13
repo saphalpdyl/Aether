@@ -1,5 +1,4 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { CircleCheck, Clock, Sparkles, CircleMinus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
@@ -14,46 +13,40 @@ function formatDate(dateString: string | null): string {
 const statusConfig = {
   online: {
     label: "Online",
-    icon: CircleCheck,
-    className: "bg-green-600 text-white",
+    className: "bg-green-500 text-white hover:bg-green-600",
   },
   recent: {
     label: "Online 24h",
-    icon: Clock,
-    className: "bg-blue-600 text-white",
+    className: "bg-orange-500 text-white hover:bg-orange-600",
   },
   new: {
     label: "New",
-    icon: Sparkles,
-    className: "bg-purple-600 text-white",
+    className: "bg-blue-500 text-white hover:bg-blue-600",
   },
   offline: {
     label: "Offline",
-    icon: CircleMinus,
-    className: "bg-muted text-muted-foreground",
+    className: "bg-gray-500 text-white hover:bg-gray-600",
   },
 } as const;
 
 export const customersColumns: ColumnDef<CustomerListing>[] = [
+  {
+    accessorKey: "name",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
+    cell: ({ row }) => <span className="font-medium">{row.getValue("name")}</span>,
+  },
   {
     accessorKey: "status",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
     cell: ({ row }) => {
       const status = row.getValue("status") as keyof typeof statusConfig;
       const config = statusConfig[status] ?? statusConfig.offline;
-      const Icon = config.icon;
       return (
-        <Badge className={config.className}>
-          <Icon className="mr-1 h-3 w-3" />
+        <Badge className={`${config.className} rounded-none text-md font-bold`}>
           {config.label}
         </Badge>
       );
     },
-  },
-  {
-    accessorKey: "name",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
-    cell: ({ row }) => <span className="font-medium">{row.getValue("name")}</span>,
   },
   {
     accessorKey: "email",

@@ -25,6 +25,21 @@ interface DataTableCustomersProps {
   onRowClick?: (customer: CustomerListing) => void;
 }
 
+// Helper function to get row background class based on status
+function getRowBackgroundClass(status: CustomerListing["status"]): string {
+  switch (status) {
+    case "online":
+      return "bg-green-100 hover:bg-green-200 dark:bg-green-950/50 dark:hover:bg-green-950/70";
+    case "recent":
+      return "bg-orange-100 hover:bg-orange-200 dark:bg-orange-950/50 dark:hover:bg-orange-950/70";
+    case "new":
+      return "bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/50 dark:hover:bg-blue-950/70";
+    case "offline":
+    default:
+      return "hover:bg-muted/50";
+  }
+}
+
 export function DataTableCustomers({ data: initialData, onRowClick }: DataTableCustomersProps) {
   const [data, setData] = React.useState(() => initialData);
   const table = useDataTableInstance({
@@ -53,7 +68,7 @@ export function DataTableCustomers({ data: initialData, onRowClick }: DataTableC
       </div>
       <div className="overflow-hidden rounded-lg border">
         <Table>
-          <TableHeader className="sticky top-0 z-10 bg-muted">
+          <TableHeader className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -71,7 +86,7 @@ export function DataTableCustomers({ data: initialData, onRowClick }: DataTableC
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="cursor-pointer"
+                  className={`cursor-pointer ${getRowBackgroundClass(row.original.status)}`}
                   onClick={() => onRowClick?.(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
