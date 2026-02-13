@@ -1,18 +1,14 @@
 # Roadmap
 
 ## In Progress
-
-- **CoA/DM Daemon** — Go-based RADIUS Change-of-Authorization and Disconnect-Message daemon running alongside the BNG. Communicates with the Python event loop over Unix socket IPC. Enables the OSS to dynamically disconnect subscribers or change policies in real time.
+- **Alerting** — Notify on router down, BNG health degradation, or session anomalies
+- **Historical analytics** — Per-subscriber traffic trends, peak usage hours, session duration distributions
 
 ## Planned
 
-- **CoA integration in the backend** — API endpoints to trigger CoA/Disconnect requests from the dashboard via `pyrad`
-- **Rate limiting / QoS** — Apply per-subscriber bandwidth policies through nftables or tc based on RADIUS Filter-Id attributes pushed via CoA
 - **Multi-BNG support** — Test and harden the event pipeline for multiple BNG instances reporting to the same OSS
 - **Timer-wheel session scheduler** — Introduce per-session timer-wheel based scheduling in the BNG runtime for lease/reconcile/auth-retry/interim/idle-disconnect deadlines. Keep a single-writer state machine and route timer expirations as prioritized commands to avoid shared-state races while maintaining deterministic timing under load.
-- **Alerting** — Notify on router down, BNG health degradation, or session anomalies
 - **Development setup documentation** — Contributor-friendly setup guide with Containerlab prerequisites and build instructions
-- **Historical analytics** — Per-subscriber traffic trends, peak usage hours, session duration distributions
 
 ## Future
 
@@ -32,3 +28,5 @@
 - BNG health monitoring (CPU, memory)
 - FastAPI read-only dashboard API
 - Next.js frontend
+- Apply per-subscriber bandwidth policies through nftables or tc based on RADIUS Filter-Id attributes pushed via CoA
+- Go-based RADIUS Change-of-Authorization and Disconnect-Message daemon running alongside the BNG. Communicates with the Python event loop over Unix socket IPC. Enables the OSS to dynamically disconnect subscribers or change policies in real time.

@@ -23,6 +23,8 @@ from lib.services.event_dispatcher import BNGEventDispatcher, BNGEventDispatcher
 from lib.services.router_tracker import RouterTracker
 
 COA_IPC_SOCKET = os.getenv("COA_IPC_SOCKET", "/tmp/coad.sock")
+
+# Remove OSS API URL. BNG should not be calling OSS.
 OSS_API_URL = os.getenv("OSS_API_URL", "http://192.0.2.21:8000")
 
 
