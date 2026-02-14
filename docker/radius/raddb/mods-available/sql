@@ -399,6 +399,11 @@ sql {
         #  own escaping functions which only escape characters as required
         #  by those databases.
         #
+        # Preserve usernames that contain encoded delimiters (e.g. "=7C")
+        # used by the BNG user-format. Without '=' in safe_characters the
+        # SQL-User-Name expansion can become "=3D7C..." and fail group lookups.
+        safe_characters = "@abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_: /|="
+
         #  Set this option to yes to use the database driver provided escape
         #  function.
         auto_escape = yes

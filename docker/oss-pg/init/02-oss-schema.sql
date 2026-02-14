@@ -5,6 +5,8 @@ CREATE TABLE plans (
     name             TEXT        NOT NULL UNIQUE,
     download_speed   INTEGER     NOT NULL,  -- kbps
     upload_speed     INTEGER     NOT NULL,  -- kbps
+    download_burst   INTEGER     NOT NULL,  -- kbit
+    upload_burst     INTEGER     NOT NULL,  -- kbit
     price            NUMERIC(10,2) NOT NULL,
     is_active        BOOLEAN     NOT NULL DEFAULT true,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -51,11 +53,11 @@ CREATE INDEX idx_services_plan_id ON services (plan_id);
 CREATE INDEX idx_services_status ON services (status);
 
 -- Seed example plans (no services attached by default)
-INSERT INTO plans (name, download_speed, upload_speed, price, is_active) VALUES
-    ('Bronze 25/10', 25000, 10000, 29.99, true),
-    ('Silver 100/30', 100000, 30000, 49.99, true),
-    ('Gold 300/100', 300000, 100000, 79.99, true),
-    ('Legacy 10/5', 10000, 5000, 19.99, false);
+INSERT INTO plans (name, download_speed, upload_speed, download_burst, upload_burst, price, is_active) VALUES
+    ('Bronze 25/10', 25000, 10000, 500, 200, 29.99, true),
+    ('Silver 100/30', 100000, 30000, 2000, 600, 49.99, true),
+    ('Gold 300/100', 300000, 100000, 6000, 2000, 79.99, true),
+    ('Legacy 10/5', 10000, 5000, 200, 100, 19.99, false);
 
 -- Seed example customers (OSS-side entities)
 INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
@@ -72,4 +74,4 @@ INSERT INTO access_routers (router_name, giaddr, bng_id) VALUES
 -- Seed default service: Acme Bakery on srl-access, Silver plan
 -- RADIUS username: bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0
 INSERT INTO services (customer_id, plan_id, circuit_id, remote_id) VALUES
-    (1, 2, 'srl-access|default|irb1|1:0', '000000000002');
+    (1, 1, 'srl-access|default|irb1|1:0', '000000000002');

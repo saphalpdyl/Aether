@@ -56,6 +56,8 @@ export function useProvisioningData(): ProvisioningData {
           name: String(p.name ?? ""),
           download_speed: Number(p.download_speed ?? 0),
           upload_speed: Number(p.upload_speed ?? 0),
+          download_burst: Number(p.download_burst ?? 0),
+          upload_burst: Number(p.upload_burst ?? 0),
           price: String(p.price ?? "0.00"),
           is_active: String(p.is_active) === "True",
         }))

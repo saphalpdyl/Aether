@@ -17,6 +17,8 @@ RADIUS_CHECK_PASSWORD = os.getenv("RADIUS_CHECK_PASSWORD", "testing123")
 
 RADIUS_DOWNLOAD_ATTRIBUTE = os.getenv("RADIUS_DOWNLOAD_ATTRIBUTE", "OSS-Download-Speed")
 RADIUS_UPLOAD_ATTRIBUTE = os.getenv("RADIUS_UPLOAD_ATTRIBUTE", "OSS-Upload-Speed")
+RADIUS_DOWNLOAD_BURST_ATTRIBUTE = os.getenv("RADIUS_DOWNLOAD_BURST_ATTRIBUTE", "OSS-Download-Burst")
+RADIUS_UPLOAD_BURST_ATTRIBUTE = os.getenv("RADIUS_UPLOAD_BURST_ATTRIBUTE", "OSS-Upload-Burst")
 RADIUS_ATTRIBUTE_OP = os.getenv("RADIUS_ATTRIBUTE_OP", ":=")
 
 COA_PORT = int(os.getenv("COA_PORT", 3799))
@@ -30,15 +32,23 @@ def service_username(circuit_id: str, remote_id: str, relay_id: str | None = Non
     return f"{rid}/{remote_id}/{circuit_id}".replace("|", "=7C")
 
 
-def sync_radius_group_for_plan(plan_name: str, download_speed: int, upload_speed: int) -> None:
-    """Sync plan speed attributes to RADIUS group."""
+def sync_radius_group_for_plan(
+    plan_name: str,
+    download_speed: int,
+    upload_speed: int,
+    download_burst: int,
+    upload_burst: int,
+) -> None:
+    """Sync plan speed and burst attributes to RADIUS group."""
     execute_radius(
         "DELETE FROM radgroupreply WHERE groupname = %(groupname)s "
-        "AND attribute IN (%(download_attr)s, %(upload_attr)s)",
+        "AND attribute IN (%(download_attr)s, %(upload_attr)s, %(download_burst_attr)s, %(upload_burst_attr)s)",
         {
             "groupname": plan_name,
             "download_attr": RADIUS_DOWNLOAD_ATTRIBUTE,
             "upload_attr": RADIUS_UPLOAD_ATTRIBUTE,
+            "download_burst_attr": RADIUS_DOWNLOAD_BURST_ATTRIBUTE,
+            "upload_burst_attr": RADIUS_UPLOAD_BURST_ATTRIBUTE,
         },
     )
     execute_radius(
@@ -46,15 +56,21 @@ def sync_radius_group_for_plan(plan_name: str, download_speed: int, upload_speed
         INSERT INTO radgroupreply (groupname, attribute, op, value)
         VALUES
           (%(groupname)s, %(download_attr)s, %(op)s, %(download_value)s),
-          (%(groupname)s, %(upload_attr)s, %(op)s, %(upload_value)s)
+          (%(groupname)s, %(upload_attr)s, %(op)s, %(upload_value)s),
+          (%(groupname)s, %(download_burst_attr)s, %(op)s, %(download_burst_value)s),
+          (%(groupname)s, %(upload_burst_attr)s, %(op)s, %(upload_burst_value)s)
         """,
         {
             "groupname": plan_name,
             "download_attr": RADIUS_DOWNLOAD_ATTRIBUTE,
             "upload_attr": RADIUS_UPLOAD_ATTRIBUTE,
+            "download_burst_attr": RADIUS_DOWNLOAD_BURST_ATTRIBUTE,
+            "upload_burst_attr": RADIUS_UPLOAD_BURST_ATTRIBUTE,
             "op": RADIUS_ATTRIBUTE_OP,
             "download_value": str(download_speed),
             "upload_value": str(upload_speed),
+            "download_burst_value": str(download_burst),
+            "upload_burst_value": str(upload_burst),
         },
     )
 

@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Tuple
 
+from lib.services.traffic_shaper import BNGTrafficShaper
 from lib.nftables.helpers import (
     nft_add_subscriber_rules,
     nft_allow_ip,
@@ -36,9 +37,85 @@ class Tombstone:
     reason: str
     missing_seen: bool = False
 
+@dataclass
+class RadiusReplyResult:
+    download_speed_kbit: int
+    upload_speed_kbit: int
+    download_burst_kbit: int
+    upload_burst_kbit: int
 
 TombstoneMap = Dict[SessionKey, Tombstone]
 
+_OSS_VSA_RE = re.compile(r"Attr-26\.43242\.(\d+)\s*=\s*([^\s]+)")
+_OSS_NAMED_RE = re.compile(r"OSS-(Download|Upload)-(Speed|Burst)\s*[:=]+\s*([^\s]+)", re.IGNORECASE)
+
+def _parse_radius_int(token: str) -> int:
+    t = token.strip().strip('"')
+    if t.lower().startswith("0x"):
+        return int(t, 16)
+    return int(t, 10)
+
+
+def parse_radius_reply_result(response_text: str) -> RadiusReplyResult | None:
+    """
+    Parse speed AVPs from radius output text.
+    Supports:
+      - Attr-26.43242.1 = 0x000186a0   (download)
+      - Attr-26.43242.2 = 0x00007530   (upload)
+      - OSS-Download-Speed := 100000
+      - OSS-Upload-Speed := 30000
+      - OSS-Download-Burst := 500
+      - OSS-Upload-Burst := 150
+    """
+    download_kbit: int | None = None
+    upload_kbit: int | None = None
+    download_burst_kbit: int | None = None
+    upload_burst_kbit: int | None = None
+
+    for line in response_text.splitlines():
+        m_vsa = _OSS_VSA_RE.search(line)
+        if m_vsa:
+            attr_type = int(m_vsa.group(1))
+            try:
+                value = _parse_radius_int(m_vsa.group(2))
+            except Exception:
+                continue
+            if attr_type == 1:
+                download_kbit = value
+            elif attr_type == 2:
+                upload_kbit = value
+            elif attr_type == 3:
+                download_burst_kbit = value
+            elif attr_type == 4:
+                upload_burst_kbit = value
+            continue
+
+        m_named = _OSS_NAMED_RE.search(line)
+        if m_named:
+            direction = m_named.group(1).lower()
+            kind = m_named.group(2).lower()
+            try:
+                value = _parse_radius_int(m_named.group(3))
+            except Exception:
+                continue
+            if direction == "download" and kind == "speed":
+                download_kbit = value
+            elif direction == "upload" and kind == "speed":
+                upload_kbit = value
+            elif direction == "download" and kind == "burst":
+                download_burst_kbit = value
+            elif direction == "upload" and kind == "burst":
+                upload_burst_kbit = value
+
+    if download_kbit is None or upload_kbit is None:
+        return None
+
+    return RadiusReplyResult(
+        download_speed_kbit=download_kbit,
+        upload_speed_kbit=upload_kbit,
+        download_burst_kbit=download_burst_kbit,
+        upload_burst_kbit=upload_burst_kbit,
+    )
 
 def decode_bytes(value):
     if value is None:
@@ -75,6 +152,8 @@ async def authorize_session(
     nas_ip: str,
     nas_port_id: str,
     ensure_rules: bool = False,
+    *,
+    traffic_shaper: BNGTrafficShaper,
 ) -> str | None:
     access_request_pkt = build_access_request(s, nas_ip=nas_ip, nas_port_id=nas_port_id)
     access_request_response = await rad_auth_send_from_bng(
@@ -100,6 +179,29 @@ async def authorize_session(
     if re.search(r"Access-Accept", response_text):
         if ensure_rules and (s.nft_up_handle is None or s.nft_down_handle is None):
             await install_rules_and_baseline(s, ip, mac, iface)
+
+        # QoS
+        parsed_policy = parse_radius_reply_result(response_text)
+        if parsed_policy:
+            print(
+                f"Parsed RADIUS policy: download={parsed_policy.download_speed_kbit}kbit "
+                f"upload={parsed_policy.upload_speed_kbit}kbit "
+                f"download_burst={parsed_policy.download_burst_kbit}kbit "
+                f"upload_burst={parsed_policy.upload_burst_kbit}kbit"
+            )
+
+            qos_success = await traffic_shaper.add_traffic_shaping_rule(
+                ip=ip,
+                upload_speed_kbit=parsed_policy.upload_speed_kbit,
+                download_speed_kbit=parsed_policy.download_speed_kbit,
+                download_burst_kbit=parsed_policy.download_burst_kbit,
+                upload_burst_kbit=parsed_policy.upload_burst_kbit,
+            )
+
+            if not qos_success:
+                print(f"Failed to apply QoS for session mac={mac} ip={ip}")
+
+
         s.auth_state = "AUTHORIZED"
         if ip:
             try:
@@ -145,6 +247,7 @@ async def terminate_session(
     radius_secret: str,
     nas_ip: str,
     nas_port_id: str,
+    traffic_shaper: BNGTrafficShaper,
     nftables_snapshot=None,
     delete_rules: bool = True,
     event_dispatcher: BNGEventDispatcher | None = None,
@@ -158,6 +261,13 @@ async def terminate_session(
         )
 
         if s.auth_state == "AUTHORIZED":
+            # Remove QoS
+            if s.ip:
+                qos_success = await traffic_shaper.remove_traffic_shaping_rule( ip=s.ip )
+
+                if not qos_success:
+                    print(f"Failed to remove QoS for session mac={s.mac} ip={s.ip}")
+
             pkt = build_acct_stop(
                 s,
                 nas_ip=nas_ip,

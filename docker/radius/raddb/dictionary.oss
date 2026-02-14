@@ -1,0 +1,9 @@
+# Custom OSS Vendor-Specific attributes for plan speeds (kbit/s).
+# Standard RADIUS attributes are limited to 1..255, so use a private vendor space.
+VENDOR OSS 43242
+BEGIN-VENDOR OSS
+ATTRIBUTE OSS-Download-Speed 1 integer
+ATTRIBUTE OSS-Upload-Speed   2 integer
+ATTRIBUTE OSS-Download-Burst 3 integer
+ATTRIBUTE OSS-Upload-Burst   4 integer
+END-VENDOR OSS

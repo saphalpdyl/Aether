@@ -27,6 +27,7 @@ from lib.services.bng_session import (
     terminate_session,
 )
 from lib.services.event_dispatcher import BNGEventDispatcher
+from lib.services.traffic_shaper import BNGTrafficShaper
 
 
 @dataclass
@@ -43,6 +44,7 @@ def dhcp_lease_handler(
     bng_id: str,
     bng_instance_id: str,
     event_dispatcher: BNGEventDispatcher,
+    traffic_shaper: BNGTrafficShaper,
     iface: str = "eth0",
     radius_server_ip: str = "192.0.2.2",
     radius_secret: str = __RADIUS_SECRET,
@@ -154,6 +156,7 @@ def dhcp_lease_handler(
                         nas_ip=nas_ip,
                         nas_port_id=nas_port_id,
                         event_dispatcher=event_dispatcher,
+                        traffic_shaper=traffic_shaper,
                     )
                     s.nft_up_handle = None
                     s.nft_down_handle = None
@@ -182,6 +185,7 @@ def dhcp_lease_handler(
                         nas_ip,
                         nas_port_id,
                         ensure_rules=True,
+                        traffic_shaper=traffic_shaper,
                     )
                     if result == "REJECTED":
                         print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
@@ -236,6 +240,7 @@ def dhcp_lease_handler(
                 nas_port_id=nas_port_id,
                 nftables_snapshot=nftables_snapshot,
                 event_dispatcher=event_dispatcher,
+                traffic_shaper=traffic_shaper,
             ):
                 print(f"RADIUS Acct-Stop sent for mac={s.mac} ip={s.ip}")
 
@@ -339,6 +344,7 @@ def dhcp_lease_handler(
                             nas_ip,
                             nas_port_id,
                             ensure_rules=True,
+                            traffic_shaper=traffic_shaper,
                         )
                         if result == "REJECTED":
                             print(f"RADIUS Access-Reject received for mac={l.mac} ip={l.ip}")
@@ -380,6 +386,7 @@ def dhcp_lease_handler(
                             nas_ip,
                             nas_port_id,
                             ensure_rules=True,
+                            traffic_shaper=traffic_shaper,
                         )
                         if result == "REJECTED":
                             print(f"RADIUS Access-Reject received for mac={s.mac} ip={s.ip}")
@@ -464,6 +471,7 @@ def dhcp_lease_handler(
                             nas_port_id=nas_port_id,
                             nftables_snapshot=nftables_snapshot,
                             event_dispatcher=event_dispatcher,
+                            traffic_shaper=traffic_shaper,
                         ):
                             print(f"RADIUS Acct-Stop sent for mac={s.mac} old_ip={old_ip}")
 
@@ -480,6 +488,7 @@ def dhcp_lease_handler(
                         nas_ip,
                         nas_port_id,
                         ensure_rules=True,
+                        traffic_shaper=traffic_shaper,
                     )
 
                     if reauth_result == "REJECTED":
@@ -522,6 +531,7 @@ def dhcp_lease_handler(
                 nas_port_id=nas_port_id,
                 nftables_snapshot=nftables_snapshot,
                 event_dispatcher=event_dispatcher,
+                traffic_shaper=traffic_shaper,
             ):
                 print(f"RADIUS Acct-Stop sent for mac={s.mac} ip={s.ip}")
 

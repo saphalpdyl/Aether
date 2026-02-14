@@ -41,19 +41,27 @@ def create_plan(body: PlanCreate):
         raise HTTPException(status_code=409, detail="Plan already exists")
 
     try:
-        sync_radius_group_for_plan(body.name, body.download_speed, body.upload_speed)
+        sync_radius_group_for_plan(
+            body.name,
+            body.download_speed,
+            body.upload_speed,
+            body.download_burst,
+            body.upload_burst,
+        )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Failed to sync plan to RADIUS: {e}")
 
     execute_oss(
         """
-        INSERT INTO plans (name, download_speed, upload_speed, price, is_active)
-        VALUES (%(name)s, %(download_speed)s, %(upload_speed)s, %(price)s, %(is_active)s)
+        INSERT INTO plans (name, download_speed, upload_speed, download_burst, upload_burst, price, is_active)
+        VALUES (%(name)s, %(download_speed)s, %(upload_speed)s, %(download_burst)s, %(upload_burst)s, %(price)s, %(is_active)s)
         """,
         {
             "name": body.name,
             "download_speed": body.download_speed,
             "upload_speed": body.upload_speed,
+            "download_burst": body.download_burst,
+            "upload_burst": body.upload_burst,
             "price": body.price,
             "is_active": body.is_active,
         },
@@ -73,6 +81,8 @@ def update_plan(plan_id: int, body: PlanUpdate):
     new_name = body.name if body.name is not None else current["name"]
     new_download_speed = body.download_speed if body.download_speed is not None else int(current["download_speed"])
     new_upload_speed = body.upload_speed if body.upload_speed is not None else int(current["upload_speed"])
+    new_download_burst = body.download_burst if body.download_burst is not None else int(current["download_burst"])
+    new_upload_burst = body.upload_burst if body.upload_burst is not None else int(current["upload_burst"])
 
     if body.name is not None:
         name_conflict = query_oss(
@@ -93,6 +103,12 @@ def update_plan(plan_id: int, body: PlanUpdate):
     if body.upload_speed is not None:
         sets.append("upload_speed = %(upload_speed)s")
         params["upload_speed"] = body.upload_speed
+    if body.download_burst is not None:
+        sets.append("download_burst = %(download_burst)s")
+        params["download_burst"] = body.download_burst
+    if body.upload_burst is not None:
+        sets.append("upload_burst = %(upload_burst)s")
+        params["upload_burst"] = body.upload_burst
     if body.price is not None:
         sets.append("price = %(price)s")
         params["price"] = body.price
@@ -116,7 +132,13 @@ def update_plan(plan_id: int, body: PlanUpdate):
                 {"new_name": new_name, "old_name": current["name"]},
             )
 
-        sync_radius_group_for_plan(new_name, new_download_speed, new_upload_speed)
+        sync_radius_group_for_plan(
+            new_name,
+            new_download_speed,
+            new_upload_speed,
+            new_download_burst,
+            new_upload_burst,
+        )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Failed to sync plan to RADIUS: {e}")
 

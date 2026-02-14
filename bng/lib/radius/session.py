@@ -21,6 +21,12 @@ class DHCPSession:
     # Unique session ID for event tracking
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
+    # QoS parameters
+    qos_download_kbit: int | None = None
+    qos_upload_kbit: int | None = None
+    qos_download_burst_kbit: int | None = None
+    qos_upload_burst_kbit: int | None = None
+
     # nftables related data
     nft_up_handle: int | None = None
     nft_down_handle: int | None = None

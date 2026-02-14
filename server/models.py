@@ -18,6 +18,8 @@ class PlanCreate(BaseModel):
     name: str
     download_speed: int
     upload_speed: int
+    download_burst: int
+    upload_burst: int
     price: float
     is_active: bool = True
 
@@ -26,6 +28,8 @@ class PlanUpdate(BaseModel):
     name: str | None = None
     download_speed: int | None = None
     upload_speed: int | None = None
+    download_burst: int | None = None
+    upload_burst: int | None = None
     price: float | None = None
     is_active: bool | None = None
 

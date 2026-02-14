@@ -125,6 +125,7 @@ async def async_main():
     await bng_event_loop(
         event_queue,
         iface="eth1",
+        uplink_iface="eth2",
         nas_port_id="eth1",
         interim_interval=30,
         bng_id=args.bng_id,

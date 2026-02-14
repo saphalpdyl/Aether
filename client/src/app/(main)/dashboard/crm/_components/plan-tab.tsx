@@ -61,6 +61,8 @@ export function PlanTab({ plans, loading, onCreatePlan, onEditPlan, onDeletePlan
               <TableHead>Name</TableHead>
               <TableHead>Download</TableHead>
               <TableHead>Upload</TableHead>
+              <TableHead>Download Burst</TableHead>
+              <TableHead>Upload Burst</TableHead>
               <TableHead>Price</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -69,13 +71,13 @@ export function PlanTab({ plans, loading, onCreatePlan, onEditPlan, onDeletePlan
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground py-6 text-center">
+                <TableCell colSpan={8} className="text-muted-foreground py-6 text-center">
                   Loading plans...
                 </TableCell>
               </TableRow>
             ) : filteredPlans.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground py-6 text-center">
+                <TableCell colSpan={8} className="text-muted-foreground py-6 text-center">
                   No plans found
                 </TableCell>
               </TableRow>
@@ -85,6 +87,8 @@ export function PlanTab({ plans, loading, onCreatePlan, onEditPlan, onDeletePlan
                   <TableCell className="font-medium">{plan.name}</TableCell>
                   <TableCell>{plan.download_speed} kbps</TableCell>
                   <TableCell>{plan.upload_speed} kbps</TableCell>
+                  <TableCell>{plan.download_burst} kbit</TableCell>
+                  <TableCell>{plan.upload_burst} kbit</TableCell>
                   <TableCell>${Number(plan.price).toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={plan.is_active ? "default" : "secondary"}>

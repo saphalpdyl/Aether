@@ -20,6 +20,7 @@ from lib.services.bng_session import (
     terminate_session,
 )
 from lib.services.event_dispatcher import BNGEventDispatcher, BNGEventDispatcherConfig
+from lib.services.traffic_shaper import BNGTrafficShaper, BNGTrafficShaperConfig
 from lib.services.router_tracker import RouterTracker
 
 COA_IPC_SOCKET = os.getenv("COA_IPC_SOCKET", "/tmp/coad.sock")
@@ -33,6 +34,7 @@ async def bng_event_loop(
     *,
     redis_conn: aioredis.Redis | None = None,
     iface: str = "eth1",
+    uplink_iface: str = "eth2",
     interim_interval: int = 30,
     auth_retry_interval: int = 10,
     disconnection_check_interval: int = 5,
@@ -56,6 +58,17 @@ async def bng_event_loop(
         )
     )
 
+    traffic_shaper = BNGTrafficShaper(
+        config=BNGTrafficShaperConfig(
+            bandwidth_limit=100000,
+            bng_id=bng_id,
+            bng_instance_id=bng_instance_id,
+            subscriber_facing_interface=iface,
+            uplink_interface=uplink_iface,
+            debug_mode=True,
+        )
+    )
+
     router_tracker = RouterTracker(bng_id=bng_id, event_dispatcher=event_dispatcher, oss_api_url=OSS_API_URL)
     router_tracker.load_routers()
 
@@ -71,6 +84,7 @@ async def bng_event_loop(
         nas_ip=nas_ip,
         nas_port_id=nas_port_id,
         event_dispatcher=event_dispatcher,
+        traffic_shaper=traffic_shaper,
     )
 
     socket_path = COA_IPC_SOCKET
@@ -106,6 +120,7 @@ async def bng_event_loop(
                 nas_ip=nas_ip,
                 nas_port_id=nas_port_id,
                 event_dispatcher=event_dispatcher,
+                traffic_shaper=traffic_shaper,
             )
             if ok:
                 remove_session_from_maps(
@@ -163,6 +178,7 @@ async def bng_event_loop(
                         nas_ip,
                         nas_port_id,
                         ensure_rules=True,
+                        traffic_shaper=traffic_shaper,
                     )
             except Exception as e:
                 print(f"BNG Auth-Retry error: {e}")
@@ -197,6 +213,7 @@ async def bng_event_loop(
                                 nas_port_id=nas_port_id,
                                 nftables_snapshot=nftables_snapshot,
                                 event_dispatcher=event_dispatcher,
+                                traffic_shaper=traffic_shaper,
                             )
                             dhcp_runtime.tombstones[key] = Tombstone(
                                 ip_at_stop=s.ip or "",

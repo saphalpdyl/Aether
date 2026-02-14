@@ -62,6 +62,8 @@ interface Plan {
   name: string;
   download_speed: number;
   upload_speed: number;
+  download_burst: number;
+  upload_burst: number;
   price: string;
   is_active: boolean;
 }
@@ -140,6 +142,8 @@ export default function ProvisioningConsole() {
     name: "",
     download_speed: "",
     upload_speed: "",
+    download_burst: "",
+    upload_burst: "",
     price: "",
     is_active: true,
   });
@@ -213,6 +217,8 @@ export default function ProvisioningConsole() {
           name: String(p.name ?? ""),
           download_speed: Number(p.download_speed ?? 0),
           upload_speed: Number(p.upload_speed ?? 0),
+          download_burst: Number(p.download_burst ?? 0),
+          upload_burst: Number(p.upload_burst ?? 0),
           price: String(p.price ?? "0.00"),
           is_active: String(p.is_active) === "True",
         }))
@@ -300,7 +306,15 @@ export default function ProvisioningConsole() {
 
   const openCreatePlan = () => {
     setPlanEdit(null);
-    setPlanForm({ name: "", download_speed: "", upload_speed: "", price: "", is_active: true });
+    setPlanForm({
+      name: "",
+      download_speed: "",
+      upload_speed: "",
+      download_burst: "",
+      upload_burst: "",
+      price: "",
+      is_active: true,
+    });
     setPlanDialogOpen(true);
   };
 
@@ -310,6 +324,8 @@ export default function ProvisioningConsole() {
       name: plan.name,
       download_speed: String(plan.download_speed),
       upload_speed: String(plan.upload_speed),
+      download_burst: String(plan.download_burst),
+      upload_burst: String(plan.upload_burst),
       price: plan.price,
       is_active: plan.is_active,
     });
@@ -329,6 +345,14 @@ export default function ProvisioningConsole() {
       toast.error("Upload speed must be greater than 0");
       return;
     }
+    if (!planForm.download_burst || Number(planForm.download_burst) <= 0) {
+      toast.error("Download burst must be greater than 0");
+      return;
+    }
+    if (!planForm.upload_burst || Number(planForm.upload_burst) <= 0) {
+      toast.error("Upload burst must be greater than 0");
+      return;
+    }
     if (!planForm.price || Number(planForm.price) < 0) {
       toast.error("Price must be 0 or greater");
       return;
@@ -340,6 +364,8 @@ export default function ProvisioningConsole() {
         name: planForm.name.trim(),
         download_speed: Number(planForm.download_speed),
         upload_speed: Number(planForm.upload_speed),
+        download_burst: Number(planForm.download_burst),
+        upload_burst: Number(planForm.upload_burst),
         price: Number(planForm.price),
         is_active: planForm.is_active,
       };
@@ -633,6 +659,8 @@ export default function ProvisioningConsole() {
                     <TableHead>Name</TableHead>
                     <TableHead>Download</TableHead>
                     <TableHead>Upload</TableHead>
+                    <TableHead>Download Burst</TableHead>
+                    <TableHead>Upload Burst</TableHead>
                     <TableHead>Price</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -641,13 +669,13 @@ export default function ProvisioningConsole() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-muted-foreground py-6 text-center">
+                      <TableCell colSpan={8} className="text-muted-foreground py-6 text-center">
                         Loading plans...
                       </TableCell>
                     </TableRow>
                   ) : filteredPlans.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-muted-foreground py-6 text-center">
+                      <TableCell colSpan={8} className="text-muted-foreground py-6 text-center">
                         No plans found
                       </TableCell>
                     </TableRow>
@@ -657,6 +685,8 @@ export default function ProvisioningConsole() {
                         <TableCell className="font-medium">{plan.name}</TableCell>
                         <TableCell>{plan.download_speed} kbps</TableCell>
                         <TableCell>{plan.upload_speed} kbps</TableCell>
+                        <TableCell>{plan.download_burst} kbit</TableCell>
+                        <TableCell>{plan.upload_burst} kbit</TableCell>
                         <TableCell>${Number(plan.price).toFixed(2)}</TableCell>
                         <TableCell>
                           <Badge variant={plan.is_active ? "default" : "secondary"}>
@@ -872,7 +902,7 @@ export default function ProvisioningConsole() {
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{planEdit ? "Edit plan" : "Create plan"}</DialogTitle>
-            <DialogDescription>Speed values are stored in kbps and synced to RADIUS group checks.</DialogDescription>
+            <DialogDescription>Speed values are in kbps and burst values are in kbit.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
@@ -898,6 +928,28 @@ export default function ProvisioningConsole() {
                   min="1"
                   value={planForm.upload_speed}
                   onChange={(e) => setPlanForm((s) => ({ ...s, upload_speed: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="plan-download-burst">Download Burst (kbit)</Label>
+                <Input
+                  id="plan-download-burst"
+                  type="number"
+                  min="1"
+                  value={planForm.download_burst}
+                  onChange={(e) => setPlanForm((s) => ({ ...s, download_burst: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="plan-upload-burst">Upload Burst (kbit)</Label>
+                <Input
+                  id="plan-upload-burst"
+                  type="number"
+                  min="1"
+                  value={planForm.upload_burst}
+                  onChange={(e) => setPlanForm((s) => ({ ...s, upload_burst: e.target.value }))}
                 />
               </div>
             </div>

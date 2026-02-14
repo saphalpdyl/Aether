@@ -7,6 +7,8 @@ export interface Plan {
   name: string;
   download_speed: number;
   upload_speed: number;
+  download_burst: number;
+  upload_burst: number;
   price: string;
   is_active: boolean;
 }
