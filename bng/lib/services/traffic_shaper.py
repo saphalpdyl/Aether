@@ -74,7 +74,8 @@ class BNGTrafficShaper:
         # For egress on subscriber interface (download shaping)
         await self._cmd(
             f"tc class replace dev {download_iface} parent 1:1 classid 1:{handle} "
-            f"htb rate {download_speed_kbit}kbit ceil {download_speed_kbit}kbit burst {download_burst_kbit}kbit"
+            f"htb rate {download_speed_kbit}kbit ceil {download_speed_kbit}kbit "
+            f"burst {download_burst_kbit}kbit cburst {download_burst_kbit}kbit"
         )
         await self._cmd(
             f"tc qdisc replace dev {download_iface} parent 1:{handle} handle {handle}: sfq perturb 10"
@@ -87,7 +88,8 @@ class BNGTrafficShaper:
         # For egress on uplink interface (upload shaping)
         await self._cmd(
             f"tc class replace dev {upload_iface} parent 1:1 classid 1:{handle} "
-            f"htb rate {upload_speed_kbit}kbit ceil {upload_speed_kbit}kbit burst {upload_burst_kbit}kbit"
+            f"htb rate {upload_speed_kbit}kbit ceil {upload_speed_kbit}kbit "
+            f"burst {upload_burst_kbit}kbit cburst {upload_burst_kbit}kbit"
         )
         await self._cmd(
             f"tc qdisc replace dev {upload_iface} parent 1:{handle} handle {handle}: sfq perturb 10"

@@ -54,10 +54,10 @@ CREATE INDEX idx_services_status ON services (status);
 
 -- Seed example plans (no services attached by default)
 INSERT INTO plans (name, download_speed, upload_speed, download_burst, upload_burst, price, is_active) VALUES
-    ('Bronze 25/10', 25000, 10000, 500, 200, 29.99, true),
-    ('Silver 100/30', 100000, 30000, 2000, 600, 49.99, true),
-    ('Gold 300/100', 300000, 100000, 6000, 2000, 79.99, true),
-    ('Legacy 10/5', 10000, 5000, 200, 100, 19.99, false);
+    ('Bronze 25/10', 25000, 10000, 1000, 500, 29.99, true),
+    ('Silver 100/30', 100000, 30000, 3000, 1200, 49.99, true),
+    ('Gold 300/100', 300000, 100000, 8000, 3000, 79.99, true),
+    ('Legacy 10/5', 10000, 5000, 500, 250, 19.99, false);
 
 -- Seed example customers (OSS-side entities)
 INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
@@ -71,7 +71,7 @@ INSERT INTO access_routers (router_name, giaddr, bng_id) VALUES
     ('srl-access',  '10.0.0.2', 'bng-01'),
     ('srl2-access', '10.0.0.3', 'bng-01');
 
--- Seed default service: Acme Bakery on srl-access, Silver plan
+-- Seed default service: Acme Bakery on srl-access, Gold plan
 -- RADIUS username: bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0
 INSERT INTO services (customer_id, plan_id, circuit_id, remote_id) VALUES
-    (1, 1, 'srl-access|default|irb1|1:0', '000000000002');
+    (1, 3, 'srl-access|default|irb1|1:0', '000000000002');
