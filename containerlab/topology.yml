@@ -1,17 +1,13 @@
 name: isp-lab
 
 topology:
-  kinds:
-    nokia_srlinux:
-      type: ixr-d2l
-      image: ghcr.io/nokia/srlinux:25.3.1
-
   nodes:
     # Subscriber hosts
     h1:
       kind: linux
       image: lab-host
       exec:
+        - sh -c "command -v ethtool >/dev/null 2>&1 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ethtool)"
         - ip link set eth1 address 00:00:00:00:00:01
         - ip link set eth1 up
         - sh -c "ip link set eth0 down || true"
@@ -20,6 +16,7 @@ topology:
       kind: linux
       image: lab-host
       exec:
+        - sh -c "command -v ethtool >/dev/null 2>&1 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ethtool)"
         - ip link set eth1 address 00:00:00:00:00:02
         - ip link set eth1 up
         - sh -c "ip link set eth0 down || true"
@@ -28,21 +25,47 @@ topology:
       kind: linux
       image: lab-host
       exec:
+        - sh -c "command -v ethtool >/dev/null 2>&1 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ethtool)"
         - ip link set eth1 address 00:00:00:00:00:03
         - ip link set eth1 up
         - sh -c "ip link set eth0 down || true"
 
-    # Nokia SR Linux access node (DHCP Option 82 circuit-id/remote-id)
-    srl:
-      kind: nokia_srlinux
-      type: ixr-d3
-      startup-config: srl-access.json
+    # Linux access relay node #1 (replaces SR Linux)
+    relay1:
+      kind: linux
+      image: lab-relay
+      env:
+        REMOTE_ID: "000000000002"
+        GIADDR: "10.0.1.1"
+        CIRCUIT_ID_MAP: "eth1=srl-access|default|irb1|1:0,eth2=srl-access|default|irb1|1:0"
+      exec:
+        - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && break; sleep 0.2; done"
+        - sh -c "ip link add br0 type bridge 2>/dev/null || true"
+        - sh -c "ip link set eth1 up && ip link set eth2 up && ip link set eth3 up"
+        - sh -c "ip link set eth1 master br0 && ip link set eth2 master br0"
+        - sh -c "ip link set br0 up"
+        - sh -c "ip addr replace 10.0.1.1/26 dev br0"
+        - sh -c "ip addr replace 10.0.0.2/24 dev eth3"
+        - sh -c "ip route replace default via 10.0.0.1 dev eth3"
+        - sh -c "sysctl -w net.ipv4.ip_forward=1 || true"
+        - sh -c "ip link set eth0 down || true"
 
-    # Second Nokia SR Linux access node (different hostname for circuit-id)
-    srl2:
-      kind: nokia_srlinux
-      type: ixr-d3
-      startup-config: srl2-access.json
+    # Linux access relay node #2 (replaces SR Linux)
+    relay2:
+      kind: linux
+      image: lab-relay
+      env:
+        REMOTE_ID: "000000000003"
+        GIADDR: "10.0.1.65"
+        CIRCUIT_ID_MAP: "eth1=srl2-access|default|irb1|1:0"
+      exec:
+        - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done"
+        - sh -c "ip link set eth1 up && ip link set eth2 up"
+        - sh -c "ip addr replace 10.0.1.65/26 dev eth1"
+        - sh -c "ip addr replace 10.0.0.3/24 dev eth2"
+        - sh -c "ip route replace default via 10.0.0.1 dev eth2"
+        - sh -c "sysctl -w net.ipv4.ip_forward=1 || true"
+        - sh -c "ip link set eth0 down || true"
 
     # Aggregation switch between SRLs and BNG
     agg:
@@ -58,6 +81,7 @@ topology:
       exec:
         - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done; PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py --bng-id $BNG_IDENTIFIER >>/proc/1/fd/1 2>>/proc/1/fd/2 &"
         - sh -c "coad >/proc/1/fd/1 2>/proc/1/fd/2 &"
+        - sh -c "iperf3 -s -D"
         - sh -c "ip link set eth0 down || true"
 
     # DHCP Server (Kea)
@@ -208,7 +232,7 @@ topology:
       kind: linux
       image: alpine:latest
       exec:
-        - apk add --no-cache iptables dhcpcd curl
+        - apk add --no-cache iptables dhcpcd curl iperf3 ethtool
         - dhcpcd eth11
         - sleep 5
         - sysctl -w net.ipv4.ip_forward=1
@@ -239,18 +263,17 @@ topology:
         - ip addr add 192.0.2.5/24 dev br0
         - ip route replace 10.0.1.0/24 via 192.0.2.1
         - sh -c "ip link set eth0 down || true"
+        - sh -c "iperf3 -s -D"
 
   links:
-    # Subscriber -> SR Linux (srl)
-    - endpoints: ["h1:eth1", "srl:e1-1"]
-    - endpoints: ["h2:eth1", "srl:e1-2"]
+    # Subscriber -> Linux relays
+    - endpoints: ["h1:eth1", "relay1:eth1"]
+    - endpoints: ["h2:eth1", "relay1:eth2"]
+    - endpoints: ["h3:eth1", "relay2:eth1"]
 
-    # Subscriber -> SR Linux (srl2)
-    - endpoints: ["h3:eth1", "srl2:e1-1"]
-
-    # SR Linux nodes -> Aggregation switch
-    - endpoints: ["srl:e1-3", "agg:eth1"]
-    - endpoints: ["srl2:e1-3", "agg:eth2"]
+    # Linux relays -> Aggregation switch
+    - endpoints: ["relay1:eth3", "agg:eth1"]
+    - endpoints: ["relay2:eth2", "agg:eth2"]
 
     # Aggregation switch -> BNG (subscriber side)
     - endpoints: ["agg:eth3", "bng:eth1"]

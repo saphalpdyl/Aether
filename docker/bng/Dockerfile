@@ -16,8 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     freeradius-utils \
     curl \
+    iperf3 \
     iproute2 \
     iputils-ping \
+    iptables \
     nftables \
     procps \
     python3 \

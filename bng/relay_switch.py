@@ -26,10 +26,31 @@ DHCP_RELAY_SUBOPT_CIRCUIT_ID = 1
 DHCP_RELAY_SUBOPT_REMOTE_ID = 2
 DHCP_CLIENT_PORT = 68
 DHCP_SERVER_PORT = 67
+BOOTP_GIADDR_OFFSET = 24
 
 
 def mac_to_bytes(mac: str) -> bytes:
     return bytes.fromhex(mac.replace(":", ""))
+
+def parse_remote_id(value: str) -> bytes:
+    # Accept textual IDs, or raw hex (e.g. 000000000002 / 00:00:00:00:00:02).
+    s = value.strip()
+    h = s.replace(":", "").replace("-", "")
+    if len(h) % 2 == 0 and all(c in "0123456789abcdefABCDEF" for c in h):
+        return bytes.fromhex(h)
+    return s.encode()
+
+def set_giaddr(bootp_payload: bytes, giaddr: str) -> bytes:
+    if len(bootp_payload) < BOOTP_FIXED_LEN:
+        return bootp_payload
+    ipb = socket.inet_aton(giaddr)
+    if bootp_payload[BOOTP_GIADDR_OFFSET:BOOTP_GIADDR_OFFSET + 4] != b"\x00\x00\x00\x00":
+        return bootp_payload
+    return (
+        bootp_payload[:BOOTP_GIADDR_OFFSET]
+        + ipb
+        + bootp_payload[BOOTP_GIADDR_OFFSET + 4:]
+    )
 
 
 def checksum16(data: bytes) -> int:
@@ -132,7 +153,16 @@ def rebuild_options(opts: list[tuple[int, bytes]], opt82: bytes) -> bytes:
     return bytes(out)
 
 
-def handle_packet(pkt: bytes, iface: str, uplink_mac: bytes | None, dst_mac: bytes | None, remote_id: bytes) -> bytes | None:
+def handle_packet(
+    pkt: bytes,
+    iface: str,
+    uplink_mac: bytes | None,
+    dst_mac: bytes | None,
+    remote_id: bytes,
+    circuit_id_map: dict[str, bytes],
+    default_circuit_id: bytes | None,
+    giaddr: str | None,
+) -> bytes | None:
     # Only handle DHCP client->server (UDP 68->67) IPv4 packets.
     if len(pkt) < ETH_HDR_LEN:
         return None
@@ -166,9 +196,12 @@ def handle_packet(pkt: bytes, iface: str, uplink_mac: bytes | None, dst_mac: byt
 
     options = payload[BOOTP_FIXED_LEN + len(DHCP_MAGIC) :]
     opt_list = parse_options(options)
-    opt82 = build_option82(iface.encode(), remote_id)
+    circuit_id = circuit_id_map.get(iface, default_circuit_id or iface.encode())
+    opt82 = build_option82(circuit_id, remote_id)
     new_opts = rebuild_options(opt_list, opt82)
     new_payload = payload[: BOOTP_FIXED_LEN + len(DHCP_MAGIC)] + new_opts
+    if giaddr:
+        new_payload = set_giaddr(new_payload, giaddr)
 
     new_udp_len = UDP_HDR_LEN + len(new_payload)
     new_ip_len = ihl + new_udp_len
@@ -201,11 +234,23 @@ def main():
     parser.add_argument("--access", action="append", required=True)
     parser.add_argument("--uplink", required=True)
     parser.add_argument("--remote-id", default="OLT-1")
+    parser.add_argument("--circuit-id", default=None)
+    parser.add_argument("--circuit-id-map", action="append", default=[])
+    parser.add_argument("--giaddr", default=None)
     parser.add_argument("--dst-mac", default=None)
     parser.add_argument("--src-mac", default=None)
     args = parser.parse_args()
 
-    remote_id = args.remote_id.encode()
+    remote_id = parse_remote_id(args.remote_id)
+    default_circuit_id = args.circuit_id.encode() if args.circuit_id else None
+    circuit_id_map: dict[str, bytes] = {}
+    for item in args.circuit_id_map:
+        if "=" not in item:
+            continue
+        iface, value = item.split("=", 1)
+        iface = iface.strip()
+        if iface:
+            circuit_id_map[iface] = value.encode()
     dst_mac = mac_to_bytes(args.dst_mac) if args.dst_mac else None
     src_mac = mac_to_bytes(args.src_mac) if args.src_mac else None
 
@@ -219,10 +264,17 @@ def main():
     send_uplink.bind((args.uplink, 0))
 
     send_access = {}
+    down_access = {}
     for iface in args.access:
         s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
         s.bind((iface, 0))
         send_access[iface] = s
+        d = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        d.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        d.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, iface.encode())
+        d.bind(("0.0.0.0", DHCP_SERVER_PORT))
+        down_access[iface] = d
 
     mac_table = {}
 
@@ -236,21 +288,48 @@ def main():
                 continue
 
             if iface == args.uplink:
-                pkt = fix_ipv4_udp_checksum(pkt, zero_udp=True)
-                dst_mac = pkt[0:6]
+                # Only relay DHCP server->client traffic; regular traffic is routed by kernel.
+                out = fix_ipv4_udp_checksum(pkt, zero_udp=True)
+                if len(out) < ETH_HDR_LEN:
+                    continue
+                eth_type = struct.unpack("!H", out[12:14])[0]
+                if eth_type != ETH_P_IP:
+                    continue
+                ip_off = ETH_HDR_LEN
+                ihl = (out[ip_off] & 0x0F) * 4
+                if len(out) < ip_off + ihl + UDP_HDR_LEN or out[ip_off + 9] != UDP_PROTO:
+                    continue
+                udp_off = ip_off + ihl
+                src_port, dst_port = struct.unpack("!HH", out[udp_off : udp_off + 4])
+                if src_port != DHCP_SERVER_PORT:
+                    continue
+                udp_len = struct.unpack("!H", out[udp_off + 4 : udp_off + 6])[0]
+                if len(out) < udp_off + udp_len or udp_len < UDP_HDR_LEN:
+                    continue
+                payload = out[udp_off + UDP_HDR_LEN : udp_off + udp_len]
+                dst_mac = out[0:6]
                 out_iface = mac_table.get(dst_mac)
                 if out_iface and out_iface in send_access:
-                    send_access[out_iface].send(pkt)
+                    down_access[out_iface].sendto(payload, ("255.255.255.255", DHCP_CLIENT_PORT))
                 else:
-                    for dst_iface, send_sock in send_access.items():
-                        send_sock.send(pkt)
+                    for send_sock in down_access.values():
+                        send_sock.sendto(payload, ("255.255.255.255", DHCP_CLIENT_PORT))
                 continue
 
-            out = handle_packet(pkt, iface, src_mac, dst_mac, remote_id)
+            out = handle_packet(
+                pkt,
+                iface,
+                src_mac,
+                dst_mac,
+                remote_id,
+                circuit_id_map,
+                default_circuit_id,
+                args.giaddr,
+            )
             if out:
                 send_uplink.send(fix_ipv4_udp_checksum(out))
             else:
-                send_uplink.send(fix_ipv4_udp_checksum(pkt))
+                continue
 
             src_mac = pkt[6:12]
             mac_table[src_mac] = iface
