@@ -26,7 +26,7 @@ from lib.services.router_tracker import RouterTracker
 COA_IPC_SOCKET = os.getenv("COA_IPC_SOCKET", "/tmp/coad.sock")
 
 # Remove OSS API URL. BNG should not be calling OSS.
-OSS_API_URL = os.getenv("OSS_API_URL", "http://192.0.2.21:8000")
+OSS_API_URL = os.getenv("OSS_API_URL", "http://198.18.0.21:8000")
 
 
 async def bng_event_loop(
@@ -41,12 +41,13 @@ async def bng_event_loop(
     reconciler_interval: int = 15,
     router_ping_interval: int = 30,
     bng_health_check_interval: int = 5,
-    radius_server_ip: str = "192.0.2.2",
+    radius_server_ip: str = "198.18.0.2",
     radius_secret: str = __RADIUS_SECRET,
-    nas_ip: str = "192.0.2.1",
+    nas_ip: str = "198.18.0.1",
     nas_port_id: str = "eth1",
     bng_id: str = "bng-default",
     bng_instance_id: str = "",
+    oss_api_url: str = OSS_API_URL,
 ) -> None:
     event_dispatcher = BNGEventDispatcher(
         config=BNGEventDispatcherConfig(
@@ -69,7 +70,7 @@ async def bng_event_loop(
         )
     )
 
-    router_tracker = RouterTracker(bng_id=bng_id, event_dispatcher=event_dispatcher, oss_api_url=OSS_API_URL)
+    router_tracker = RouterTracker(bng_id=bng_id, event_dispatcher=event_dispatcher, oss_api_url=oss_api_url)
     router_tracker.load_routers()
 
     bng_health_tracker = BNGHealthTracker(bng_id=bng_id, event_dispatcher=event_dispatcher)

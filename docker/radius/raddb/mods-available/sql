@@ -164,7 +164,7 @@ sql {
 
         # Connection info:
         #
-        server = "192.0.2.6"
+        server = "198.18.0.6"
         port = 5432
         login = "radius"
         password = "test"

@@ -38,15 +38,18 @@ topology:
         REMOTE_ID: "000000000002"
         GIADDR: "10.0.1.1"
         CIRCUIT_ID_MAP: "eth1=srl-access|default|irb1|1:0,eth2=srl-access|default|irb1|1:0"
+        RELAY_BR_IP_CIDR: "10.0.1.1/26"
+        RELAY_UPLINK_IP_CIDR: "10.0.0.2/24"
+        RELAY_DEFAULT_GW: "10.0.0.1"
       exec:
         - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && break; sleep 0.2; done"
         - sh -c "ip link add br0 type bridge 2>/dev/null || true"
         - sh -c "ip link set eth1 up && ip link set eth2 up && ip link set eth3 up"
         - sh -c "ip link set eth1 master br0 && ip link set eth2 master br0"
         - sh -c "ip link set br0 up"
-        - sh -c "ip addr replace 10.0.1.1/26 dev br0"
-        - sh -c "ip addr replace 10.0.0.2/24 dev eth3"
-        - sh -c "ip route replace default via 10.0.0.1 dev eth3"
+        - sh -c "ip addr replace $RELAY_BR_IP_CIDR dev br0"
+        - sh -c "ip addr replace $RELAY_UPLINK_IP_CIDR dev eth3"
+        - sh -c "ip route replace default via $RELAY_DEFAULT_GW dev eth3"
         - sh -c "sysctl -w net.ipv4.ip_forward=1 || true"
         - sh -c "ip link set eth0 down || true"
 
@@ -58,12 +61,15 @@ topology:
         REMOTE_ID: "000000000003"
         GIADDR: "10.0.1.65"
         CIRCUIT_ID_MAP: "eth1=srl2-access|default|irb1|1:0"
+        RELAY_BR_IP_CIDR: "10.0.1.65/26"
+        RELAY_UPLINK_IP_CIDR: "10.0.0.3/24"
+        RELAY_DEFAULT_GW: "10.0.0.1"
       exec:
         - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done"
         - sh -c "ip link set eth1 up && ip link set eth2 up"
-        - sh -c "ip addr replace 10.0.1.65/26 dev eth1"
-        - sh -c "ip addr replace 10.0.0.3/24 dev eth2"
-        - sh -c "ip route replace default via 10.0.0.1 dev eth2"
+        - sh -c "ip addr replace $RELAY_BR_IP_CIDR dev eth1"
+        - sh -c "ip addr replace $RELAY_UPLINK_IP_CIDR dev eth2"
+        - sh -c "ip route replace default via $RELAY_DEFAULT_GW dev eth2"
         - sh -c "sysctl -w net.ipv4.ip_forward=1 || true"
         - sh -c "ip link set eth0 down || true"
 
@@ -78,8 +84,26 @@ topology:
       image: lab-bng
       env:
         BNG_IDENTIFIER: bng-01
+        BNG_SUBSCRIBER_IFACE: "eth1"
+        BNG_UPLINK_IFACE: "eth2"
+        BNG_DHCP_UPLINK_IFACE: "eth3"
+        BNG_SUBSCRIBER_IP_CIDR: "10.0.0.1/24"
+        BNG_UPLINK_IP_CIDR: "192.0.2.1/30"
+        BNG_DHCP_UPLINK_IP_CIDR: "198.18.0.1/24"
+        BNG_DEFAULT_GW: "192.0.2.2"
+        BNG_NAT_SOURCE_CIDR: "10.0.0.0/24"
+        BNG_RELAY1_SUBNET_CIDR: "10.0.1.0/26"
+        BNG_RELAY1_NEXT_HOP: "10.0.0.2"
+        BNG_RELAY2_SUBNET_CIDR: "10.0.1.64/26"
+        BNG_RELAY2_NEXT_HOP: "10.0.0.3"
+        BNG_DHCP_SERVER_IP: "198.18.0.3"
+        BNG_RADIUS_SERVER_IP: "198.18.0.2"
+        BNG_NAS_IP: "198.18.0.1"
+        BNG_REDIS_HOST: "198.18.0.10"
+        BNG_OSS_API_URL: "http://198.18.0.21:8000"
+        BNG_KEA_CTRL_URL: "http://198.18.0.3:6772"
       exec:
-        - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done; PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py --bng-id $BNG_IDENTIFIER >>/proc/1/fd/1 2>>/proc/1/fd/2 &"
+        - sh -c "for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && break; sleep 0.2; done; PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py --bng-id $BNG_IDENTIFIER >>/proc/1/fd/1 2>>/proc/1/fd/2 &"
         - sh -c "coad >/proc/1/fd/1 2>/proc/1/fd/2 &"
         - sh -c "iperf3 -s -D"
         - sh -c "ip link set eth0 down || true"
@@ -90,6 +114,15 @@ topology:
         - 'tc class add dev eth2 parent 1: classid 1:1 htb rate 1gbit'
         - 'tc class add dev eth2 parent 1:1 classid 1:9999 htb rate 1gbit'
 
+    # L2 switch for management/services network
+    mgmt:
+      kind: linux
+      image: alpine:latest
+      exec:
+        - sh -c "ip link add br0 type bridge 2>/dev/null || true"
+        - sh -c "ip link set br0 up"
+        - sh -c "for i in $(seq 1 11); do ip link set eth${i} up; ip link set eth${i} master br0; done"
+
     # DHCP Server (Kea)
     kea:
       kind: linux
@@ -97,10 +130,10 @@ topology:
       exec:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
-        - ip addr add 192.0.2.3/24 dev eth1
-        - ip route replace default via 192.0.2.1
-        - sh -c "for i in $(seq 1 60); do pg_isready -h 192.0.2.4 -U kea >/dev/null 2>&1 && break; sleep 0.5; done"
-        - sh -c "kea-admin db-init pgsql -u kea -p test -n kea_lease_db -h 192.0.2.4 || true"
+        - ip addr add 198.18.0.3/24 dev eth1
+        - ip route replace default via 198.18.0.254
+        - sh -c "for i in $(seq 1 60); do pg_isready -h 198.18.0.4 -U kea >/dev/null 2>&1 && break; sleep 0.5; done"
+        - sh -c "kea-admin db-init pgsql -u kea -p test -n kea_lease_db -h 198.18.0.4 || true"
         - mkdir -p /run/kea && chmod 777 /run/kea
         - sh -c "KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf >/tmp/kea-dhcp4.log 2>&1 &"
         - sh -c "rm -f /run/kea/kea-ctrl-agent.*.pid"
@@ -129,8 +162,8 @@ topology:
       exec:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
-        - ip addr add 192.0.2.6/24 dev eth1
-        - ip route replace default via 192.0.2.1
+        - ip addr add 198.18.0.6/24 dev eth1
+        - ip route replace default via 198.18.0.254
         - sh -c "for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U radius >/dev/null 2>&1 && break; sleep 0.5; done"
         - sh -c "/docker-entrypoint-initdb.d/00-radius-hba.sh || true"
         - sh -c "pg_ctl -D \"$PGDATA\" reload || true"
@@ -149,8 +182,8 @@ topology:
       exec:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
-        - ip addr add 192.0.2.4/24 dev eth1
-        - ip route replace default via 192.0.2.1
+        - ip addr add 198.18.0.4/24 dev eth1
+        - ip route replace default via 198.18.0.254
         # - sh -c "ip link set eth0 down || true"
 
     # Redis for session events stream
@@ -160,8 +193,8 @@ topology:
       exec:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
-        - ip addr add 192.0.2.10/24 dev eth1
-        - ip route replace default via 192.0.2.5
+        - ip addr add 198.18.0.10/24 dev eth1
+        - ip route replace default via 198.18.0.254
         - sh -c "ip link set eth0 down || true"
 
     # OSS PostgreSQL (session events database)
@@ -177,8 +210,8 @@ topology:
       exec:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
-        - ip addr add 192.0.2.11/24 dev eth1
-        - ip route replace default via 192.0.2.1
+        - ip addr add 198.18.0.11/24 dev eth1
+        - ip route replace default via 198.18.0.254
         - sh -c "for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U oss >/dev/null 2>&1 && break; sleep 0.5; done"
         - sh -c "/docker-entrypoint-initdb.d/00-oss-hba.sh || true"
         - sh -c "pg_ctl -D \"$PGDATA\" reload || true"
@@ -194,8 +227,8 @@ topology:
       exec:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
-        - ip addr add 192.0.2.20/24 dev eth1
-        - ip route replace default via 192.0.2.5
+        - ip addr add 198.18.0.20/24 dev eth1
+        - ip route replace default via 198.18.0.254
         - sh -c "pnpm dev --hostname 0.0.0.0 >/proc/1/fd/1 2>/proc/1/fd/2 &"
 
     # BNG Events Ingestor (Redis -> PostgreSQL)
@@ -203,16 +236,16 @@ topology:
       kind: linux
       image: lab-bng-ingestor
       env:
-        REDIS_HOST: 192.0.2.10
-        PG_HOST: 192.0.2.11
+        REDIS_HOST: 198.18.0.10
+        PG_HOST: 198.18.0.11
         PG_DB: oss
         PG_USER: oss
         PG_PASSWORD: oss
       exec:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
-        - ip addr add 192.0.2.12/24 dev eth1
-        - ip route replace default via 192.0.2.5
+        - ip addr add 198.18.0.12/24 dev eth1
+        - ip route replace default via 198.18.0.254
         - sh -c "ip link set eth0 down || true"
 
     # FastAPI backend (read-only OSS API)
@@ -221,16 +254,17 @@ topology:
       image: lab-backend
       mgmt-ipv4: 172.20.20.21
       env:
-        PG_HOST: 192.0.2.11
+        PG_HOST: 198.18.0.11
         PG_DB: oss
         PG_USER: oss
         PG_PASSWORD: oss
+        RADIUS_PG_HOST: 198.18.0.6
       exec:
         - sh -c "ip addr flush dev eth1 || true"
         - ip link set eth1 up
-        - ip addr add 192.0.2.21/24 dev eth1
-        - ip route replace default via 192.0.2.5
-        - sh -c "for i in $(seq 1 60); do python3 -c 'import socket; s=socket.create_connection((\"192.0.2.11\",5432),2); s.close()' 2>/dev/null && break; sleep 1; done"
+        - ip addr add 198.18.0.21/24 dev eth1
+        - ip route replace default via 198.18.0.254
+        - sh -c "for i in $(seq 1 60); do python3 -c 'import socket; s=socket.create_connection((\"198.18.0.11\",5432),2); s.close()' 2>/dev/null && break; sleep 1; done"
         - sh -c "uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &"
 
     # Upstream router - provides internet access via macvlan
@@ -244,29 +278,10 @@ topology:
         - sysctl -w net.ipv4.ip_forward=1
         - ip link set eth1 up
         - ip link set eth2 up
-        - ip link set eth3 up
-        - ip link set eth4 up
-        - ip link set eth5 up
-        - ip link set eth6 up
-        - ip link set eth7 up
-        - ip link set eth8 up
-        - ip link set eth9 up
-        - ip link set eth10 up
-        - ip link add br0 type bridge
-        - ip link set br0 up
-        - ip link set eth1 master br0
-        - ip link set eth2 master br0
-        - ip link set eth3 master br0
-        - ip link set eth4 master br0
-        - ip link set eth5 master br0
-        - ip link set eth6 master br0
-        - ip link set eth7 master br0
-        - ip link set eth8 master br0
-        - ip link set eth9 master br0
-        - ip link set eth10 master br0
-        - iptables -t nat -A POSTROUTING -s 192.0.2.0/24 -o eth11 -j MASQUERADE
+        - ip addr add 192.0.2.2/30 dev eth1
+        - ip addr add 198.18.0.254/24 dev eth2
+        - iptables -t nat -A POSTROUTING -s 198.18.0.0/24 -o eth11 -j MASQUERADE
         - iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -o eth11 -j MASQUERADE
-        - ip addr add 192.0.2.5/24 dev br0
         - ip route replace 10.0.1.0/24 via 192.0.2.1
         - sh -c "ip link set eth0 down || true"
         - sh -c "iperf3 -s -D"
@@ -284,19 +299,21 @@ topology:
     # Aggregation switch -> BNG (subscriber side)
     - endpoints: ["agg:eth3", "bng:eth1"]
 
-    # BNG -> Upstream network (192.0.2.0/24)
+    # BNG -> Upstream WAN transit (192.0.2.0/30)
     - endpoints: ["bng:eth2", "upstream:eth1"]
 
-    # Services on upstream network
-    - endpoints: ["kea:eth1", "upstream:eth2"]
-    - endpoints: ["radius:eth1", "upstream:eth3"]
-    - endpoints: ["radius_pg:eth1", "upstream:eth4"]
-    - endpoints: ["dhcp_pg:eth1", "upstream:eth5"]
-    - endpoints: ["redis:eth1", "upstream:eth6"]
-    - endpoints: ["oss_pg:eth1", "upstream:eth7"]
-    - endpoints: ["bng_ingestor:eth1", "upstream:eth8"]
-    - endpoints: ["frontend:eth1", "upstream:eth9"]
-    - endpoints: ["backend:eth1", "upstream:eth10"]
+    # Management/services LAN (198.18.0.0/24)
+    - endpoints: ["bng:eth3", "mgmt:eth1"]
+    - endpoints: ["upstream:eth2", "mgmt:eth2"]
+    - endpoints: ["kea:eth1", "mgmt:eth3"]
+    - endpoints: ["radius:eth1", "mgmt:eth4"]
+    - endpoints: ["radius_pg:eth1", "mgmt:eth5"]
+    - endpoints: ["dhcp_pg:eth1", "mgmt:eth6"]
+    - endpoints: ["redis:eth1", "mgmt:eth7"]
+    - endpoints: ["oss_pg:eth1", "mgmt:eth8"]
+    - endpoints: ["bng_ingestor:eth1", "mgmt:eth9"]
+    - endpoints: ["frontend:eth1", "mgmt:eth10"]
+    - endpoints: ["backend:eth1", "mgmt:eth11"]
 
     # Upstream to internet (macvlan to host's interface)
     # Replace 'enp1s0' with your host's interface
