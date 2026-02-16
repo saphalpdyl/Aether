@@ -12,6 +12,7 @@ generate: validate
 apply: generate
 	sudo docker compose build
 	-sudo containerlab destroy -t containerlab/topology.yml
+	-sudo docker rm -f $$(docker ps -aq --filter "name=^clab-isp-lab-")
 	sudo containerlab deploy -t containerlab/topology.yml
 	$(MAKE) ips
 

@@ -27,6 +27,9 @@ KEA_OUTPUT_PATH = ROOT / "bng/conf/kea-dhcp4.conf"
 OSS_SEED_TEMPLATE_PATH = ROOT / "docker/oss-pg/init/02-oss-schema.sql.j2"
 OSS_SEED_OUTPUT_PATH = ROOT / "docker/oss-pg/init/02-oss-schema.sql"
 
+RADIUS_CLIENTS_TEMPLATE_PATH = ROOT / "docker/radius/raddb/clients.conf.j2"
+RADIUS_CLIENTS_OUTPUT_PATH = ROOT / "docker/radius/raddb/clients.conf"
+
 
 class ConfigError(ValueError):
     pass
@@ -132,6 +135,7 @@ def _normalize_access_node(raw: dict[str, Any], bng_id: str, idx: int) -> dict[s
         )
 
     return {
+        "bng_id": bng_id,
         "container_name": str(container_name),
         "remote_id": remote_id,
         "iface_count": iface_count,
@@ -142,9 +146,64 @@ def _normalize_access_node(raw: dict[str, Any], bng_id: str, idx: int) -> dict[s
         "pool_start": str(pool_start),
         "pool_end": str(pool_end),
         "uplink_cidr": str(uplink_cidr),
+        "uplink_ip": _cidr_ip(str(uplink_cidr)),
         "uplink_default_gw": str(uplink_gw),
         "bng_route_subnet": str(subnet),
         "bng_route_next_hop": str(bng_route_next_hop),
+        "subnet_prefix": _cidr_prefix(str(subnet)),
+    }
+
+
+def _normalize_bng(raw: dict[str, Any], idx: int) -> dict[str, Any]:
+    bng_id = _require(raw, "bng-id", f"bngs[{idx}]")
+    if not isinstance(bng_id, str) or not bng_id.strip():
+        raise ConfigError(f"bngs[{idx}].bng-id must be a non-empty string")
+
+    topo = _require(raw, "topology", f"bngs[{idx}]")
+    iface = _require(topo, "interfaces", f"bngs[{idx}].topology")
+    ipv4 = _require(topo, "ipv4", f"bngs[{idx}].topology")
+    services = _require(topo, "services", f"bngs[{idx}].topology")
+
+    for key in ["subscriber", "upstream", "dhcp-uplink"]:
+        _require(iface, key, f"bngs[{idx}].topology.interfaces")
+
+    for key in ["subscriber-cidr", "upstream-cidr", "dhcp-uplink-cidr", "default-gw", "nat-source-cidr"]:
+        _require(ipv4, key, f"bngs[{idx}].topology.ipv4")
+
+    for key in [
+        "dhcp-server-ip",
+        "radius-server-ip",
+        "nas-ip",
+        "redis-host",
+        "oss-api-url",
+        "kea-ctrl-url",
+    ]:
+        _require(services, key, f"bngs[{idx}].topology.services")
+
+    access_nodes_raw = _require(raw, "access-nodes", f"bngs[{idx}]")
+    if not isinstance(access_nodes_raw, list) or not access_nodes_raw:
+        raise ConfigError(f"bngs[{idx}].access-nodes must be a non-empty list")
+    access_nodes = [_normalize_access_node(item, bng_id, i) for i, item in enumerate(access_nodes_raw, start=1)]
+
+    env_overrides = raw.get("environment") or {}
+    if not isinstance(env_overrides, dict):
+        raise ConfigError(f"bngs[{idx}].environment must be a mapping when provided")
+
+    return {
+        "bng_id": bng_id,
+        "bng_node_name": bng_id,
+        "subscriber_iface": str(iface["subscriber"]),
+        "upstream_iface": str(iface["upstream"]),
+        "dhcp_uplink_iface": str(iface["dhcp-uplink"]),
+        "subscriber_cidr": str(ipv4["subscriber-cidr"]),
+        "upstream_cidr": str(ipv4["upstream-cidr"]),
+        "upstream_ip": _cidr_ip(str(ipv4["upstream-cidr"])),
+        "dhcp_uplink_cidr": str(ipv4["dhcp-uplink-cidr"]),
+        "default_gw": str(ipv4["default-gw"]),
+        "nat_source_cidr": str(ipv4["nat-source-cidr"]),
+        "services": {str(k): str(v) for k, v in services.items()},
+        "environment": {str(k): str(v) for k, v in env_overrides.items()},
+        "access_nodes": access_nodes,
     }
 
 
@@ -155,234 +214,273 @@ def load_and_validate_config(config_path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ConfigError("Top-level config must be a mapping")
 
-    bngs = _require(raw, "bngs", "config")
-    if not isinstance(bngs, list) or not bngs:
+    shared_raw = raw.get("shared") or {}
+    if not isinstance(shared_raw, dict):
+        raise ConfigError("config.shared must be a mapping when provided")
+
+    upstream_shared = shared_raw.get("upstream") or {}
+    if not isinstance(upstream_shared, dict):
+        raise ConfigError("config.shared.upstream must be a mapping when provided")
+    mgmt_shared = shared_raw.get("mgmt") or {}
+    if not isinstance(mgmt_shared, dict):
+        raise ConfigError("config.shared.mgmt must be a mapping when provided")
+
+    upstream_cfg = {
+        "wan-node-name": str(upstream_shared.get("wan-node-name", "wan")),
+        "upstream-node-name": str(upstream_shared.get("upstream-node-name", "upstream")),
+        "internet-iface": str(upstream_shared.get("internet-iface", "eth11")),
+        "internet-macvlan-parent": str(upstream_shared.get("internet-macvlan-parent", "enp1s0")),
+        "mgmt-ip-cidr": str(upstream_shared.get("mgmt-ip-cidr", "198.18.0.254/24")),
+        "mgmt-nat-source-cidr": str(upstream_shared.get("mgmt-nat-source-cidr", "198.18.0.0/24")),
+    }
+
+    mgmt_cfg = {
+        "node-name": str(mgmt_shared.get("node-name", "mgmt")),
+        "static-endpoints": mgmt_shared.get(
+            "static-endpoints",
+            [
+                "upstream:eth2",
+                "kea:eth1",
+                "radius:eth1",
+                "radius_pg:eth1",
+                "dhcp_pg:eth1",
+                "redis:eth1",
+                "oss_pg:eth1",
+                "bng_ingestor:eth1",
+                "frontend:eth1",
+                "backend:eth1",
+            ],
+        ),
+    }
+    if not isinstance(mgmt_cfg["static-endpoints"], list) or not all(
+        isinstance(x, str) and ":" in x for x in mgmt_cfg["static-endpoints"]
+    ):
+        raise ConfigError("config.shared.mgmt.static-endpoints must be a list of '<node>:<iface>' strings")
+
+    bngs_raw = _require(raw, "bngs", "config")
+    if not isinstance(bngs_raw, list) or not bngs_raw:
         raise ConfigError("config.bngs must be a non-empty list")
-    if len(bngs) != 1:
-        raise ConfigError("Current generator supports exactly one BNG entry")
 
-    bng = bngs[0]
-    if not isinstance(bng, dict):
-        raise ConfigError("bngs[0] must be a mapping")
+    bngs = [_normalize_bng(item, i) for i, item in enumerate(bngs_raw)]
 
-    bng_id = _require(bng, "bng-id", "bngs[0]")
-    if not isinstance(bng_id, str) or not bng_id.strip():
-        raise ConfigError("bngs[0].bng-id must be a non-empty string")
-
-    topo = _require(bng, "topology", "bngs[0]")
-    iface = _require(topo, "interfaces", "bngs[0].topology")
-    ipv4 = _require(topo, "ipv4", "bngs[0].topology")
-    services = _require(topo, "services", "bngs[0].topology")
-
-    sub_iface = _require(iface, "subscriber", "bngs[0].topology.interfaces")
-    up_iface = _require(iface, "upstream", "bngs[0].topology.interfaces")
-    dhcp_up_iface = _require(iface, "dhcp-uplink", "bngs[0].topology.interfaces")
-
-    sub_cidr = _require(ipv4, "subscriber-cidr", "bngs[0].topology.ipv4")
-    up_cidr = _require(ipv4, "upstream-cidr", "bngs[0].topology.ipv4")
-    dhcp_up_cidr = _require(ipv4, "dhcp-uplink-cidr", "bngs[0].topology.ipv4")
-    default_gw = _require(ipv4, "default-gw", "bngs[0].topology.ipv4")
-    nat_source_cidr = _require(ipv4, "nat-source-cidr", "bngs[0].topology.ipv4")
-
-    for key in [
-        "dhcp-server-ip",
-        "radius-server-ip",
-        "nas-ip",
-        "redis-host",
-        "oss-api-url",
-        "kea-ctrl-url",
-    ]:
-        _require(services, key, "bngs[0].topology.services")
-
-    access_nodes_raw = _require(bng, "access-nodes", "bngs[0]")
-    if not isinstance(access_nodes_raw, list) or not access_nodes_raw:
-        raise ConfigError("bngs[0].access-nodes must be a non-empty list")
-    if len(access_nodes_raw) > 2:
-        raise ConfigError("Current BNG entrypoint supports at most 2 access node routes")
-
-    access_nodes = [_normalize_access_node(item, str(bng_id), i) for i, item in enumerate(access_nodes_raw, start=1)]
-
+    seen_bng: set[str] = set()
     seen_remote: set[str] = set()
     seen_container: set[str] = set()
     seen_subnets: set[str] = set()
-    for node in access_nodes:
-        if node["remote_id"] in seen_remote:
-            raise ConfigError(f"Duplicate remote-id: {node['remote_id']}")
-        if node["container_name"] in seen_container:
-            raise ConfigError(f"Duplicate access node container-name: {node['container_name']}")
-        if node["dhcp_subnet"] in seen_subnets:
-            raise ConfigError(f"Duplicate DHCP subnet across access nodes: {node['dhcp_subnet']}")
-        seen_remote.add(node["remote_id"])
-        seen_container.add(node["container_name"])
-        seen_subnets.add(node["dhcp_subnet"])
 
-    env_overrides = bng.get("environment") or {}
-    if not isinstance(env_overrides, dict):
-        raise ConfigError("bngs[0].environment must be a mapping when provided")
+    for bng in bngs:
+        if bng["bng_id"] in seen_bng:
+            raise ConfigError(f"Duplicate bng-id: {bng['bng_id']}")
+        seen_bng.add(bng["bng_id"])
+
+        for node in bng["access_nodes"]:
+            if node["remote_id"] in seen_remote:
+                raise ConfigError(f"Duplicate remote-id across all BNGs: {node['remote_id']}")
+            if node["container_name"] in seen_container:
+                raise ConfigError(f"Duplicate access node container-name: {node['container_name']}")
+            if node["dhcp_subnet"] in seen_subnets:
+                raise ConfigError(f"Duplicate DHCP subnet across access nodes: {node['dhcp_subnet']}")
+            seen_remote.add(node["remote_id"])
+            seen_container.add(node["container_name"])
+            seen_subnets.add(node["dhcp_subnet"])
+
+    # Shared upstream eth1 model: all BNG upstream IPs must be on the same network + gateway.
+    first_up = ipaddress.ip_interface(bngs[0]["upstream_cidr"])
+    first_net = first_up.network
+    first_gw = bngs[0]["default_gw"]
+    for bng in bngs[1:]:
+        up = ipaddress.ip_interface(bng["upstream_cidr"])
+        if up.network != first_net:
+            raise ConfigError(
+                f"All BNG upstream-cidr must be in same network (shared upstream:eth1). "
+                f"'{bng['bng_id']}' has {up.network}, expected {first_net}"
+            )
+        if bng["default_gw"] != first_gw:
+            raise ConfigError(
+                f"All BNG default-gw must match shared upstream gateway ({first_gw}); "
+                f"'{bng['bng_id']}' has {bng['default_gw']}"
+            )
 
     return {
-        "bng_id": str(bng_id),
-        "bng_node_name": str(bng_id),
-        "subscriber_iface": str(sub_iface),
-        "upstream_iface": str(up_iface),
-        "dhcp_uplink_iface": str(dhcp_up_iface),
-        "subscriber_cidr": str(sub_cidr),
-        "upstream_cidr": str(up_cidr),
-        "dhcp_uplink_cidr": str(dhcp_up_cidr),
-        "default_gw": str(default_gw),
-        "nat_source_cidr": str(nat_source_cidr),
-        "services": services,
-        "environment": {str(k): str(v) for k, v in env_overrides.items()},
-        "access_nodes": access_nodes,
+        "bngs": bngs,
+        "upstream_network": str(first_net),
+        "upstream_default_gw": first_gw,
+        "upstream_prefix": first_net.prefixlen,
+        "shared": {
+            "upstream": upstream_cfg,
+            "mgmt": mgmt_cfg,
+        },
     }
-
-
-def _relay_exec(node: dict[str, Any]) -> list[str]:
-    iface_list = [f"eth{i}" for i in range(1, node["iface_count"] + 1)]
-    wait_clause = " && ".join(f"ip link show {iface} >/dev/null 2>&1" for iface in iface_list)
-    up_clause = " && ".join(f"ip link set {iface} up" for iface in iface_list)
-
-    cmds = [
-        f"sh -c \"for i in $(seq 1 50); do {wait_clause} && break; sleep 0.2; done\"",
-    ]
-
-    subscriber_ifaces = node["subscriber_ifaces"]
-    if len(subscriber_ifaces) > 1:
-        cmds.extend(
-            [
-                "sh -c \"ip link add br0 type bridge 2>/dev/null || true\"",
-                f"sh -c \"{up_clause}\"",
-                "sh -c \"" + " && ".join(f"ip link set {iface} master br0" for iface in subscriber_ifaces) + "\"",
-                "sh -c \"ip link set br0 up\"",
-                f"sh -c \"ip addr replace {node['dhcp_addr']}/{_cidr_prefix(node['dhcp_subnet'])} dev br0\"",
-            ]
-        )
-    else:
-        sub = subscriber_ifaces[0]
-        cmds.extend(
-            [
-                f"sh -c \"{up_clause}\"",
-                f"sh -c \"ip addr replace {node['dhcp_addr']}/{_cidr_prefix(node['dhcp_subnet'])} dev {sub}\"",
-            ]
-        )
-
-    cmds.extend(
-        [
-            f"sh -c \"ip addr replace {node['uplink_cidr']} dev {node['uplink_iface']}\"",
-            f"sh -c \"ip route replace default via {node['uplink_default_gw']} dev {node['uplink_iface']}\"",
-            "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\"",
-            "sh -c \"ip link set eth0 down || true\"",
-        ]
-    )
-
-    return cmds
 
 
 def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
-    access_nodes = []
-    hosts = []
-    host_links = []
+    shared_upstream = cfg["shared"]["upstream"]
+    shared_mgmt = cfg["shared"]["mgmt"]
+    host_nodes: list[dict[str, str]] = []
+    access_nodes: list[dict[str, Any]] = []
+    agg_nodes: list[dict[str, str]] = []
+    bng_nodes: list[dict[str, Any]] = []
 
-    for idx, node in enumerate(cfg["access_nodes"], start=1):
-        n = dict(node)
-        n["agg_iface"] = f"eth{idx}"
-        n["relay_exec"] = _relay_exec(node)
-        n["uplink_ip"] = _cidr_ip(node["uplink_cidr"])
-        n["subnet_prefix"] = _cidr_prefix(node["dhcp_subnet"])
-        n["circuit_id_map"] = ",".join(
-            f"{iface}=1/0/{_parse_iface_index(iface, node['remote_id'])}" for iface in node["subscriber_ifaces"]
+    links: list[dict[str, str]] = []
+
+    all_access_nodes: list[dict[str, Any]] = []
+    radius_clients: list[dict[str, str]] = []
+    radius_clients_by_ip: dict[str, dict[str, str]] = {}
+
+    mgmt_links: list[str] = []
+
+    for bng_idx, bng in enumerate(cfg["bngs"], start=1):
+        agg_name = f"agg-{bng['bng_id']}"
+        agg_nodes.append({"name": agg_name})
+
+        # Access nodes + auto-hosts + links
+        for access_idx, node in enumerate(bng["access_nodes"], start=1):
+            node_ctx = dict(node)
+            node_ctx["agg_name"] = agg_name
+            node_ctx["agg_iface"] = f"eth{access_idx}"
+            node_ctx["wait_clause"] = " && ".join(
+                f"ip link show eth{i} >/dev/null 2>&1" for i in range(1, node["iface_count"] + 1)
+            )
+            node_ctx["up_clause"] = " && ".join(f"ip link set eth{i} up" for i in range(1, node["iface_count"] + 1))
+            node_ctx["bridge_attach_clause"] = " && ".join(
+                f"ip link set {iface} master br0" for iface in node["subscriber_ifaces"]
+            )
+            node_ctx["circuit_id_map"] = ",".join(
+                f"{iface}=1/0/{_parse_iface_index(iface, node['remote_id'])}" for iface in node["subscriber_ifaces"]
+            )
+            access_nodes.append(node_ctx)
+            all_access_nodes.append(node_ctx)
+
+            links.append({
+                "a": f"{node['container_name']}:{node['uplink_iface']}",
+                "b": f"{agg_name}:{node_ctx['agg_iface']}",
+            })
+
+            for iface in node["subscriber_ifaces"]:
+                host_name = f"h-{node['remote_id']}-{iface}"
+                host_nodes.append(
+                    {
+                        "name": host_name,
+                        "mac": _deterministic_mac(f"{bng['bng_id']}/{node['remote_id']}/{iface}"),
+                    }
+                )
+                links.append({"a": f"{host_name}:eth1", "b": f"{node['container_name']}:{iface}"})
+
+        # BNG env and exec
+        bng_env: dict[str, str] = {
+            "BNG_IDENTIFIER": bng["bng_id"],
+            "BNG_SUBSCRIBER_IFACE": bng["subscriber_iface"],
+            "BNG_UPLINK_IFACE": bng["upstream_iface"],
+            "BNG_DHCP_UPLINK_IFACE": bng["dhcp_uplink_iface"],
+            "BNG_SUBSCRIBER_IP_CIDR": bng["subscriber_cidr"],
+            "BNG_UPLINK_IP_CIDR": bng["upstream_cidr"],
+            "BNG_DHCP_UPLINK_IP_CIDR": bng["dhcp_uplink_cidr"],
+            "BNG_DEFAULT_GW": bng["default_gw"],
+            "BNG_NAT_SOURCE_CIDR": bng["nat_source_cidr"],
+            "BNG_DHCP_SERVER_IP": bng["services"]["dhcp-server-ip"],
+            "BNG_RADIUS_SERVER_IP": bng["services"]["radius-server-ip"],
+            "BNG_NAS_IP": bng["services"]["nas-ip"],
+            "BNG_REDIS_HOST": bng["services"]["redis-host"],
+            "BNG_OSS_API_URL": bng["services"]["oss-api-url"],
+            "BNG_KEA_CTRL_URL": bng["services"]["kea-ctrl-url"],
+        }
+        for i, node in enumerate(bng["access_nodes"], start=1):
+            bng_env[f"BNG_RELAY{i}_SUBNET_CIDR"] = node["bng_route_subnet"]
+            bng_env[f"BNG_RELAY{i}_NEXT_HOP"] = node["bng_route_next_hop"]
+        bng_env.update(bng["environment"])
+
+        bng_exec = [
+            (
+                f"sh -c \"for i in $(seq 1 50); do ip link show {bng['subscriber_iface']} >/dev/null 2>&1 && "
+                f"ip link show {bng['upstream_iface']} >/dev/null 2>&1 && "
+                f"ip link show {bng['dhcp_uplink_iface']} >/dev/null 2>&1 && break; sleep 0.2; done; "
+                "PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py --bng-id $BNG_IDENTIFIER "
+                ">>/proc/1/fd/1 2>>/proc/1/fd/2 &\""
+            ),
+            "sh -c \"coad >/proc/1/fd/1 2>/proc/1/fd/2 &\"",
+            "sh -c \"iperf3 -s -D\"",
+            "sh -c \"ip link set eth0 down || true\"",
+            f"tc qdisc add dev {bng['subscriber_iface']} root handle 1: htb r2q 100 default 9999",
+            f"tc class add dev {bng['subscriber_iface']} parent 1: classid 1:1 htb rate 1gbit",
+            f"tc class add dev {bng['subscriber_iface']} parent 1:1 classid 1:9999 htb rate 1gbit",
+            f"tc qdisc add dev {bng['upstream_iface']} root handle 1: htb r2q 100 default 9999",
+            f"tc class add dev {bng['upstream_iface']} parent 1: classid 1:1 htb rate 1gbit",
+            f"tc class add dev {bng['upstream_iface']} parent 1:1 classid 1:9999 htb rate 1gbit",
+        ]
+
+        bng_nodes.append({"name": bng["bng_node_name"], "env": bng_env, "exec": bng_exec})
+
+        nas_ip = bng["services"]["nas-ip"]
+        secret = bng["services"].get("radius-client-secret", "testing123")
+        existing = radius_clients_by_ip.get(nas_ip)
+        if existing and existing["secret"] != secret:
+            raise ConfigError(
+                f"Conflicting RADIUS client secret for NAS IP {nas_ip}: "
+                f"{existing['bng_id']} vs {bng['bng_id']}"
+            )
+        if not existing:
+            entry = {"bng_id": bng["bng_id"], "ipaddr": nas_ip, "secret": secret}
+            radius_clients_by_ip[nas_ip] = entry
+            radius_clients.append(entry)
+
+        # agg -> bng subscriber side link
+        links.append(
+            {
+                "a": f"{agg_name}:eth{len(bng['access_nodes']) + 1}",
+                "b": f"{bng['bng_node_name']}:{bng['subscriber_iface']}",
+            }
         )
 
-        access_nodes.append(n)
+        # bng -> wan shared upstream link
+        links.append(
+            {
+                "a": f"{bng['bng_node_name']}:{bng['upstream_iface']}",
+                "b": f"{shared_upstream['wan-node-name']}:eth{bng_idx}",
+            }
+        )
 
-        for iface in node["subscriber_ifaces"]:
-            host_name = f"h-{node['remote_id']}-{iface}"
-            host_mac = _deterministic_mac(f"{cfg['bng_id']}/{node['remote_id']}/{iface}")
-            hosts.append(
-                {
-                    "name": host_name,
-                    "mac": host_mac,
-                    "access_container": node["container_name"],
-                    "access_iface": iface,
-                }
-            )
-            host_links.append({"host": f"{host_name}:eth1", "access": f"{node['container_name']}:{iface}"})
+        # bng -> mgmt link
+        mgmt_links.append(f"{bng['bng_node_name']}:{bng['dhcp_uplink_iface']}")
 
-    bng_env: dict[str, str] = {
-        "BNG_IDENTIFIER": cfg["bng_id"],
-        "BNG_SUBSCRIBER_IFACE": cfg["subscriber_iface"],
-        "BNG_UPLINK_IFACE": cfg["upstream_iface"],
-        "BNG_DHCP_UPLINK_IFACE": cfg["dhcp_uplink_iface"],
-        "BNG_SUBSCRIBER_IP_CIDR": cfg["subscriber_cidr"],
-        "BNG_UPLINK_IP_CIDR": cfg["upstream_cidr"],
-        "BNG_DHCP_UPLINK_IP_CIDR": cfg["dhcp_uplink_cidr"],
-        "BNG_DEFAULT_GW": cfg["default_gw"],
-        "BNG_NAT_SOURCE_CIDR": cfg["nat_source_cidr"],
-        "BNG_DHCP_SERVER_IP": cfg["services"]["dhcp-server-ip"],
-        "BNG_RADIUS_SERVER_IP": cfg["services"]["radius-server-ip"],
-        "BNG_NAS_IP": cfg["services"]["nas-ip"],
-        "BNG_REDIS_HOST": cfg["services"]["redis-host"],
-        "BNG_OSS_API_URL": cfg["services"]["oss-api-url"],
-        "BNG_KEA_CTRL_URL": cfg["services"]["kea-ctrl-url"],
-    }
-    for idx, node in enumerate(access_nodes, start=1):
-        bng_env[f"BNG_RELAY{idx}_SUBNET_CIDR"] = node["bng_route_subnet"]
-        bng_env[f"BNG_RELAY{idx}_NEXT_HOP"] = node["bng_route_next_hop"]
-    bng_env.update(cfg["environment"])
-
-    bng_exec = [
-        (
-            f"sh -c \"for i in $(seq 1 50); do ip link show {cfg['subscriber_iface']} >/dev/null 2>&1 && "
-            f"ip link show {cfg['upstream_iface']} >/dev/null 2>&1 && "
-            f"ip link show {cfg['dhcp_uplink_iface']} >/dev/null 2>&1 && break; sleep 0.2; done; "
-            "PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py --bng-id $BNG_IDENTIFIER "
-            ">>/proc/1/fd/1 2>>/proc/1/fd/2 &\""
-        ),
-        "sh -c \"coad >/proc/1/fd/1 2>/proc/1/fd/2 &\"",
-        "sh -c \"iperf3 -s -D\"",
-        "sh -c \"ip link set eth0 down || true\"",
-        f"tc qdisc add dev {cfg['subscriber_iface']} root handle 1: htb r2q 100 default 9999",
-        f"tc class add dev {cfg['subscriber_iface']} parent 1: classid 1:1 htb rate 1gbit",
-        f"tc class add dev {cfg['subscriber_iface']} parent 1:1 classid 1:9999 htb rate 1gbit",
-        f"tc qdisc add dev {cfg['upstream_iface']} root handle 1: htb r2q 100 default 9999",
-        f"tc class add dev {cfg['upstream_iface']} parent 1: classid 1:1 htb rate 1gbit",
-        f"tc class add dev {cfg['upstream_iface']} parent 1:1 classid 1:9999 htb rate 1gbit",
-    ]
-
-    upstream_exec = [
-        "apk add --no-cache iptables dhcpcd curl iperf3 ethtool",
-        "dhcpcd eth11",
-        "sleep 5",
-        "sysctl -w net.ipv4.ip_forward=1",
-        "ip link set eth1 up",
-        "ip link set eth2 up",
-        f"ip addr add {cfg['default_gw']}/{_cidr_prefix(cfg['upstream_cidr'])} dev eth1",
-        "ip addr add 198.18.0.254/24 dev eth2",
-        "iptables -t nat -A POSTROUTING -s 198.18.0.0/24 -o eth11 -j MASQUERADE",
-    ]
-    bng_uplink_ip = _cidr_ip(cfg["upstream_cidr"])
-    for node in access_nodes:
-        upstream_exec.append(f"iptables -t nat -A POSTROUTING -s {node['dhcp_subnet']} -o eth11 -j MASQUERADE")
-    for node in access_nodes:
-        upstream_exec.append(f"ip route replace {node['dhcp_subnet']} via {bng_uplink_ip}")
-    upstream_exec.extend(
-        [
-            "sh -c \"ip link set eth0 down || true\"",
-            "sh -c \"iperf3 -s -D\"",
-        ]
+    # wan -> upstream link on next port after all bngs
+    links.append(
+        {
+            "a": f"{shared_upstream['wan-node-name']}:eth{len(cfg['bngs']) + 1}",
+            "b": f"{shared_upstream['upstream-node-name']}:eth1",
+        }
     )
 
-    agg_bng_iface = f"eth{len(access_nodes) + 1}"
+    # mgmt links with dynamic ports
+    mgmt_port = 1
+    for endpoint in mgmt_links:
+        links.append({"a": endpoint, "b": f"{shared_mgmt['node-name']}:eth{mgmt_port}"})
+        mgmt_port += 1
+
+    for endpoint in shared_mgmt["static-endpoints"]:
+        links.append({"a": endpoint, "b": f"{shared_mgmt['node-name']}:eth{mgmt_port}"})
+        mgmt_port += 1
+
+    # upstream internet macvlan
+    links.append(
+        {
+            "a": f"{shared_upstream['upstream-node-name']}:{shared_upstream['internet-iface']}",
+            "b": f"macvlan:{shared_upstream['internet-macvlan-parent']}",
+        }
+    )
 
     return {
-        "bng": cfg,
-        "bng_env": bng_env,
-        "bng_exec": bng_exec,
-        "upstream_exec": upstream_exec,
-        "hosts": hosts,
-        "host_links": host_links,
+        "bngs": cfg["bngs"],
+        "host_nodes": host_nodes,
         "access_nodes": access_nodes,
-        "agg_bng_iface": agg_bng_iface,
+        "agg_nodes": agg_nodes,
+        "bng_nodes": bng_nodes,
+        "links": links,
+        "mgmt_port_count": mgmt_port,
+        "all_access_nodes": all_access_nodes,
+        "radius_clients": radius_clients,
+        "shared": cfg["shared"],
+        "upstream_default_gw": cfg["upstream_default_gw"],
+        "upstream_prefix": cfg["upstream_prefix"],
     }
 
 
@@ -413,6 +511,7 @@ def generate(cfg: dict[str, Any]) -> None:
     render_to_file(TOPOLOGY_TEMPLATE_PATH, TOPOLOGY_OUTPUT_PATH, ctx, env)
     render_to_file(KEA_TEMPLATE_PATH, KEA_OUTPUT_PATH, ctx, env)
     render_to_file(OSS_SEED_TEMPLATE_PATH, OSS_SEED_OUTPUT_PATH, ctx, env)
+    render_to_file(RADIUS_CLIENTS_TEMPLATE_PATH, RADIUS_CLIENTS_OUTPUT_PATH, ctx, env)
 
 
 
@@ -436,7 +535,7 @@ def main() -> int:
         print(f"Config validation successful: {cfg_path}")
         return 0
 
-    for path in [TOPOLOGY_TEMPLATE_PATH, KEA_TEMPLATE_PATH, OSS_SEED_TEMPLATE_PATH]:
+    for path in [TOPOLOGY_TEMPLATE_PATH, KEA_TEMPLATE_PATH, OSS_SEED_TEMPLATE_PATH, RADIUS_CLIENTS_TEMPLATE_PATH]:
         if not path.exists():
             print(f"Config error: template file not found: {path}")
             return 1
@@ -445,6 +544,7 @@ def main() -> int:
     print(f"Rendered {TOPOLOGY_OUTPUT_PATH} from {TOPOLOGY_TEMPLATE_PATH}")
     print(f"Rendered {KEA_OUTPUT_PATH} from {KEA_TEMPLATE_PATH}")
     print(f"Rendered {OSS_SEED_OUTPUT_PATH} from {OSS_SEED_TEMPLATE_PATH}")
+    print(f"Rendered {RADIUS_CLIENTS_OUTPUT_PATH} from {RADIUS_CLIENTS_TEMPLATE_PATH}")
     return 0
 
 

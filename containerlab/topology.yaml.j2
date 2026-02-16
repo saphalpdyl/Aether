@@ -2,7 +2,7 @@ name: isp-lab
 
 topology:
   nodes:
-{% for host in hosts %}
+{% for host in host_nodes %}
     {{ host.name }}:
       kind: linux
       image: lab-host
@@ -22,34 +22,54 @@ topology:
         RELAY_UPLINK_IP_CIDR: {{ node.uplink_cidr | tojson }}
         RELAY_DEFAULT_GW: {{ node.uplink_default_gw | tojson }}
       exec:
-{% for cmd in node.relay_exec %}
-        - {{ cmd | tojson }}
-{% endfor %}
+        - {{ ("sh -c \"for i in $(seq 1 50); do " ~ node.wait_clause ~ " && break; sleep 0.2; done\"") | tojson }}
+{% if node.subscriber_ifaces | length > 1 %}
+        - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
+        - {{ ("sh -c \"" ~ node.up_clause ~ "\"") | tojson }}
+        - {{ ("sh -c \"" ~ node.bridge_attach_clause ~ "\"") | tojson }}
+        - "sh -c \"ip link set br0 up\""
+        - {{ ("sh -c \"ip addr replace " ~ node.dhcp_addr ~ "/" ~ node.subnet_prefix ~ " dev br0\"") | tojson }}
+{% else %}
+        - {{ ("sh -c \"" ~ node.up_clause ~ "\"") | tojson }}
+        - {{ ("sh -c \"ip addr replace " ~ node.dhcp_addr ~ "/" ~ node.subnet_prefix ~ " dev " ~ node.subscriber_ifaces[0] ~ "\"") | tojson }}
+{% endif %}
+        - {{ ("sh -c \"ip addr replace " ~ node.uplink_cidr ~ " dev " ~ node.uplink_iface ~ "\"") | tojson }}
+        - {{ ("sh -c \"ip route replace default via " ~ node.uplink_default_gw ~ " dev " ~ node.uplink_iface ~ "\"") | tojson }}
+        - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
+        - "sh -c \"ip link set eth0 down || true\""
 
 {% endfor %}
-    agg:
+{% for agg in agg_nodes %}
+    {{ agg.name }}:
       kind: linux
       image: lab-agg
 
-    {{ bng.bng_node_name }}:
+{% endfor %}
+{% for bng in bng_nodes %}
+    {{ bng.name }}:
       kind: linux
       image: lab-bng
       env:
-{% for key, value in bng_env.items() %}
+{% for key, value in bng.env.items() %}
         {{ key }}: {{ value | tojson }}
 {% endfor %}
       exec:
-{% for cmd in bng_exec %}
+{% for cmd in bng.exec %}
         - {{ cmd | tojson }}
 {% endfor %}
 
-    mgmt:
+{% endfor %}
+    {{ shared.upstream["wan-node-name"] }}:
+      kind: linux
+      image: lab-agg
+
+    {{ shared.mgmt["node-name"] }}:
       kind: linux
       image: alpine:latest
       exec:
         - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
         - "sh -c \"ip link set br0 up\""
-        - "sh -c \"for i in $(seq 1 11); do ip link set eth${i} up; ip link set eth${i} master br0; done\""
+        - "sh -c \"for i in $(seq 1 {{ mgmt_port_count }}); do ip link set eth${i} up; ip link set eth${i} master br0; done\""
 
     kea:
       kind: linux
@@ -183,36 +203,31 @@ topology:
         - "sh -c \"for i in $(seq 1 60); do python3 -c 'import socket; s=socket.create_connection((\\\"198.18.0.11\\\",5432),2); s.close()' 2>/dev/null && break; sleep 1; done\""
         - "sh -c \"uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
 
-    upstream:
+    {{ shared.upstream["upstream-node-name"] }}:
       kind: linux
       image: alpine:latest
       exec:
-{% for cmd in upstream_exec %}
-        - {{ cmd | tojson }}
+        - "apk add --no-cache iptables dhcpcd curl iperf3 ethtool"
+        - {{ ("dhcpcd " ~ shared.upstream["internet-iface"]) | tojson }}
+        - "sleep 5"
+        - "sysctl -w net.ipv4.ip_forward=1"
+        - "ip link set eth1 up"
+        - "ip link set eth2 up"
+        - {{ ("ip addr add " ~ upstream_default_gw ~ "/" ~ upstream_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip addr add " ~ shared.upstream["mgmt-ip-cidr"] ~ " dev eth2") | tojson }}
+        - {{ ("iptables -t nat -A POSTROUTING -s " ~ shared.upstream["mgmt-nat-source-cidr"] ~ " -o " ~ shared.upstream["internet-iface"] ~ " -j MASQUERADE") | tojson }}
+{% for node in all_access_nodes %}
+        - {{ ("iptables -t nat -A POSTROUTING -s " ~ node.dhcp_subnet ~ " -o " ~ shared.upstream["internet-iface"] ~ " -j MASQUERADE") | tojson }}
 {% endfor %}
+{% for bng in bngs %}
+{% for node in bng.access_nodes %}
+        - {{ ("ip route replace " ~ node.dhcp_subnet ~ " via " ~ bng.upstream_ip) | tojson }}
+{% endfor %}
+{% endfor %}
+        - "sh -c \"ip link set eth0 down || true\""
+        - "sh -c \"iperf3 -s -D\""
 
   links:
-{% for link in host_links %}
-    - endpoints: [{{ link.host | tojson }}, {{ link.access | tojson }}]
+{% for link in links %}
+    - endpoints: [{{ link.a | tojson }}, {{ link.b | tojson }}]
 {% endfor %}
-
-{% for node in access_nodes %}
-    - endpoints: [{{ (node.container_name ~ ':' ~ node.uplink_iface) | tojson }}, {{ ('agg:' ~ node.agg_iface) | tojson }}]
-{% endfor %}
-
-    - endpoints: [{{ ('agg:' ~ agg_bng_iface) | tojson }}, {{ (bng.bng_node_name ~ ':' ~ bng.subscriber_iface) | tojson }}]
-    - endpoints: [{{ (bng.bng_node_name ~ ':' ~ bng.upstream_iface) | tojson }}, "upstream:eth1"]
-
-    - endpoints: [{{ (bng.bng_node_name ~ ':' ~ bng.dhcp_uplink_iface) | tojson }}, "mgmt:eth1"]
-    - endpoints: ["upstream:eth2", "mgmt:eth2"]
-    - endpoints: ["kea:eth1", "mgmt:eth3"]
-    - endpoints: ["radius:eth1", "mgmt:eth4"]
-    - endpoints: ["radius_pg:eth1", "mgmt:eth5"]
-    - endpoints: ["dhcp_pg:eth1", "mgmt:eth6"]
-    - endpoints: ["redis:eth1", "mgmt:eth7"]
-    - endpoints: ["oss_pg:eth1", "mgmt:eth8"]
-    - endpoints: ["bng_ingestor:eth1", "mgmt:eth9"]
-    - endpoints: ["frontend:eth1", "mgmt:eth10"]
-    - endpoints: ["backend:eth1", "mgmt:eth11"]
-
-    - endpoints: ["upstream:eth11", "macvlan:enp1s0"]

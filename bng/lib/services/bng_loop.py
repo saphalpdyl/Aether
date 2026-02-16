@@ -43,7 +43,7 @@ async def bng_event_loop(
     bng_health_check_interval: int = 5,
     radius_server_ip: str = "198.18.0.2",
     radius_secret: str = __RADIUS_SECRET,
-    nas_ip: str = "198.18.0.1",
+    nas_ip: str,
     nas_port_id: str = "eth1",
     bng_id: str = "bng-default",
     bng_instance_id: str = "",

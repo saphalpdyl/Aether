@@ -18,7 +18,7 @@ UPLINK_IP_CIDR = os.getenv("BNG_UPLINK_IP_CIDR", "192.0.2.1/30")
 DHCP_UPLINK_IP_CIDR = os.getenv("BNG_DHCP_UPLINK_IP_CIDR", "198.18.0.1/24")
 DHCP_SERVER_IP = os.getenv("BNG_DHCP_SERVER_IP", "198.18.0.3")
 RADIUS_SERVER_IP = os.getenv("BNG_RADIUS_SERVER_IP", "198.18.0.2")
-NAS_IP = os.getenv("BNG_NAS_IP", "198.18.0.1")
+NAS_IP = os.getenv("BNG_NAS_IP", "")
 OSS_API_URL = os.getenv("BNG_OSS_API_URL", "http://198.18.0.21:8000")
 
 # Redis configuration

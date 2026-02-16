@@ -68,6 +68,6 @@ INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
 
 -- Seed access routers
 INSERT INTO access_routers (router_name, giaddr, bng_id, total_interfaces) VALUES
-{% for node in access_nodes %}
-    ('{{ node.remote_id }}', '{{ node.uplink_ip }}', '{{ bng.bng_id }}', {{ node.iface_count }}){% if not loop.last %},{% else %};{% endif %}
+{% for node in all_access_nodes %}
+    ('{{ node.remote_id }}', '{{ node.uplink_ip }}', '{{ node.bng_id }}', {{ node.iface_count }}){% if not loop.last %},{% else %};{% endif %}
 {% endfor %}

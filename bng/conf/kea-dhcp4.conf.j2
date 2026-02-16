@@ -19,7 +19,7 @@
     "renew-timer": 60,
     "rebind-timer": 90,
     "subnet4": [
-{% for node in access_nodes %}
+{% for node in all_access_nodes %}
       {
         "id": {{ loop.index }},
         "subnet": "{{ node.dhcp_subnet }}",

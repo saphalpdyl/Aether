@@ -12,10 +12,6 @@ uplink_ip_cidr="${BNG_UPLINK_IP_CIDR:-192.0.2.1/30}"
 dhcp_uplink_ip_cidr="${BNG_DHCP_UPLINK_IP_CIDR:-198.18.0.1/24}"
 default_gw="${BNG_DEFAULT_GW:-192.0.2.2}"
 nat_source_cidr="${BNG_NAT_SOURCE_CIDR:-10.0.0.0/24}"
-relay1_subnet_cidr="${BNG_RELAY1_SUBNET_CIDR:-10.0.1.0/26}"
-relay1_next_hop="${BNG_RELAY1_NEXT_HOP:-10.0.0.2}"
-relay2_subnet_cidr="${BNG_RELAY2_SUBNET_CIDR:-10.0.1.64/26}"
-relay2_next_hop="${BNG_RELAY2_NEXT_HOP:-10.0.0.3}"
 
 # Wait for interfaces to appear
 for i in $(seq 1 30); do
@@ -37,8 +33,15 @@ ip addr add "$uplink_ip_cidr" dev "$uplink_if"
 ip addr add "$dhcp_uplink_ip_cidr" dev "$dhcp_uplink_if"
 ip route replace default via "$default_gw" dev "$uplink_if"
 # Routes to DHCP relay gi-addresses and client subnets
-ip route add "$relay1_subnet_cidr" via "$relay1_next_hop" dev "$subscriber_if" || true
-ip route add "$relay2_subnet_cidr" via "$relay2_next_hop" dev "$subscriber_if" || true
+i=1
+while [ "$i" -le 64 ]; do
+  eval relay_subnet_cidr=\${BNG_RELAY${i}_SUBNET_CIDR:-}
+  eval relay_next_hop=\${BNG_RELAY${i}_NEXT_HOP:-}
+  if [ -n "$relay_subnet_cidr" ] && [ -n "$relay_next_hop" ]; then
+    ip route add "$relay_subnet_cidr" via "$relay_next_hop" dev "$subscriber_if" || true
+  fi
+  i=$((i + 1))
+done
 sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
 
 # MSS clamping - standard ISP practice to prevent oversized TCP segments

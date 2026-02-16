@@ -1,3 +1,33 @@
+shared:
+  upstream:
+    # L2 fan-in node that connects all BNG uplinks before reaching upstream router.
+    wan-node-name: wan
+    # Upstream router/container connected to internet via macvlan.
+    upstream-node-name: upstream
+    # Interface on upstream node that reaches host/internet.
+    internet-iface: eth11
+    internet-macvlan-parent: enp1s0
+    # Upstream node IP on management LAN.
+    mgmt-ip-cidr: 198.18.0.254/24
+    # Source CIDR to NAT for management/services LAN.
+    mgmt-nat-source-cidr: 198.18.0.0/24
+
+  mgmt:
+    # Bridge node used by services and BNG DHCP-uplink interfaces.
+    node-name: mgmt
+    # Extra endpoints attached to management bridge after all BNG DHCP-uplink links.
+    static-endpoints:
+      - upstream:eth2
+      - kea:eth1
+      - radius:eth1
+      - radius_pg:eth1
+      - dhcp_pg:eth1
+      - redis:eth1
+      - oss_pg:eth1
+      - bng_ingestor:eth1
+      - frontend:eth1
+      - backend:eth1
+
 bngs:
   - bng-id: bng-01
 
@@ -9,7 +39,7 @@ bngs:
 
       ipv4:
         subscriber-cidr: 10.0.0.1/24
-        upstream-cidr: 192.0.2.1/30
+        upstream-cidr: 192.0.2.1/24
         dhcp-uplink-cidr: 198.18.0.1/24
         default-gw: 192.0.2.2
         nat-source-cidr: 10.0.0.0/24
@@ -28,8 +58,8 @@ bngs:
 
           topology:
             interfaces:
-              count: 3
-              subscriber-ifaces: [eth1, eth2]
+              count: 6
+              subscriber-ifaces: [eth1, eth2, eth4, eth5, eth6]
               uplink-iface: eth3
 
           dhcp:
@@ -52,8 +82,8 @@ bngs:
 
           topology:
             interfaces:
-              count: 2
-              subscriber-ifaces: [eth1]
+              count: 4
+              subscriber-ifaces: [eth1, eth3, eth4]
               uplink-iface: eth2
 
           dhcp:
@@ -70,3 +100,147 @@ bngs:
           bng-route:
             subnet: 10.0.1.64/26
             next-hop: 10.0.0.3
+
+  - bng-id: bng-02
+
+    topology:
+      interfaces:
+        subscriber: eth1
+        upstream: eth2
+        dhcp-uplink: eth3
+
+      ipv4:
+        subscriber-cidr: 10.0.2.1/24
+        upstream-cidr: 192.0.2.3/24
+        dhcp-uplink-cidr: 198.18.0.101/24
+        default-gw: 192.0.2.2
+        nat-source-cidr: 10.0.2.0/24
+
+      services:
+        dhcp-server-ip: 198.18.0.3
+        radius-server-ip: 198.18.0.2
+        nas-ip: 198.18.0.101
+        redis-host: 198.18.0.10
+        oss-api-url: http://198.18.0.21:8000
+        kea-ctrl-url: http://198.18.0.3:6772
+
+    access-nodes:
+      - node-config:
+          remote-id: cstm-relay-11
+
+          topology:
+            interfaces:
+              count: 3
+              subscriber-ifaces: [eth1, eth2]
+              uplink-iface: eth3
+
+          dhcp:
+            ipv4:
+              addr: 10.0.3.1
+              subnet: 10.0.3.0/26
+              pool-start: 10.0.3.10
+              pool-end: 10.0.3.62
+
+          uplink:
+            ipv4-cidr: 10.0.2.2/24
+            default-gw: 10.0.2.1
+
+          bng-route:
+            subnet: 10.0.3.0/26
+            next-hop: 10.0.2.2
+
+      - node-config:
+          remote-id: cstm-relay-12
+
+          topology:
+            interfaces:
+              count: 2
+              subscriber-ifaces: [eth1]
+              uplink-iface: eth2
+
+          dhcp:
+            ipv4:
+              addr: 10.0.3.65
+              subnet: 10.0.3.64/26
+              pool-start: 10.0.3.66
+              pool-end: 10.0.3.126
+
+          uplink:
+            ipv4-cidr: 10.0.2.3/24
+            default-gw: 10.0.2.1
+
+          bng-route:
+            subnet: 10.0.3.64/26
+            next-hop: 10.0.2.3
+
+      - node-config:
+          remote-id: cstm-relay-13
+
+          topology:
+            interfaces:
+              count: 2
+              subscriber-ifaces: [eth1]
+              uplink-iface: eth2
+
+          dhcp:
+            ipv4:
+              addr: 10.0.4.1
+              subnet: 10.0.4.0/26
+              pool-start: 10.0.4.10
+              pool-end: 10.0.4.62
+
+          uplink:
+            ipv4-cidr: 10.0.2.4/24
+            default-gw: 10.0.2.1
+
+          bng-route:
+            subnet: 10.0.4.0/26
+            next-hop: 10.0.2.4
+
+      - node-config:
+          remote-id: cstm-relay-14
+
+          topology:
+            interfaces:
+              count: 2
+              subscriber-ifaces: [eth1]
+              uplink-iface: eth2
+
+          dhcp:
+            ipv4:
+              addr: 10.0.4.65
+              subnet: 10.0.4.64/26
+              pool-start: 10.0.4.66
+              pool-end: 10.0.4.126
+
+          uplink:
+            ipv4-cidr: 10.0.2.5/24
+            default-gw: 10.0.2.1
+
+          bng-route:
+            subnet: 10.0.4.64/26
+            next-hop: 10.0.2.5
+
+      - node-config:
+          remote-id: cstm-relay-15
+
+          topology:
+            interfaces:
+              count: 2
+              subscriber-ifaces: [eth1]
+              uplink-iface: eth2
+
+          dhcp:
+            ipv4:
+              addr: 10.0.4.129
+              subnet: 10.0.4.128/26
+              pool-start: 10.0.4.130
+              pool-end: 10.0.4.190
+
+          uplink:
+            ipv4-cidr: 10.0.2.6/24
+            default-gw: 10.0.2.1
+
+          bng-route:
+            subnet: 10.0.4.128/26
+            next-hop: 10.0.2.6
