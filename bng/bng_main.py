@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import asyncio
+import ipaddress
 import json
 import os
 import uuid
@@ -9,9 +10,24 @@ import redis.asyncio as aioredis
 
 from lib.services.bng import bng_event_loop
 
+SUBSCRIBER_IFACE = os.getenv("BNG_SUBSCRIBER_IFACE", "eth1")
+UPLINK_IFACE = os.getenv("BNG_UPLINK_IFACE", "eth2")
+DHCP_UPLINK_IFACE = os.getenv("BNG_DHCP_UPLINK_IFACE", "eth3")
+SUBSCRIBER_IP_CIDR = os.getenv("BNG_SUBSCRIBER_IP_CIDR", "10.0.0.1/24")
+UPLINK_IP_CIDR = os.getenv("BNG_UPLINK_IP_CIDR", "192.0.2.1/30")
+DHCP_UPLINK_IP_CIDR = os.getenv("BNG_DHCP_UPLINK_IP_CIDR", "198.18.0.1/24")
+DHCP_SERVER_IP = os.getenv("BNG_DHCP_SERVER_IP", "198.18.0.3")
+RADIUS_SERVER_IP = os.getenv("BNG_RADIUS_SERVER_IP", "198.18.0.2")
+NAS_IP = os.getenv("BNG_NAS_IP", "")
+OSS_API_URL = os.getenv("BNG_OSS_API_URL", "http://198.18.0.21:8000")
+
 # Redis configuration
-REDIS_HOST = os.getenv("REDIS_HOST", "192.0.2.10")
+REDIS_HOST = os.getenv("BNG_REDIS_HOST", os.getenv("REDIS_HOST", "198.18.0.10"))
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
+
+def _ip_from_cidr(cidr: str) -> str:
+    return str(ipaddress.ip_interface(cidr).ip)
 
 
 async def wait_for_redis(max_retries=30, delay=2) -> aioredis.Redis:
@@ -30,9 +46,9 @@ async def wait_for_redis(max_retries=30, delay=2) -> aioredis.Redis:
 
 async def run_sniffer(bng_id: str, event_queue: asyncio.PriorityQueue):
     """Start the DHCP sniffer and feed its stdout JSON lines into the priority queue."""
-    # Get uplink MAC
+    # Get DHCP server-facing MAC (mgmt interface)
     proc = await asyncio.create_subprocess_shell(
-        "cat /sys/class/net/eth2/address",
+        f"cat /sys/class/net/{DHCP_UPLINK_IFACE}/address",
         stdout=asyncio.subprocess.PIPE,
     )
     stdout, _ = await proc.communicate()
@@ -46,10 +62,13 @@ async def run_sniffer(bng_id: str, event_queue: asyncio.PriorityQueue):
 
     cmd = [
         "python3", "-u", "/opt/bng/bng_dhcp_sniffer.py",
-        "--client-if", "eth1", "--uplink-if", "eth2",
-        "--server-ip", "192.0.2.3", "--giaddr", "10.0.0.1",
-        "--relay-id", "192.0.2.1",
-        "--src-ip", "192.0.2.1", "--src-mac", bng_uplink_mac,
+        "--client-if", SUBSCRIBER_IFACE,
+        "--uplink-if", DHCP_UPLINK_IFACE,
+        "--server-ip", DHCP_SERVER_IP,
+        "--giaddr", _ip_from_cidr(SUBSCRIBER_IP_CIDR),
+        "--relay-id", NAS_IP,
+        "--src-ip", NAS_IP,
+        "--src-mac", bng_uplink_mac,
         "--log", "/tmp/bng_dhcp_relay.log", "--json",
         "--bng-id", bng_id,
     ]
@@ -98,7 +117,9 @@ async def async_main():
     # Wait for interfaces to exist
     for _ in range(20):
         proc = await asyncio.create_subprocess_shell(
-            "ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1"
+            f"ip link show {SUBSCRIBER_IFACE} >/dev/null 2>&1 && "
+            f"ip link show {UPLINK_IFACE} >/dev/null 2>&1 && "
+            f"ip link show {DHCP_UPLINK_IFACE} >/dev/null 2>&1"
         )
         if await proc.wait() == 0:
             break
@@ -107,7 +128,9 @@ async def async_main():
     # Wait for IPs to be assigned (entrypoint.sh sets these)
     for _ in range(30):
         proc = await asyncio.create_subprocess_shell(
-            "ip -4 addr show eth1 | grep -q '10.0.0.1' && ip -4 addr show eth2 | grep -q '192.0.2.1'"
+            f"ip -4 addr show {SUBSCRIBER_IFACE} | grep -q '{_ip_from_cidr(SUBSCRIBER_IP_CIDR)}' && "
+            f"ip -4 addr show {UPLINK_IFACE} | grep -q '{_ip_from_cidr(UPLINK_IP_CIDR)}' && "
+            f"ip -4 addr show {DHCP_UPLINK_IFACE} | grep -q '{_ip_from_cidr(DHCP_UPLINK_IP_CIDR)}'"
         )
         if await proc.wait() == 0:
             break
@@ -124,9 +147,12 @@ async def async_main():
     print("Starting BNG event loop")
     await bng_event_loop(
         event_queue,
-        iface="eth1",
-        uplink_iface="eth2",
-        nas_port_id="eth1",
+        iface=SUBSCRIBER_IFACE,
+        uplink_iface=UPLINK_IFACE,
+        radius_server_ip=RADIUS_SERVER_IP,
+        nas_ip=NAS_IP,
+        nas_port_id=SUBSCRIBER_IFACE,
+        oss_api_url=OSS_API_URL,
         interim_interval=30,
         bng_id=args.bng_id,
         bng_instance_id=bng_instance_id,

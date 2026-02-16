@@ -1,4 +1,5 @@
 import ipaddress
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -46,9 +47,9 @@ def dhcp_lease_handler(
     event_dispatcher: BNGEventDispatcher,
     traffic_shaper: BNGTrafficShaper,
     iface: str = "eth0",
-    radius_server_ip: str = "192.0.2.2",
+    radius_server_ip: str = "198.18.0.2",
     radius_secret: str = __RADIUS_SECRET,
-    nas_ip: str = "192.0.2.1",
+    nas_ip: str = "198.18.0.1",
     nas_port_id: str = "eth0",
     kea_ctrl_agent_auth_key: str = __KEA_CTRL_AGENT_PASSWORD,
 ) -> DHCPRuntimeState:
@@ -58,7 +59,8 @@ def dhcp_lease_handler(
     sessions_by_session_id: SessionsBySessionIDMap = {}
     tombstones: TombstoneMap = {}
 
-    kea_client = KeaClient(base_url="http://192.0.2.3:6772", auth_key=kea_ctrl_agent_auth_key)
+    kea_ctrl_url = os.getenv("BNG_KEA_CTRL_URL", "http://198.18.0.3:6772")
+    kea_client = KeaClient(base_url=kea_ctrl_url, auth_key=kea_ctrl_agent_auth_key)
     kea_lease_service = KeaLeaseService(kea_client, bng_relay_id=bng_id)
 
     async def handle_dhcp_request(circuit_id: str, remote_id: str, chaddr: str, event: dict):

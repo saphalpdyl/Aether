@@ -1,7 +1,3 @@
-/**
- * Provisioning Console Type Definitions
- */
-
 export interface Plan {
   id: number;
   name: string;
@@ -22,6 +18,17 @@ export interface Customer {
   city: string | null;
   zip_code: string | null;
   state: string | null;
+}
+
+export interface BNG {
+  bng_id: string;
+  bng_instance_id: string;
+  first_seen: string;
+  last_seen: string;
+  is_alive: string;
+  cpu_usage: number | null;
+  mem_usage: number | null;
+  mem_max: number | null;
 }
 
 export interface Router {
@@ -53,24 +60,8 @@ export type DeleteTarget =
   | { type: "customer"; id: number; label: string }
   | { type: "service"; id: number; label: string };
 
-export const statusBadgeVariant: Record<Service["status"], "default" | "secondary" | "destructive"> = {
-  ACTIVE: "default",
-  SUSPENDED: "secondary",
-  TERMINATED: "destructive",
-};
-
-export function parseErrorMessage(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== "object") return fallback;
-  const maybe = payload as { detail?: unknown; error?: unknown; message?: unknown };
-  if (typeof maybe.detail === "string") return maybe.detail;
-  if (typeof maybe.error === "string") return maybe.error;
-  if (typeof maybe.message === "string") return maybe.message;
-  return fallback;
-}
-
-export function buildCircuitIdFromPort(portName: string): string {
-  if (!portName.startsWith("eth")) return "";
-  const idx = Number.parseInt(portName.replace("eth", ""), 10);
-  if (!Number.isFinite(idx) || idx <= 0) return "";
-  return `1/0/${idx}`;
+export interface RouterPortDetails {
+  totalPorts: number;
+  occupiedPorts: number;
+  availablePorts: string[];
 }

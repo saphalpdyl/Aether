@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+ENV RELAY_BR_IP_CIDR=10.0.1.1/26
+ENV RELAY_UPLINK_IP_CIDR=10.0.0.2/24
+ENV RELAY_DEFAULT_GW=10.0.0.1
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     nftables \

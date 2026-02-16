@@ -1,17 +1,19 @@
 """Pydantic models for request/response validation."""
 from typing import Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RouterCreate(BaseModel):
     router_name: str
     giaddr: str
     bng_id: str | None = None
+    total_interfaces: int = Field(default=5, ge=2)
 
 
 class RouterUpdate(BaseModel):
     giaddr: str | None = None
     bng_id: str | None = None
+    total_interfaces: int | None = Field(default=None, ge=2)
 
 
 class PlanCreate(BaseModel):

@@ -1,0 +1,53 @@
+{
+  "Dhcp4": {
+    "control-socket": {
+      "socket-type": "unix",
+      "socket-name": "/run/kea/kea4-ctrl-socket"
+    },
+    "interfaces-config": {
+      "interfaces": ["eth1"]
+    },
+    "lease-database": {
+      "type": "postgresql",
+      "name": "kea_lease_db",
+      "user": "kea",
+      "password": "test",
+      "host": "198.18.0.4",
+      "port": 5432
+    },
+    "valid-lifetime": 120,
+    "renew-timer": 60,
+    "rebind-timer": 90,
+    "subnet4": [
+{% for node in all_access_nodes %}
+      {
+        "id": {{ loop.index }},
+        "subnet": "{{ node.dhcp_subnet }}",
+        "relay": {
+          "ip-addresses": ["{{ node.dhcp_addr }}"]
+        },
+        "pools": [
+          {"pool": "{{ node.pool_start }} - {{ node.pool_end }}"}
+        ],
+        "option-data": [
+          {"name": "routers", "data": "{{ node.dhcp_addr }}"},
+          {"name": "domain-name-servers", "data": "1.1.1.1, 8.8.8.8"}
+        ]
+      }{% if not loop.last %},{% endif %}
+{% endfor %}
+    ],
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output_options": [{"output": "/tmp/kea-dhcp4.log"}],
+        "severity": "DEBUG"
+      }
+    ],
+    "store-extended-info": true,
+    "hooks-libraries": [
+      {
+        "library": "/usr/lib/x86_64-linux-gnu/kea/hooks/libdhcp_lease_cmds.so"
+      }
+    ]
+  }
+}

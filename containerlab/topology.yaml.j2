@@ -1,0 +1,233 @@
+name: isp-lab
+
+topology:
+  nodes:
+{% for host in host_nodes %}
+    {{ host.name }}:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: {{ host.mac | tojson }}
+
+{% endfor %}
+{% for node in access_nodes %}
+    {{ node.container_name }}:
+      kind: linux
+      image: lab-relay
+      env:
+        REMOTE_ID: {{ node.remote_id | tojson }}
+        GIADDR: {{ node.dhcp_addr | tojson }}
+        CIRCUIT_ID_MAP: {{ node.circuit_id_map | tojson }}
+        RELAY_BR_IP_CIDR: {{ (node.dhcp_addr ~ '/' ~ node.subnet_prefix) | tojson }}
+        RELAY_UPLINK_IP_CIDR: {{ node.uplink_cidr | tojson }}
+        RELAY_DEFAULT_GW: {{ node.uplink_default_gw | tojson }}
+      exec:
+        - {{ ("sh -c \"for i in $(seq 1 50); do " ~ node.wait_clause ~ " && break; sleep 0.2; done\"") | tojson }}
+{% if node.subscriber_ifaces | length > 1 %}
+        - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
+        - {{ ("sh -c \"" ~ node.up_clause ~ "\"") | tojson }}
+        - {{ ("sh -c \"" ~ node.bridge_attach_clause ~ "\"") | tojson }}
+        - "sh -c \"ip link set br0 up\""
+        - {{ ("sh -c \"ip addr replace " ~ node.dhcp_addr ~ "/" ~ node.subnet_prefix ~ " dev br0\"") | tojson }}
+{% else %}
+        - {{ ("sh -c \"" ~ node.up_clause ~ "\"") | tojson }}
+        - {{ ("sh -c \"ip addr replace " ~ node.dhcp_addr ~ "/" ~ node.subnet_prefix ~ " dev " ~ node.subscriber_ifaces[0] ~ "\"") | tojson }}
+{% endif %}
+        - {{ ("sh -c \"ip addr replace " ~ node.uplink_cidr ~ " dev " ~ node.uplink_iface ~ "\"") | tojson }}
+        - {{ ("sh -c \"ip route replace default via " ~ node.uplink_default_gw ~ " dev " ~ node.uplink_iface ~ "\"") | tojson }}
+        - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
+        - "sh -c \"ip link set eth0 down || true\""
+
+{% endfor %}
+{% for agg in agg_nodes %}
+    {{ agg.name }}:
+      kind: linux
+      image: lab-agg
+
+{% endfor %}
+{% for bng in bng_nodes %}
+    {{ bng.name }}:
+      kind: linux
+      image: lab-bng
+      env:
+{% for key, value in bng.env.items() %}
+        {{ key }}: {{ value | tojson }}
+{% endfor %}
+      exec:
+{% for cmd in bng.exec %}
+        - {{ cmd | tojson }}
+{% endfor %}
+
+{% endfor %}
+    {{ shared.upstream["wan-node-name"] }}:
+      kind: linux
+      image: lab-agg
+
+    {{ shared.mgmt["node-name"] }}:
+      kind: linux
+      image: alpine:latest
+      exec:
+        - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
+        - "sh -c \"ip link set br0 up\""
+        - "sh -c \"for i in $(seq 1 {{ mgmt_port_count }}); do ip link set eth${i} up; ip link set eth${i} master br0; done\""
+
+    kea:
+      kind: linux
+      image: lab-kea
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.3/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+        - "sh -c \"for i in $(seq 1 60); do pg_isready -h 198.18.0.4 -U kea >/dev/null 2>&1 && break; sleep 0.5; done\""
+        - "sh -c \"kea-admin db-init pgsql -u kea -p test -n kea_lease_db -h 198.18.0.4 || true\""
+        - "mkdir -p /run/kea && chmod 777 /run/kea"
+        - "sh -c \"KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf >/tmp/kea-dhcp4.log 2>&1 &\""
+        - "sh -c \"rm -f /run/kea/kea-ctrl-agent.*.pid\""
+        - "sh -c \"KEA_LOCKFILE_DIR=none kea-ctrl-agent -c /etc/kea/kea-ctrl-agent.conf >/tmp/kea-ctrl-agent.log 2>&1 &\""
+        - "sh -c \"ip link set eth0 down || true\""
+
+    radius:
+      memory: 8Gb
+      kind: linux
+      image: lab-radius
+      exec:
+        - "sh -c \"/opt/radius/entrypoint.sh >/tmp/radius-entry.log 2>&1 &\""
+        - "sh -c \"ip link set eth0 down || true\""
+
+    radius_pg:
+      kind: linux
+      image: lab-radius-pg
+      memory: 8Gb
+      mgmt-ipv4: 172.20.20.11
+      env:
+        POSTGRES_DB: radius
+        POSTGRES_USER: radius
+        POSTGRES_PASSWORD: test
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.6/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+        - "sh -c \"for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U radius >/dev/null 2>&1 && break; sleep 0.5; done\""
+        - "sh -c \"/docker-entrypoint-initdb.d/00-radius-hba.sh || true\""
+        - "sh -c \"pg_ctl -D \\\"$PGDATA\\\" reload || true\""
+
+    dhcp_pg:
+      kind: linux
+      image: lab-dhcp-pg
+      memory: 8Gb
+      mgmt-ipv4: 172.20.20.12
+      env:
+        POSTGRES_DB: kea_lease_db
+        POSTGRES_USER: kea
+        POSTGRES_PASSWORD: test
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.4/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+
+    redis:
+      kind: linux
+      image: lab-redis
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.10/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+        - "sh -c \"ip link set eth0 down || true\""
+
+    oss_pg:
+      kind: linux
+      image: lab-oss-pg
+      memory: 8Gb
+      mgmt-ipv4: 172.20.20.10
+      env:
+        POSTGRES_DB: oss
+        POSTGRES_USER: oss
+        POSTGRES_PASSWORD: oss
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.11/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+        - "sh -c \"for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U oss >/dev/null 2>&1 && break; sleep 0.5; done\""
+        - "sh -c \"/docker-entrypoint-initdb.d/00-oss-hba.sh || true\""
+        - "sh -c \"pg_ctl -D \\\"$PGDATA\\\" reload || true\""
+
+    frontend:
+      kind: linux
+      image: lab-frontend
+      mgmt-ipv4: 172.20.20.20
+      binds:
+        - /home/test/lab/client/src:/app/src
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.20/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+        - "sh -c \"pnpm dev --hostname 0.0.0.0 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
+
+    bng_ingestor:
+      kind: linux
+      image: lab-bng-ingestor
+      env:
+        REDIS_HOST: 198.18.0.10
+        PG_HOST: 198.18.0.11
+        PG_DB: oss
+        PG_USER: oss
+        PG_PASSWORD: oss
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.12/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+        - "sh -c \"ip link set eth0 down || true\""
+
+    backend:
+      kind: linux
+      image: lab-backend
+      mgmt-ipv4: 172.20.20.21
+      env:
+        PG_HOST: 198.18.0.11
+        PG_DB: oss
+        PG_USER: oss
+        PG_PASSWORD: oss
+        RADIUS_PG_HOST: 198.18.0.6
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.21/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+        - "sh -c \"for i in $(seq 1 60); do python3 -c 'import socket; s=socket.create_connection((\\\"198.18.0.11\\\",5432),2); s.close()' 2>/dev/null && break; sleep 1; done\""
+        - "sh -c \"uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
+
+    {{ shared.upstream["upstream-node-name"] }}:
+      kind: linux
+      image: alpine:latest
+      exec:
+        - "apk add --no-cache iptables dhcpcd curl iperf3 ethtool"
+        - {{ ("dhcpcd " ~ shared.upstream["internet-iface"]) | tojson }}
+        - "sleep 5"
+        - "sysctl -w net.ipv4.ip_forward=1"
+        - "ip link set eth1 up"
+        - "ip link set eth2 up"
+        - {{ ("ip addr add " ~ upstream_default_gw ~ "/" ~ upstream_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip addr add " ~ shared.upstream["mgmt-ip-cidr"] ~ " dev eth2") | tojson }}
+        - {{ ("iptables -t nat -A POSTROUTING -s " ~ shared.upstream["mgmt-nat-source-cidr"] ~ " -o " ~ shared.upstream["internet-iface"] ~ " -j MASQUERADE") | tojson }}
+{% for node in all_access_nodes %}
+        - {{ ("iptables -t nat -A POSTROUTING -s " ~ node.dhcp_subnet ~ " -o " ~ shared.upstream["internet-iface"] ~ " -j MASQUERADE") | tojson }}
+{% endfor %}
+{% for bng in bngs %}
+{% for node in bng.access_nodes %}
+        - {{ ("ip route replace " ~ node.dhcp_subnet ~ " via " ~ bng.upstream_ip) | tojson }}
+{% endfor %}
+{% endfor %}
+        - "sh -c \"ip link set eth0 down || true\""
+        - "sh -c \"iperf3 -s -D\""
+
+  links:
+{% for link in links %}
+    - endpoints: [{{ link.a | tojson }}, {{ link.b | tojson }}]
+{% endfor %}

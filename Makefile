@@ -1,11 +1,23 @@
 # Make file for building and running
 #
 
-dev:
-	$(MAKE) clean
+CONFIG_FILE ?= aether.config.yaml
+
+validate:
+	python3 tools/config_pipeline.py validate --config $(CONFIG_FILE)
+
+generate: validate
+	python3 tools/config_pipeline.py generate --config $(CONFIG_FILE)
+
+apply: generate
 	sudo docker compose build
+	-sudo containerlab destroy -t containerlab/topology.yml
+	-sudo docker rm -f $$(docker ps -aq --filter "name=^clab-isp-lab-")
 	sudo containerlab deploy -t containerlab/topology.yml
 	$(MAKE) ips
+
+dev:
+	$(MAKE) apply
 
 clean:
 	sudo containerlab destroy -t containerlab/topology.yml

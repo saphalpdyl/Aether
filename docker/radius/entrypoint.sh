@@ -10,8 +10,8 @@ done
 
 ip addr flush dev eth1 2>/dev/null || true
 ip link set eth1 up 2>/dev/null || true
-ip addr add 192.0.2.2/24 dev eth1 2>/dev/null || true
-ip route replace default via 192.0.2.1 dev eth1 2>/dev/null || true
+ip addr add 198.18.0.2/24 dev eth1 2>/dev/null || true
+ip route replace default via 198.18.0.254 dev eth1 2>/dev/null || true
 
 # Ensure custom OSS dictionary is loaded.
 if [ -f /etc/freeradius/3.0/dictionary.oss ] && ! grep -q '^\$INCLUDE[[:space:]]\+dictionary\.oss$' /etc/freeradius/3.0/dictionary; then
@@ -19,24 +19,24 @@ if [ -f /etc/freeradius/3.0/dictionary.oss ] && ! grep -q '^\$INCLUDE[[:space:]]
 fi
 
 for i in $(seq 1 60); do
-  if pg_isready -h 192.0.2.6 -U radius >/dev/null 2>&1; then
+  if pg_isready -h 198.18.0.6 -U radius >/dev/null 2>&1; then
     break
   fi
   sleep 0.5
 done
 
 # Initialize SQL schema if missing (idempotent).
-if psql "host=192.0.2.6 user=radius password=test dbname=radius" -tc "SELECT to_regclass('public.radcheck');" | grep -q radcheck; then
+if psql "host=198.18.0.6 user=radius password=test dbname=radius" -tc "SELECT to_regclass('public.radcheck');" | grep -q radcheck; then
   : # already initialized
 else
-  psql "host=192.0.2.6 user=radius password=test dbname=radius" \
+  psql "host=198.18.0.6 user=radius password=test dbname=radius" \
     -f /etc/freeradius/3.0/mods-config/sql/main/postgresql/schema.sql || true
-  psql "host=192.0.2.6 user=radius password=test dbname=radius" \
+  psql "host=198.18.0.6 user=radius password=test dbname=radius" \
     -f /etc/freeradius/3.0/mods-config/sql/main/postgresql/setup.sql || true
 fi
 
 # Seed default plan policies into group reply attributes (idempotent).
-psql "host=192.0.2.6 user=radius password=test dbname=radius" <<'SQL'
+psql "host=198.18.0.6 user=radius password=test dbname=radius" <<'SQL'
 DELETE FROM radgroupreply
 WHERE groupname IN ('Bronze 25/10', 'Silver 100/30', 'Gold 300/100', 'Legacy 10/5')
   AND attribute IN ('OSS-Download-Speed', 'OSS-Upload-Speed', 'OSS-Download-Burst', 'OSS-Upload-Burst');
@@ -59,14 +59,6 @@ INSERT INTO radgroupreply (groupname, attribute, op, value) VALUES
   ('Legacy 10/5', 'OSS-Download-Burst',   ':=', '500'),
   ('Legacy 10/5', 'OSS-Upload-Burst',     ':=', '250');
 
--- Seed default subscriber: Acme Bakery on srl-access (Gold 300/100)
-DELETE FROM radcheck WHERE username = 'bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0';
-INSERT INTO radcheck (username, attribute, op, value) VALUES
-  ('bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0', 'Cleartext-Password', ':=', 'testing123');
-
-DELETE FROM radusergroup WHERE username = 'bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0';
-INSERT INTO radusergroup (username, groupname, priority) VALUES
-  ('bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0', 'Gold 300/100', 1);
 SQL
 
 #ln -sf /etc/freeradius/3.0/mods-available/files /etc/freeradius/3.0/mods-enabled/files

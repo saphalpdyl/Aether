@@ -1,0 +1,7 @@
+{% for c in radius_clients %}
+client {{ c.bng_id }} {
+    ipaddr = {{ c.ipaddr }}
+    secret = {{ c.secret }}
+}
+
+{% endfor %}

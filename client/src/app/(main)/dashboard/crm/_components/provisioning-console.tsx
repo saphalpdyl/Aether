@@ -56,6 +56,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { ServiceDialog } from "./provisioning/service-dialog";
 
 interface Plan {
   id: number;
@@ -83,12 +84,24 @@ interface Router {
   router_name: string;
   giaddr: string;
   bng_id: string | null;
+  total_interfaces: number;
   is_alive: string;
   last_seen: string | null;
   last_ping: string | null;
   active_subscribers: number;
   created_at: string;
   updated_at: string;
+}
+
+interface BNG {
+  bng_id: string;
+  bng_instance_id: string;
+  first_seen: string;
+  last_seen: string;
+  is_alive: string;
+  cpu_usage: number | null;
+  mem_usage: number | null;
+  mem_max: number | null;
 }
 
 interface Service {
@@ -127,6 +140,7 @@ export default function ProvisioningConsole() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [routers, setRouters] = useState<Router[]>([]);
+  const [bngs, setBngs] = useState<BNG[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -164,6 +178,16 @@ export default function ProvisioningConsole() {
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [serviceEdit, setServiceEdit] = useState<Service | null>(null);
   const [serviceSaving, setServiceSaving] = useState(false);
+  const [servicePortOptions, setServicePortOptions] = useState<string[]>([]);
+  const [selectedBngId, setSelectedBngId] = useState("");
+  const [selectedPortName, setSelectedPortName] = useState("");
+  const [selectedRouterForService, setSelectedRouterForService] = useState("");
+  const [routerPortDetails, setRouterPortDetails] = useState<{
+    totalPorts: number;
+    occupiedPorts: number;
+    availablePorts: string[];
+  } | null>(null);
+  const [loadingRouterPorts, setLoadingRouterPorts] = useState(false);
   const [serviceForm, setServiceForm] = useState({
     customer_id: "",
     plan_id: "",
@@ -177,39 +201,51 @@ export default function ProvisioningConsole() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Helper function to build circuit_id from router and remote_id
-  const buildCircuitId = useCallback((routerName: string, _remoteId: string): string => {
-    if (!routerName) return "";
-    // circuit_id is just the access node identity — relay_id/remote_id are added by the backend
-    return `${routerName}|default|irb1|1:0`;
+  const buildCircuitIdFromPort = useCallback((portName: string): string => {
+    if (!portName.startsWith("eth")) return "";
+    const idx = Number.parseInt(portName.replace("eth", ""), 10);
+    if (!Number.isFinite(idx) || idx <= 0) return "";
+    return `1/0/${idx}`;
+  }, []);
+
+  const circuitIdToPort = useCallback((circuitId: string): string => {
+    const parts = String(circuitId).split("/");
+    if (parts.length !== 3) return "";
+    if (parts[0] !== "1" || parts[1] !== "0") return "";
+    if (!/^\d+$/.test(parts[2])) return "";
+    return `eth${Number.parseInt(parts[2], 10)}`;
   }, []);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [plansRes, customersRes, servicesRes, routersRes] = await Promise.all([
+      const [plansRes, customersRes, servicesRes, routersRes, bngsRes] = await Promise.all([
         fetch("/api/plans", { cache: "no-store" }),
         fetch("/api/customers", { cache: "no-store" }),
         fetch("/api/services", { cache: "no-store" }),
         fetch("/api/routers", { cache: "no-store" }),
+        fetch("/api/bngs", { cache: "no-store" }),
       ]);
 
-      const [plansJson, customersJson, servicesJson, routersJson] = await Promise.all([
+      const [plansJson, customersJson, servicesJson, routersJson, bngsJson] = await Promise.all([
         plansRes.json().catch(() => ({})),
         customersRes.json().catch(() => ({})),
         servicesRes.json().catch(() => ({})),
         routersRes.json().catch(() => ({})),
+        bngsRes.json().catch(() => ({})),
       ]);
 
       if (!plansRes.ok) throw new Error(parseErrorMessage(plansJson, "Failed to fetch plans"));
       if (!customersRes.ok) throw new Error(parseErrorMessage(customersJson, "Failed to fetch customers"));
       if (!servicesRes.ok) throw new Error(parseErrorMessage(servicesJson, "Failed to fetch services"));
       if (!routersRes.ok) throw new Error(parseErrorMessage(routersJson, "Failed to fetch routers"));
+      if (!bngsRes.ok) throw new Error(parseErrorMessage(bngsJson, "Failed to fetch BNGs"));
 
       const plansData = Array.isArray(plansJson?.data) ? plansJson.data : [];
       const customersData = Array.isArray(customersJson?.data) ? customersJson.data : [];
       const servicesData = Array.isArray(servicesJson?.data) ? servicesJson.data : [];
       const routersData = Array.isArray(routersJson?.data) ? routersJson.data : [];
+      const bngsData = Array.isArray(bngsJson?.data) ? bngsJson.data : [];
 
       setPlans(
         plansData.map((p: any) => ({
@@ -255,12 +291,26 @@ export default function ProvisioningConsole() {
           router_name: String(r.router_name ?? ""),
           giaddr: String(r.giaddr ?? ""),
           bng_id: r.bng_id ? String(r.bng_id) : null,
+          total_interfaces: Number(r.total_interfaces ?? 5),
           is_alive: String(r.is_alive ?? ""),
           last_seen: r.last_seen ? String(r.last_seen) : null,
           last_ping: r.last_ping ? String(r.last_ping) : null,
           active_subscribers: Number(r.active_subscribers ?? 0),
           created_at: String(r.created_at ?? ""),
           updated_at: String(r.updated_at ?? ""),
+        }))
+      );
+
+      setBngs(
+        bngsData.map((b: any) => ({
+          bng_id: String(b.bng_id ?? ""),
+          bng_instance_id: String(b.bng_instance_id ?? ""),
+          first_seen: String(b.first_seen ?? ""),
+          last_seen: String(b.last_seen ?? ""),
+          is_alive: String(b.is_alive ?? ""),
+          cpu_usage: b.cpu_usage != null ? Number(b.cpu_usage) : null,
+          mem_usage: b.mem_usage != null ? Number(b.mem_usage) : null,
+          mem_max: b.mem_max != null ? Number(b.mem_max) : null,
         }))
       );
     } catch (error) {
@@ -273,6 +323,11 @@ export default function ProvisioningConsole() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  const filteredRouters = useMemo(() => {
+    if (!selectedBngId) return [];
+    return routers.filter((r) => r.bng_id === selectedBngId);
+  }, [routers, selectedBngId]);
 
   const filteredPlans = useMemo(() => {
     const q = planQuery.trim().toLowerCase();
@@ -456,9 +511,51 @@ export default function ProvisioningConsole() {
     }
   };
 
+  const fetchRouterPortDetails = useCallback(async (routerName: string, serviceId?: number) => {
+    if (!routerName) {
+      setRouterPortDetails(null);
+      return;
+    }
+    
+    setLoadingRouterPorts(true);
+    try {
+      const qp = serviceId ? `?service_id=${serviceId}` : "";
+      const response = await fetch(`/api/routers/${encodeURIComponent(routerName)}/available-ports${qp}`, {
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        throw new Error(parseErrorMessage(result, "Failed to fetch router port details"));
+      }
+
+      // Get router info for total ports
+      const router = routers.find((r) => r.router_name === routerName);
+      const totalPorts = router?.total_interfaces || 64;
+      const availablePorts = Array.isArray(result?.data?.available_ports) ? result.data.available_ports : [];
+      const occupiedPorts = totalPorts - availablePorts.length;
+
+      setRouterPortDetails({
+        totalPorts,
+        occupiedPorts,
+        availablePorts: availablePorts.map((p: unknown) => String(p)),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to fetch router port details");
+      setRouterPortDetails(null);
+    } finally {
+      setLoadingRouterPorts(false);
+    }
+  }, [routers]);
+
   const openCreateService = () => {
     setServiceEdit(null);
+    setSelectedBngId("");
     setSelectedRouterName("");
+    setSelectedRouterForService("");
+    setSelectedPortName("");
+    setServicePortOptions([]);
+    setRouterPortDetails(null);
     setServiceForm({
       customer_id: customers[0] ? String(customers[0].id) : "",
       plan_id: plans[0] ? String(plans[0].id) : "",
@@ -469,12 +566,19 @@ export default function ProvisioningConsole() {
     setServiceDialogOpen(true);
   };
 
-  const openEditService = (service: Service) => {
+  const openEditService = async (service: Service) => {
     setServiceEdit(service);
-    // Extract router name from circuit_id format: srl-access|default|irb1|1:0
-    const routerName = service.circuit_id.split("|")[0] || "";
+    const routerName = service.remote_id || "";
+    const portName = circuitIdToPort(service.circuit_id);
+
+    // Find the router and set BNG
+    const router = routers.find((r) => r.router_name === routerName);
+    const bngId = router?.bng_id || "";
     
+    setSelectedBngId(bngId);
     setSelectedRouterName(routerName);
+    setSelectedRouterForService(routerName);
+    setSelectedPortName(portName);
     setServiceForm({
       customer_id: String(service.customer_id),
       plan_id: String(service.plan_id),
@@ -482,7 +586,25 @@ export default function ProvisioningConsole() {
       remote_id: service.remote_id,
       status: service.status,
     });
+    
+    // Fetch port details for the router
+    await fetchRouterPortDetails(routerName, service.id);
     setServiceDialogOpen(true);
+  };
+
+  const handleBngChange = (bngId: string) => {
+    setSelectedBngId(bngId);
+    setSelectedRouterForService("");
+    setSelectedPortName("");
+    setServiceForm((s) => ({ ...s, circuit_id: "", remote_id: "" }));
+    setRouterPortDetails(null);
+  };
+
+  const handleRouterChange = async (routerName: string) => {
+    setSelectedRouterForService(routerName);
+    setSelectedPortName("");
+    setServiceForm((s) => ({ ...s, circuit_id: "", remote_id: routerName }));
+    await fetchRouterPortDetails(routerName, serviceEdit?.id);
   };
 
   const saveService = async () => {
@@ -490,30 +612,27 @@ export default function ProvisioningConsole() {
       toast.error("Customer and plan are required");
       return;
     }
-    if (!selectedRouterName) {
-      toast.error("Access node selection is required");
+    if (!selectedRouterForService) {
+      toast.error("Access router selection is required");
       return;
     }
-    if (!serviceForm.circuit_id.trim() || !serviceForm.remote_id.trim()) {
-      toast.error("Circuit ID and Remote ID are required");
+    if (!selectedPortName || !serviceForm.circuit_id) {
+      toast.error("Port selection is required");
       return;
     }
 
     setServiceSaving(true);
     try {
-      const selectedRouter = routers.find((r) => r.router_name === selectedRouterName);
+      const selectedRouter = routers.find((r) => r.router_name === selectedRouterForService);
       if (!selectedRouter?.bng_id) {
-        throw new Error("Selected access node is missing bng_id");
+        throw new Error("Selected access router is missing bng_id");
       }
 
-      // Format remote_id by removing colons (e.g., "00:00:00:00:00:01" -> "000000000001")
-      const formattedRemoteId = serviceForm.remote_id.replace(/:/g, "");
-      
       const payload = {
         customer_id: Number(serviceForm.customer_id),
         plan_id: Number(serviceForm.plan_id),
-        circuit_id: serviceForm.circuit_id.trim(),
-        remote_id: formattedRemoteId,
+        circuit_id: serviceForm.circuit_id,
+        remote_id: selectedRouterForService,
         relay_id: selectedRouter.bng_id,
         status: serviceForm.status,
       };
@@ -1072,150 +1191,30 @@ export default function ProvisioningConsole() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{serviceEdit ? "Edit service" : "Create service"}</DialogTitle>
-            <DialogDescription>
-              Services attach a customer and plan to a circuit/remote pair and sync to RADIUS user groups.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label>Customer</Label>
-                <Select
-                  value={serviceForm.customer_id}
-                  onValueChange={(value) => setServiceForm((s) => ({ ...s, customer_id: value }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={String(customer.id)}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>Plan</Label>
-                <Select
-                  value={serviceForm.plan_id}
-                  onValueChange={(value) => setServiceForm((s) => ({ ...s, plan_id: value }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((plan) => (
-                      <SelectItem key={plan.id} value={String(plan.id)}>
-                        {plan.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label>Circuit ID (Access Node)</Label>
-                <Popover open={routerSearchOpen} onOpenChange={setRouterSearchOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={routerSearchOpen}
-                      className="w-full justify-between"
-                    >
-                      {selectedRouterName || "Select access node..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
-                      <CommandInput placeholder="Search access node..." />
-                      <CommandEmpty>No access node found.</CommandEmpty>
-                      <CommandGroup>
-                        {routers.map((router) => (
-                          <CommandItem
-                            key={router.router_name}
-                            value={router.router_name}
-                            onSelect={(currentValue) => {
-                              const newRouterName = currentValue === selectedRouterName ? "" : currentValue;
-                              setSelectedRouterName(newRouterName);
-                              // Build circuit_id using the helper function
-                              const newCircuitId = buildCircuitId(newRouterName, serviceForm.remote_id);
-                              setServiceForm((s) => ({ ...s, circuit_id: newCircuitId }));
-                              setRouterSearchOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedRouterName === router.router_name ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {router.router_name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                {serviceForm.circuit_id && (
-                  <p className="text-sm text-muted-foreground">
-                    Circuit ID: {serviceForm.circuit_id}
-                  </p>
-                )}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="service-remote">Remote ID (MAC Address)</Label>
-                <Input
-                  id="service-remote"
-                  placeholder="00:00:00:00:00:01"
-                  value={serviceForm.remote_id}
-                  onChange={(e) => {
-                    const newRemoteId = e.target.value;
-                    // Rebuild circuit_id with new remote_id
-                    const newCircuitId = buildCircuitId(selectedRouterName, newRemoteId);
-                    setServiceForm((s) => ({ ...s, remote_id: newRemoteId, circuit_id: newCircuitId }));
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Will be sent as: {serviceForm.remote_id.replace(/:/g, "")}
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>Status</Label>
-              <Select
-                value={serviceForm.status}
-                onValueChange={(value: Service["status"]) => setServiceForm((s) => ({ ...s, status: value }))}
-              >
-                <SelectTrigger className="w-full sm:max-w-55">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                  <SelectItem value="TERMINATED">Terminated</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setServiceDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={saveService} disabled={serviceSaving}>
-              {serviceSaving ? "Saving..." : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ServiceDialog
+        open={serviceDialogOpen}
+        onOpenChange={setServiceDialogOpen}
+        serviceEdit={serviceEdit}
+        serviceForm={serviceForm}
+        setServiceForm={setServiceForm}
+        selectedBngId={selectedBngId}
+        setSelectedBngId={setSelectedBngId}
+        selectedRouterForService={selectedRouterForService}
+        setSelectedRouterForService={setSelectedRouterForService}
+        selectedPortName={selectedPortName}
+        setSelectedPortName={setSelectedPortName}
+        routerPortDetails={routerPortDetails}
+        loadingRouterPorts={loadingRouterPorts}
+        serviceSaving={serviceSaving}
+        plans={plans}
+        customers={customers}
+        bngs={bngs}
+        routers={routers}
+        filteredRouters={filteredRouters}
+        onSave={saveService}
+        onBngChange={handleBngChange}
+        onRouterChange={handleRouterChange}
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

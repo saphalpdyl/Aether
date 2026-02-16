@@ -3,16 +3,20 @@ set -eu
 
 echo "Aggregation switch starting..."
 
-# Wait for interfaces
+# Wait for at least one data interface (eth1) to appear.
 for i in $(seq 1 150); do
-  if ip link show eth1 >/dev/null 2>&1 && \
-     ip link show eth2 >/dev/null 2>&1 && \
-     ip link show eth3 >/dev/null 2>&1; then
+  if ip link show eth1 >/dev/null 2>&1; then
     echo "Interfaces ready after $i attempts"
     break
   fi
   sleep 0.2
 done
+
+ETH_IFACES="$(ls /sys/class/net | grep '^eth' | grep -v '^eth0$' | sort)"
+if [ -z "$ETH_IFACES" ]; then
+  echo "No data interfaces found (eth1+). Exiting."
+  exit 1
+fi
 
 # Create bridge
 ip link add br0 type bridge 2>/dev/null || true
@@ -25,7 +29,7 @@ ip link set br0 type bridge forward_delay 0
 ip link set br0 type bridge ageing_time 0
 
 # Bring up interfaces with promiscuous mode
-for iface in eth1 eth2 eth3; do
+for iface in $ETH_IFACES; do
   ip link set "$iface" up
   ip link set "$iface" promisc on
   ip link set "$iface" master br0

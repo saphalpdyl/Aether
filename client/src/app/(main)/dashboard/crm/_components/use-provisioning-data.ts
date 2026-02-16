@@ -94,6 +94,7 @@ export function useProvisioningData(): ProvisioningData {
           router_name: String(r.router_name ?? ""),
           giaddr: String(r.giaddr ?? ""),
           bng_id: r.bng_id ? String(r.bng_id) : null,
+          total_interfaces: Number(r.total_interfaces ?? 5),
           is_alive: String(r.is_alive ?? ""),
           last_seen: r.last_seen ? String(r.last_seen) : null,
           last_ping: r.last_ping ? String(r.last_ping) : null,

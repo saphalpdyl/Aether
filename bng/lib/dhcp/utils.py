@@ -34,15 +34,11 @@ def parse_dhcp_leases(lines: str) -> Tuple[List[DHCPLease], bool, str | None]:
 
 def format_mac(raw_mac: str, delimiter: str = ":") -> str:
     clean_mac = "".join(c for c in raw_mac if c.isalnum())
-    
+
     if len(clean_mac) != 12:
         raise ValueError("Invalid MAC address length")
 
     return delimiter.join(clean_mac[i:i+2] for i in range(0, 12, 2)).lower()
-
-def _normalize_remote_id(raw_bytes: bytes) -> str:
-    """Convert raw remote_id bytes to hex string."""
-    return raw_bytes.hex()
 
 
 def parse_network_tlv(hex_str):
@@ -68,11 +64,9 @@ def parse_network_tlv(hex_str):
             t_len = raw_data[i+1]     # The Length byte
             t_raw = raw_data[i+2 : i+2+t_len]
 
-            # Normalize remote_id to MAC format, decode others as ASCII
-            if t_type == 2:  # remote_id
-                t_value = _normalize_remote_id(t_raw)
-            else:
-                t_value = t_raw.decode('ascii', errors='replace')
+            # Decode all known sub-options as readable strings.
+            # remote_id is now treated as a string identifier, not raw bytes.
+            t_value = t_raw.decode('ascii', errors='replace')
 
             # If the type is in our map, add it to the dictionary
             if t_type in mapping:
