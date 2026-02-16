@@ -20,6 +20,17 @@ export interface Customer {
   state: string | null;
 }
 
+export interface BNG {
+  bng_id: string;
+  bng_instance_id: string;
+  first_seen: string;
+  last_seen: string;
+  is_alive: string;
+  cpu_usage: number | null;
+  mem_usage: number | null;
+  mem_max: number | null;
+}
+
 export interface Router {
   router_name: string;
   giaddr: string;

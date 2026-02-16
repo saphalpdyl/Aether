@@ -69,16 +69,16 @@ INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
 -- Seed access routers
 INSERT INTO access_routers (router_name, giaddr, bng_id, total_interfaces) VALUES
 
-    ('cstm-relay-01', '10.0.0.2', 'bng-01', 6),
+    ('cstm-relay-01', '10.0.1.1', 'bng-01', 6),
 
-    ('cstm-relay-02', '10.0.0.3', 'bng-01', 4),
+    ('cstm-relay-02', '10.0.1.65', 'bng-01', 4),
 
-    ('cstm-relay-11', '10.0.2.2', 'bng-02', 3),
+    ('cstm-relay-11', '10.0.3.1', 'bng-02', 3),
 
-    ('cstm-relay-12', '10.0.2.3', 'bng-02', 2),
+    ('cstm-relay-12', '10.0.3.65', 'bng-02', 2),
 
-    ('cstm-relay-13', '10.0.2.4', 'bng-02', 2),
+    ('cstm-relay-13', '10.0.4.1', 'bng-02', 2),
 
-    ('cstm-relay-14', '10.0.2.5', 'bng-02', 2),
+    ('cstm-relay-14', '10.0.4.65', 'bng-02', 2),
 
-    ('cstm-relay-15', '10.0.2.6', 'bng-02', 2);
+    ('cstm-relay-15', '10.0.4.129', 'bng-02', 2);

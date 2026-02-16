@@ -56,6 +56,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { ServiceDialog } from "./provisioning/service-dialog";
 
 interface Plan {
   id: number;
@@ -90,6 +91,17 @@ interface Router {
   active_subscribers: number;
   created_at: string;
   updated_at: string;
+}
+
+interface BNG {
+  bng_id: string;
+  bng_instance_id: string;
+  first_seen: string;
+  last_seen: string;
+  is_alive: string;
+  cpu_usage: number | null;
+  mem_usage: number | null;
+  mem_max: number | null;
 }
 
 interface Service {
@@ -128,6 +140,7 @@ export default function ProvisioningConsole() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [routers, setRouters] = useState<Router[]>([]);
+  const [bngs, setBngs] = useState<BNG[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -166,6 +179,7 @@ export default function ProvisioningConsole() {
   const [serviceEdit, setServiceEdit] = useState<Service | null>(null);
   const [serviceSaving, setServiceSaving] = useState(false);
   const [servicePortOptions, setServicePortOptions] = useState<string[]>([]);
+  const [selectedBngId, setSelectedBngId] = useState("");
   const [selectedPortName, setSelectedPortName] = useState("");
   const [selectedRouterForService, setSelectedRouterForService] = useState("");
   const [routerPortDetails, setRouterPortDetails] = useState<{
@@ -205,29 +219,33 @@ export default function ProvisioningConsole() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [plansRes, customersRes, servicesRes, routersRes] = await Promise.all([
+      const [plansRes, customersRes, servicesRes, routersRes, bngsRes] = await Promise.all([
         fetch("/api/plans", { cache: "no-store" }),
         fetch("/api/customers", { cache: "no-store" }),
         fetch("/api/services", { cache: "no-store" }),
         fetch("/api/routers", { cache: "no-store" }),
+        fetch("/api/bngs", { cache: "no-store" }),
       ]);
 
-      const [plansJson, customersJson, servicesJson, routersJson] = await Promise.all([
+      const [plansJson, customersJson, servicesJson, routersJson, bngsJson] = await Promise.all([
         plansRes.json().catch(() => ({})),
         customersRes.json().catch(() => ({})),
         servicesRes.json().catch(() => ({})),
         routersRes.json().catch(() => ({})),
+        bngsRes.json().catch(() => ({})),
       ]);
 
       if (!plansRes.ok) throw new Error(parseErrorMessage(plansJson, "Failed to fetch plans"));
       if (!customersRes.ok) throw new Error(parseErrorMessage(customersJson, "Failed to fetch customers"));
       if (!servicesRes.ok) throw new Error(parseErrorMessage(servicesJson, "Failed to fetch services"));
       if (!routersRes.ok) throw new Error(parseErrorMessage(routersJson, "Failed to fetch routers"));
+      if (!bngsRes.ok) throw new Error(parseErrorMessage(bngsJson, "Failed to fetch BNGs"));
 
       const plansData = Array.isArray(plansJson?.data) ? plansJson.data : [];
       const customersData = Array.isArray(customersJson?.data) ? customersJson.data : [];
       const servicesData = Array.isArray(servicesJson?.data) ? servicesJson.data : [];
       const routersData = Array.isArray(routersJson?.data) ? routersJson.data : [];
+      const bngsData = Array.isArray(bngsJson?.data) ? bngsJson.data : [];
 
       setPlans(
         plansData.map((p: any) => ({
@@ -282,6 +300,19 @@ export default function ProvisioningConsole() {
           updated_at: String(r.updated_at ?? ""),
         }))
       );
+
+      setBngs(
+        bngsData.map((b: any) => ({
+          bng_id: String(b.bng_id ?? ""),
+          bng_instance_id: String(b.bng_instance_id ?? ""),
+          first_seen: String(b.first_seen ?? ""),
+          last_seen: String(b.last_seen ?? ""),
+          is_alive: String(b.is_alive ?? ""),
+          cpu_usage: b.cpu_usage != null ? Number(b.cpu_usage) : null,
+          mem_usage: b.mem_usage != null ? Number(b.mem_usage) : null,
+          mem_max: b.mem_max != null ? Number(b.mem_max) : null,
+        }))
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load provisioning data");
     } finally {
@@ -292,6 +323,11 @@ export default function ProvisioningConsole() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  const filteredRouters = useMemo(() => {
+    if (!selectedBngId) return [];
+    return routers.filter((r) => r.bng_id === selectedBngId);
+  }, [routers, selectedBngId]);
 
   const filteredPlans = useMemo(() => {
     const q = planQuery.trim().toLowerCase();
@@ -514,6 +550,7 @@ export default function ProvisioningConsole() {
 
   const openCreateService = () => {
     setServiceEdit(null);
+    setSelectedBngId("");
     setSelectedRouterName("");
     setSelectedRouterForService("");
     setSelectedPortName("");
@@ -534,6 +571,11 @@ export default function ProvisioningConsole() {
     const routerName = service.remote_id || "";
     const portName = circuitIdToPort(service.circuit_id);
 
+    // Find the router and set BNG
+    const router = routers.find((r) => r.router_name === routerName);
+    const bngId = router?.bng_id || "";
+    
+    setSelectedBngId(bngId);
     setSelectedRouterName(routerName);
     setSelectedRouterForService(routerName);
     setSelectedPortName(portName);
@@ -548,6 +590,21 @@ export default function ProvisioningConsole() {
     // Fetch port details for the router
     await fetchRouterPortDetails(routerName, service.id);
     setServiceDialogOpen(true);
+  };
+
+  const handleBngChange = (bngId: string) => {
+    setSelectedBngId(bngId);
+    setSelectedRouterForService("");
+    setSelectedPortName("");
+    setServiceForm((s) => ({ ...s, circuit_id: "", remote_id: "" }));
+    setRouterPortDetails(null);
+  };
+
+  const handleRouterChange = async (routerName: string) => {
+    setSelectedRouterForService(routerName);
+    setSelectedPortName("");
+    setServiceForm((s) => ({ ...s, circuit_id: "", remote_id: routerName }));
+    await fetchRouterPortDetails(routerName, serviceEdit?.id);
   };
 
   const saveService = async () => {
@@ -1134,326 +1191,30 @@ export default function ProvisioningConsole() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
-        <DialogContent className="min-w-6xl">
-          <DialogHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-2xl">Add a Subscriber to a Port</DialogTitle>
-              <div className="flex items-center gap-2 text-sm">
-                <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                <span className="font-medium">{serviceForm.circuit_id || "1/0/3:12"}</span>
-              </div>
-            </div>
-          </DialogHeader>
-          
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Left Panel - Physical Attachment */}
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Physical Attachment</h3>
-                
-                <div className="space-y-2 mb-4">
-                  <Label>Access Router</Label>
-                  <Select
-                    value={selectedRouterForService}
-                    onValueChange={async (value) => {
-                      setSelectedRouterForService(value);
-                      setSelectedPortName("");
-                      setServiceForm((s) => ({ ...s, circuit_id: "", remote_id: value }));
-                      await fetchRouterPortDetails(value, serviceEdit?.id);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select access router" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {routers.map((router) => (
-                        <SelectItem key={router.router_name} value={router.router_name}>
-                          {router.router_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-3">
-                  <Label>Port</Label>
-                  {loadingRouterPorts ? (
-                    <div className="rounded-lg border p-4 bg-muted/30">
-                      <p className="text-sm text-muted-foreground text-center py-4">Loading port information...</p>
-                    </div>
-                  ) : !selectedRouterForService ? (
-                    <div className="rounded-lg border p-4 bg-muted/30">
-                      <p className="text-sm text-muted-foreground text-center py-4">Select an access router first</p>
-                    </div>
-                  ) : routerPortDetails ? (
-                    <div className="rounded-lg border p-4 bg-muted/30">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="font-semibold text-lg">{selectedPortName || "-"}</span>
-                        <div className="flex-1">
-                          <div className="flex h-4 gap-0.5">
-                            {Array.from({ length: routerPortDetails.totalPorts }, (_, i) => (
-                              <div
-                                key={i}
-                                className={cn(
-                                  "flex-1 rounded-sm",
-                                  i < routerPortDetails.occupiedPorts ? "bg-orange-400" : "bg-gray-300"
-                                )}
-                              />
-                            ))}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {routerPortDetails.occupiedPorts} / {routerPortDetails.totalPorts} ports used
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-sm mb-3">
-                        <span className="text-muted-foreground">Available Ports</span>
-                      </div>
-
-                      <div className="grid grid-cols-8 gap-2 max-h-64 overflow-y-auto">
-                        {Array.from({ length: routerPortDetails.totalPorts }, (_, i) => {
-                          const portNum = i + 1;
-                          const portId = `1/0/${portNum}`;
-                          const portName = `eth${portNum}`;
-                          const isAvailable = routerPortDetails.availablePorts.includes(portName);
-                          const isSelected = serviceForm.circuit_id === portId;
-
-                          return (
-                            <button
-                              key={portId}
-                              onClick={() => {
-                                if (isAvailable) {
-                                  setSelectedPortName(portName);
-                                  setServiceForm((s) => ({
-                                    ...s,
-                                    circuit_id: portId,
-                                  }));
-                                }
-                              }}
-                              className={cn(
-                                "flex flex-col items-center justify-center aspect-square rounded-lg border-2 transition-colors p-2",
-                                isSelected && "ring-2 ring-blue-500",
-                                isAvailable
-                                  ? "bg-teal-50 border-teal-400 hover:bg-teal-100"
-                                  : "bg-red-100 border-red-400 cursor-not-allowed"
-                              )}
-                              disabled={!isAvailable}
-                            >
-                              <div
-                                className={cn(
-                                  "w-8 h-8 rounded flex items-center justify-center mb-1",
-                                  isAvailable ? "bg-teal-200" : "bg-red-200"
-                                )}
-                              />
-                              <span className="text-xs font-medium">{portNum}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border p-4 bg-muted/30">
-                      <p className="text-sm text-muted-foreground text-center py-4">Failed to load port information</p>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded bg-red-200 border border-red-400" />
-                      <span className="text-muted-foreground">Occupied</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded bg-teal-200 border border-teal-400" />
-                      <span className="text-muted-foreground">Available</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm font-medium">Port ID</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-semibold">{selectedPortName ? selectedPortName.replace("eth", "") : "-"}</span>
-                      <span className="text-xs text-muted-foreground">Selected Port</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Provisioning Preview */}
-              <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                <h4 className="font-semibold mb-3">Provisioning Preview</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground min-w-20">Circuit ID:</span>
-                    <span className="font-mono font-medium">{serviceForm.circuit_id || "-"}</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground min-w-20">Remote ID:</span>
-                    <span className="font-mono font-medium">{selectedRouterForService || "-"}</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground min-w-20">VLAN</span>
-                    <span className="font-medium">2103</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground min-w-20">Service</span>
-                    <span className="font-medium">
-                      {plans.find((p) => p.id === Number(serviceForm.plan_id))?.name || "-"}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground min-w-20">QoS</span>
-                    <span className="font-medium">gpon-res-300</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground min-w-20">AAA</span>
-                    <span className="font-medium">RADIUS profile "residential-standard"</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Panel - Subscriber & Service Details */}
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Subscriber & Service Details</h3>
-                
-                {/* Customer Search */}
-                <div className="space-y-2 mb-4">
-                  <Label>Search Customer</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className="w-full justify-between"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Search className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            {serviceForm.customer_id
-                              ? customers.find((c) => c.id === Number(serviceForm.customer_id))?.name
-                              : "Search customer..."}
-                          </span>
-                        </div>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0">
-                      <Command>
-                        <CommandInput placeholder="Search customer..." />
-                        <CommandEmpty>No customer found.</CommandEmpty>
-                        <CommandGroup>
-                          {customers.map((customer) => (
-                            <CommandItem
-                              key={customer.id}
-                              value={customer.name}
-                              onSelect={() => {
-                                setServiceForm((s) => ({ ...s, customer_id: String(customer.id) }));
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  serviceForm.customer_id === String(customer.id) ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {customer.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Customer Details Card */}
-                {serviceForm.customer_id && (() => {
-                  const selectedCustomer = customers.find((c) => c.id === Number(serviceForm.customer_id));
-                  return selectedCustomer ? (
-                    <div className="rounded-lg border bg-card p-4 mb-6">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 font-semibold">
-                          {selectedCustomer.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <h4 className="font-semibold">{selectedCustomer.name}</h4>
-                          <p className="text-sm text-muted-foreground">A{selectedCustomer.id}</p>
-                          <p className="text-sm">{selectedCustomer.street || "123 Elm St"} | {selectedCustomer.city || "Springfield"}, {selectedCustomer.state || "IL"} {selectedCustomer.zip_code || "62701"}, USA</p>
-                          <p className="text-sm">{selectedCustomer.phone || "(217) 555-1234"}</p>
-                          <p className="text-sm text-blue-600">{selectedCustomer.email || "john.doe@email.com"}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null;
-                })()}
-
-                {/* Service Profile */}
-                <div className="space-y-4">
-                  <h4 className="font-medium">Service Profile</h4>
-                  
-                  <div className="space-y-2">
-                    <Label>Service Plan</Label>
-                    <Select
-                      value={serviceForm.plan_id}
-                      onValueChange={(value) => setServiceForm((s) => ({ ...s, plan_id: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select service plan" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {plans.filter(p => p.is_active).map((plan) => (
-                          <SelectItem key={plan.id} value={String(plan.id)}>
-                            {plan.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>VLAN ID</Label>
-                      <Input defaultValue="2103" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Service VLAN</Label>
-                      <Input defaultValue="2000" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select
-                      value={serviceForm.status}
-                      onValueChange={(value: Service["status"]) => setServiceForm((s) => ({ ...s, status: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ACTIVE">Active</SelectItem>
-                        <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                        <SelectItem value="TERMINATED">Terminated</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="mt-6">
-            <Button variant="outline" onClick={() => setServiceDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={saveService} disabled={serviceSaving} className="bg-blue-600 hover:bg-blue-700">
-              {serviceSaving ? "Provisioning..." : "Provision Service"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ServiceDialog
+        open={serviceDialogOpen}
+        onOpenChange={setServiceDialogOpen}
+        serviceEdit={serviceEdit}
+        serviceForm={serviceForm}
+        setServiceForm={setServiceForm}
+        selectedBngId={selectedBngId}
+        setSelectedBngId={setSelectedBngId}
+        selectedRouterForService={selectedRouterForService}
+        setSelectedRouterForService={setSelectedRouterForService}
+        selectedPortName={selectedPortName}
+        setSelectedPortName={setSelectedPortName}
+        routerPortDetails={routerPortDetails}
+        loadingRouterPorts={loadingRouterPorts}
+        serviceSaving={serviceSaving}
+        plans={plans}
+        customers={customers}
+        bngs={bngs}
+        routers={routers}
+        filteredRouters={filteredRouters}
+        onSave={saveService}
+        onBngChange={handleBngChange}
+        onRouterChange={handleRouterChange}
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

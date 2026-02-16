@@ -31,7 +31,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import type { Service, Plan, Customer, Router, RouterPortDetails } from "./types";
+import type { Service, Plan, Customer, Router, RouterPortDetails, BNG } from "./types";
 
 interface ServiceDialogProps {
   open: boolean;
@@ -51,6 +51,8 @@ interface ServiceDialogProps {
     remote_id: string;
     status: Service["status"];
   }>>;
+  selectedBngId: string;
+  setSelectedBngId: (bngId: string) => void;
   selectedRouterForService: string;
   setSelectedRouterForService: (router: string) => void;
   selectedPortName: string;
@@ -60,8 +62,11 @@ interface ServiceDialogProps {
   serviceSaving: boolean;
   plans: Plan[];
   customers: Customer[];
+  bngs: BNG[];
   routers: Router[];
+  filteredRouters: Router[];
   onSave: () => void;
+  onBngChange: (bngId: string) => void;
   onRouterChange: (routerName: string) => void;
 }
 
@@ -71,6 +76,8 @@ export function ServiceDialog({
   serviceEdit,
   serviceForm,
   setServiceForm,
+  selectedBngId,
+  setSelectedBngId,
   selectedRouterForService,
   setSelectedRouterForService,
   selectedPortName,
@@ -80,8 +87,11 @@ export function ServiceDialog({
   serviceSaving,
   plans,
   customers,
+  bngs,
   routers,
+  filteredRouters,
   onSave,
+  onBngChange,
   onRouterChange,
 }: ServiceDialogProps) {
   return (
@@ -104,16 +114,36 @@ export function ServiceDialog({
               <h3 className="text-lg font-semibold mb-4">Physical Attachment</h3>
               
               <div className="space-y-2 mb-4">
+                <Label>BNG</Label>
+                <Select
+                  value={selectedBngId}
+                  onValueChange={onBngChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select BNG" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bngs.map((bng) => (
+                      <SelectItem key={bng.bng_id} value={bng.bng_id}>
+                        {bng.bng_id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 mb-4">
                 <Label>Access Router</Label>
                 <Select
                   value={selectedRouterForService}
                   onValueChange={onRouterChange}
+                  disabled={!selectedBngId}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select access router" />
+                    <SelectValue placeholder={selectedBngId ? "Select access router" : "Select BNG first"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {routers.map((router) => (
+                    {filteredRouters.map((router) => (
                       <SelectItem key={router.router_name} value={router.router_name}>
                         {router.router_name}
                       </SelectItem>
@@ -239,22 +269,10 @@ export function ServiceDialog({
                   <span className="font-mono font-medium">{selectedRouterForService || "-"}</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="text-muted-foreground min-w-20">VLAN</span>
-                  <span className="font-medium">2103</span>
-                </div>
-                <div className="flex items-start gap-2">
                   <span className="text-muted-foreground min-w-20">Service</span>
                   <span className="font-medium">
                     {plans.find((p) => p.id === Number(serviceForm.plan_id))?.name || "-"}
                   </span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-muted-foreground min-w-20">QoS</span>
-                  <span className="font-medium">gpon-res-300</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-muted-foreground min-w-20">AAA</span>
-                  <span className="font-medium">RADIUS profile "residential-standard"</span>
                 </div>
               </div>
             </div>
@@ -356,17 +374,6 @@ export function ServiceDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>VLAN ID</Label>
-                    <Input defaultValue="2103" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Service VLAN</Label>
-                    <Input defaultValue="2000" />
-                  </div>
                 </div>
 
                 <div className="space-y-2">
