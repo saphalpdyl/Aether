@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import Image from "next/image";
+
 import { Activity, ArrowDown, ArrowUp, Calendar, Server } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 
+import activeTrafficIll from "@/assets/illustrations/active_traffic_ill.png";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -40,6 +43,19 @@ function formatBytes(bytes: number): string {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
+}
+
+function formatRate(bps: number): { value: string; unit: string } {
+  if (bps >= 1_000_000_000) {
+    return { value: (bps / 1_000_000_000).toFixed(1), unit: "Gbps" };
+  }
+  if (bps >= 1_000_000) {
+    return { value: (bps / 1_000_000).toFixed(0), unit: "Mbps" };
+  }
+  if (bps >= 1_000) {
+    return { value: (bps / 1_000).toFixed(0), unit: "Kbps" };
+  }
+  return { value: bps.toFixed(0), unit: "bps" };
 }
 
 export function SectionCards() {
@@ -148,9 +164,12 @@ export function SectionCards() {
   const onlineRouters = routers.data.filter((r) => r.is_alive.toLowerCase() === "true").length;
 
   const hasTrafficHistory = trafficHistory.some((point) => point.total_bps > 0);
+  const latestTraffic = trafficHistory[trafficHistory.length - 1] ?? { in_bps: 0, out_bps: 0, total_bps: 0 };
+  const inRate = formatRate(latestTraffic.in_bps);
+  const outRate = formatRate(latestTraffic.out_bps);
 
   return (
-    <div className="grid @5xl/main:grid-cols-4 @xl/main:grid-cols-2 grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs dark:*:data-[slot=card]:bg-card">
+    <div className="grid @5xl/main:grid-cols-[1fr_1fr_1fr_1.7fr] @xl/main:grid-cols-2 grid-cols-1 gap-4">
       <Card className="@container/card">
         <CardHeader>
           <CardDescription>Active Sessions</CardDescription>
@@ -171,7 +190,7 @@ export function SectionCards() {
           <div className="text-muted-foreground">Real-time session count</div>
         </CardFooter>
       </Card>
-      
+
       <Card className="@container/card">
         <CardHeader>
           <CardDescription>Access nodes online</CardDescription>
@@ -192,7 +211,7 @@ export function SectionCards() {
           <div className="text-muted-foreground">Online nodes / Total nodes</div>
         </CardFooter>
       </Card>
-      
+
       <Card className="@container/card">
         <CardHeader>
           <CardDescription>Total Events</CardDescription>
@@ -213,47 +232,68 @@ export function SectionCards() {
           <div className="text-muted-foreground">All session lifecycle events</div>
         </CardFooter>
       </Card>
-      
-      <Card className="@container/card relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none opacity-70">
+
+      <Card className="@container/card flex flex-col p-0 overflow-hidden relative">
+        <div className="flex flex-row justify-between">
+          <CardHeader className="p-8 w-1/2 z-10">
+            <CardDescription>Active Traffic</CardDescription>
+            <CardTitle className="space-y-2">
+              <div className="flex gap-1.5 divide-x-2 space-x-4 w-full">
+                <div className="flex flex-col items-baseline gap-1.5 pr-8">
+                  <div className="space-x-1">
+                    <span className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">{inRate.value}</span>
+                    <span className="text-lg font-semibold text-cyan-500">{inRate.unit}</span>
+                  </div>
+                  <span className="ml-2 text-xs text-muted-foreground flex items-center gap-1">
+                    <ArrowDown className="size-3 text-cyan-500" />
+                    {formatBytes(stats.active_traffic.input_octets)} down
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1.5 flex-col">
+                  <div className="space-x-1">
+                    <span className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">{outRate.value}</span>
+                    <span className="text-lg font-semibold text-green-500">{outRate.unit}</span>
+                  </div>
+                  <span className="ml-2 text-xs text-muted-foreground flex items-center gap-1">
+                    <ArrowUp className="size-3 text-green-500" />
+                    {formatBytes(stats.active_traffic.output_octets)} up
+                  </span>
+                </div>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <div className="absolute h-full w-96 mr-6 -right-28 z-8">
+            <div className="absolute inset-0 bg-linear-to-r from-card via-card/50 to-transparent z-10 pointer-events-none" />
+            <Image
+              src={activeTrafficIll}
+              alt="Active traffic illustration"
+              height={500}
+              width={300}
+              className="object-contain object-center z-8"
+              priority
+            />
+          </div>
+        </div>
+        <div className="h-16 w-full absolute z-12 bottom-0">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={trafficHistory}>
               <defs>
-                <linearGradient id="trafficIn" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
-                </linearGradient>
-                <linearGradient id="trafficOut" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0.01} />
+                <linearGradient id="trafficGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <Area type="monotone" dataKey="out_bps" stroke="#22c55e" strokeWidth={1.5} fill="url(#trafficOut)" />
-              <Area type="monotone" dataKey="in_bps" stroke="#3b82f6" strokeWidth={1.5} fill="url(#trafficIn)" />
+              <Area
+                type="monotone"
+                dataKey="total_bps"
+                stroke="hsl(var(--primary))"
+                fill="url(#trafficGradient)"
+                strokeWidth={2}
+                isAnimationActive={false}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
-        <CardHeader className="relative z-10">
-          <CardDescription>Active Traffic</CardDescription>
-          <CardTitle className="font-semibold @[250px]/card:text-xl text-lg tabular-nums flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <ArrowDown className="size-4 text-blue-500" />
-              <span className="text-sm">{formatBytes(stats.active_traffic.input_octets)}</span>
-              <span className="text-sm text-muted-foreground">({stats.active_traffic.input_packets} pkts)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <ArrowUp className="size-4 text-green-500" />
-              <span className="text-sm">{formatBytes(stats.active_traffic.output_octets)}</span>
-              <span className="text-sm text-muted-foreground">({stats.active_traffic.output_packets} pkts)</span>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardFooter className="relative z-10 flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Network traffic volume {hasTrafficHistory ? null : "(waiting for samples)"}
-          </div>
-          <div className="text-muted-foreground">Download / Upload (octets & packets)</div>
-        </CardFooter>
       </Card>
     </div>
   );
