@@ -5,12 +5,10 @@ import { useCallback, useEffect, useState } from "react";
 import { customerListingSchema } from "./customers-schema";
 import type { CustomerListing } from "./customers-schema";
 import { DataTableCustomers } from "./data-table-customers";
-import { CustomerDetailSheet } from "./customer-detail-sheet";
 
 export default function CustomersTable() {
   const [customers, setCustomers] = useState<CustomerListing[]>([]);
-  const [selected, setSelected] = useState<CustomerListing | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -26,7 +24,33 @@ export default function CustomersTable() {
             }
           })
           .filter((c: CustomerListing | null): c is CustomerListing => c !== null);
-        setCustomers(validated);
+        
+        // Fetch IP assignments for customers with active sessions
+        const customersWithIPs = await Promise.all(
+          validated.map(async (customer: CustomerListing) => {
+            if (customer.active_sessions > 0) {
+              try {
+                const sessionsRes = await fetch(`/api/customers/${customer.id}/sessions`);
+                if (sessionsRes.ok) {
+                  const sessionsData = await sessionsRes.json();
+                  const sessions = sessionsData.data ?? [];
+                  const ips = sessions
+                    .map((s: { ip_address: string | null }) => s.ip_address)
+                    .filter((ip: string | null): ip is string => ip !== null);
+                  return {
+                    ...customer,
+                    ip_assignments: ips.length > 0 ? ips.join(", ") : null,
+                  };
+                }
+              } catch {
+                // If fetching sessions fails, return customer without IP assignments
+              }
+            }
+            return customer;
+          })
+        );
+        
+        setCustomers(customersWithIPs);
       }
     } catch (error) {
       console.error("Failed to fetch customers:", error);
@@ -40,18 +64,14 @@ export default function CustomersTable() {
   }, [fetchData]);
 
   const handleRowClick = useCallback((customer: CustomerListing) => {
-    setSelected(customer);
-    setSheetOpen(true);
-  }, []);
+    setExpandedRow(expandedRow === customer.id ? null : customer.id);
+  }, [expandedRow]);
 
   return (
-    <>
-      <DataTableCustomers data={customers} onRowClick={handleRowClick} />
-      <CustomerDetailSheet
-        customer={selected}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-      />
-    </>
+    <DataTableCustomers 
+      data={customers} 
+      onRowClick={handleRowClick}
+      expandedRow={expandedRow}
+    />
   );
 }

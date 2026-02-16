@@ -15,6 +15,7 @@ export const customerListingSchema = z.object({
   recent_sessions: z.preprocess(Number, z.number()),
   service_count: z.preprocess(Number, z.number()),
   status: z.enum(["online", "recent", "new", "offline"]),
+  ip_assignments: z.string().nullable().optional(),
 });
 
 export type CustomerListing = z.infer<typeof customerListingSchema>;
