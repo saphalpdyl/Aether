@@ -6,38 +6,29 @@ topology:
     h1:
       kind: linux
       image: lab-host
-      exec:
-        - sh -c "command -v ethtool >/dev/null 2>&1 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ethtool)"
-        - ip link set eth1 address 00:00:00:00:00:01
-        - ip link set eth1 up
-        - sh -c "ip link set eth0 down || true"
+      env:
+        HOST_MAC: "00:00:00:00:00:01"
 
     h2:
       kind: linux
       image: lab-host
-      exec:
-        - sh -c "command -v ethtool >/dev/null 2>&1 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ethtool)"
-        - ip link set eth1 address 00:00:00:00:00:02
-        - ip link set eth1 up
-        - sh -c "ip link set eth0 down || true"
+      env:
+        HOST_MAC: "00:00:00:00:00:02"
 
     h3:
       kind: linux
       image: lab-host
-      exec:
-        - sh -c "command -v ethtool >/dev/null 2>&1 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ethtool)"
-        - ip link set eth1 address 00:00:00:00:00:03
-        - ip link set eth1 up
-        - sh -c "ip link set eth0 down || true"
+      env:
+        HOST_MAC: "00:00:00:00:00:03"
 
     # Linux access relay node #1 (replaces SR Linux)
     relay1:
       kind: linux
       image: lab-relay
       env:
-        REMOTE_ID: "000000000002"
+        REMOTE_ID: "cstm-relay-01"
         GIADDR: "10.0.1.1"
-        CIRCUIT_ID_MAP: "eth1=srl-access|default|irb1|1:0,eth2=srl-access|default|irb1|1:0"
+        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2"
         RELAY_BR_IP_CIDR: "10.0.1.1/26"
         RELAY_UPLINK_IP_CIDR: "10.0.0.2/24"
         RELAY_DEFAULT_GW: "10.0.0.1"
@@ -58,9 +49,9 @@ topology:
       kind: linux
       image: lab-relay
       env:
-        REMOTE_ID: "000000000003"
+        REMOTE_ID: "cstm-relay-01"
         GIADDR: "10.0.1.65"
-        CIRCUIT_ID_MAP: "eth1=srl2-access|default|irb1|1:0"
+        CIRCUIT_ID_MAP: "eth1=1/0/1"
         RELAY_BR_IP_CIDR: "10.0.1.65/26"
         RELAY_UPLINK_IP_CIDR: "10.0.0.3/24"
         RELAY_DEFAULT_GW: "10.0.0.1"

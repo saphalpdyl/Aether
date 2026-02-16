@@ -52,11 +52,19 @@ class RouterTracker:
 
     async def on_dhcp_event(self, event: dict):
         circuit_id = event.get("circuit_id")
-        if not circuit_id:
+        remote_id = event.get("remote_id")
+        if not circuit_id and not remote_id:
             return
 
-        parts = circuit_id.split("|")
-        name = parts[0] if parts[0] else None
+        name = None
+        # New format: remote_id is the access router name.
+        if remote_id in self.routers:
+            name = remote_id
+        # Legacy format: circuit_id starts with "<router>|..."
+        elif circuit_id and "|" in circuit_id:
+            parts = circuit_id.split("|")
+            name = parts[0] if parts[0] else None
+
         if not name:
             return
 

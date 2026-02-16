@@ -28,6 +28,7 @@ const createRouterSchema = z.object({
   router_name: z.string().min(1, "Router name is required"),
   giaddr: z.string().min(1, "Gateway IP is required"),
   bng_id: z.string().optional(),
+  total_interfaces: z.coerce.number().int().min(2, "Minimum 2 interfaces"),
 });
 
 type CreateRouterValues = z.infer<typeof createRouterSchema>;
@@ -47,6 +48,7 @@ export function RouterCreateDialog({ open, onOpenChange, onCreated }: RouterCrea
       router_name: "",
       giaddr: "",
       bng_id: "",
+      total_interfaces: 5,
     },
   });
 
@@ -60,6 +62,7 @@ export function RouterCreateDialog({ open, onOpenChange, onCreated }: RouterCrea
           router_name: data.router_name,
           giaddr: data.giaddr,
           bng_id: data.bng_id || null,
+          total_interfaces: data.total_interfaces,
         }),
       });
 
@@ -108,6 +111,19 @@ export function RouterCreateDialog({ open, onOpenChange, onCreated }: RouterCrea
                   <FormLabel>Gateway IP (giaddr)</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. 10.0.0.1" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="total_interfaces"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Total Interfaces</FormLabel>
+                  <FormControl>
+                    <Input type="number" min="2" placeholder="e.g. 5" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

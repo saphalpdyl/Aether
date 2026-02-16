@@ -243,10 +243,13 @@ def disconnect_service_session(service_id: int):
     circuit_id = svc[0]["circuit_id"]
     remote_id = svc[0]["remote_id"]
 
-    # sessions_active stores the raw DHCP circuit_id (e.g. srl-access|default|irb1|1:0)
-    # but older services may have a bng-id/remote-id/ prefix — strip it
-    if "/" in circuit_id:
-        circuit_id = circuit_id.split("/")[-1]
+    # Backward compatibility: older rows sometimes stored full username in circuit_id
+    # as bng-id/remote-id/circuit-id. Keep new "1/0/x" circuit IDs intact.
+    if circuit_id.startswith("bng-") and circuit_id.count("/") >= 2:
+        parts = circuit_id.split("/", 2)
+        circuit_id = parts[2]
+        if not remote_id:
+            remote_id = parts[1]
 
     rows = query_oss(
         """

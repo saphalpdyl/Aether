@@ -89,6 +89,7 @@ CREATE TABLE access_routers (
     router_name        TEXT        PRIMARY KEY,
     giaddr             INET        NOT NULL,
     bng_id             TEXT,                          -- nullable until assigned
+    total_interfaces   INTEGER     NOT NULL DEFAULT 5,
     is_alive           BOOLEAN     NOT NULL DEFAULT false,
     last_seen          TIMESTAMPTZ,                   -- nullable (never seen yet)
     last_ping          TIMESTAMPTZ,                   -- nullable

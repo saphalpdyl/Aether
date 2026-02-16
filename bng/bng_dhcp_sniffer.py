@@ -244,18 +244,13 @@ def decode_dhcp_with_reason(pkt: bytes):
     return result, "ok"
 
 
-def _normalize_remote_id(remote_id: bytes) -> str:
-    """Convert raw remote_id bytes to hex string."""
-    return remote_id.hex()
-
-
 def _encode_event(info: dict) -> dict:
     out = dict(info)
     out.pop("payload", None)
     if isinstance(out.get("circuit_id"), (bytes, bytearray)):
         out["circuit_id"] = out["circuit_id"].decode(errors="replace")
     if isinstance(out.get("remote_id"), (bytes, bytearray)):
-        out["remote_id"] = _normalize_remote_id(out["remote_id"])
+        out["remote_id"] = out["remote_id"].decode(errors="replace")
     if isinstance(out.get("relay_id"), (bytes, bytearray)):
         out["relay_id"] = out["relay_id"].decode(errors="replace")
     if isinstance(out.get("chaddr"), (bytes, bytearray)):
@@ -268,7 +263,7 @@ def emit_event(info: dict, emit_json: bool):
     event_info = dict(info)
     event_info["event"] = "dhcp"
     event_info.pop("payload", None)
-    
+
     if emit_json:
         print(json.dumps(_encode_event(event_info)), flush=True)
     else:
@@ -334,7 +329,7 @@ def relay_loop(
                 # Ignore server responses being routed out this interface (prevents loop)
                 if info.get("src_ip") == server_ip:
                     continue
-                
+
                 log(
                     "rx client msg_type={msg_type} xid={xid} src_port={src_port} dst_port={dst_port} "
                     "circuit_id={circuit_id} remote_id={remote_id}".format(
@@ -346,7 +341,7 @@ def relay_loop(
                         remote_id=info.get("remote_id"),
                     )
                 )
-                
+
                 # Emit event for client packet
                 emit_event(info, emit_json)
 
@@ -359,23 +354,23 @@ def relay_loop(
                 if not payload:
                     log("drop: missing payload")
                     continue
-                
+
                 # Get the EXISTING circuit_id and remote_id from the packet (from access switch)
                 # These should be PRESERVED
                 existing_circuit_id = info.get("circuit_id")
                 existing_remote_id = info.get("remote_id")
-                
+
                 # Build NEW Option 82 with:
                 # - circuit_id: from access switch (preserve)
                 # - remote_id: from access switch (preserve) OR CLI override if specified
                 # - relay_id: from CLI args (add)
                 final_remote_id = remote_id.encode() if remote_id else existing_remote_id
                 relayid = bng_id.encode() if relay_id else None
-                
+
                 opt82 = build_option82(existing_circuit_id, final_remote_id, relayid)
-                
+
                 log(f"building opt82: circuit_id={existing_circuit_id} remote_id={final_remote_id} relay_id={relayid}")
-                
+
                 # Rebuild options (removes old Option 82, adds new one)
                 opt_list = parse_options(payload[BOOTP_FIXED_LEN + len(DHCP_MAGIC) :])
                 new_opts = rebuild_options(opt_list, opt82)
@@ -386,7 +381,7 @@ def relay_loop(
 
                 uplink_sock.sendto(new_payload, (server_ip, DHCP_SERVER_PORT))
                 log("forwarded to server")
-                
+
             elif s is raw_uplink:
                 # Server -> Relay packets via raw uplink (catches traffic not destined to local IP)
                 pkt, _ = raw_uplink.recvfrom(65535)
@@ -412,14 +407,14 @@ def relay_loop(
             elif s is reply_sock:
                 # Server -> Relay packets (UDP socket receives DHCP replies)
                 data, _ = reply_sock.recvfrom(65535)
-                
+
                 # Parse the DHCP payload (data is just the UDP payload)
                 info = decode_dhcp_payload(data, DHCP_SERVER_PORT, DHCP_SERVER_PORT)
                 if info:
                     log(f"rx server msg_type={info.get('msg_type')} xid={info.get('xid')}")
                     # Emit event for server packet
                     emit_event(info, emit_json)
-                
+
                 # Forward server replies:
                 # - If giaddr is set, unicast to relay agent (giaddr) on port 67.
                 # - Otherwise broadcast to clients on port 68.

@@ -67,11 +67,11 @@ INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
     ('Maya Patel', 'maya.patel@example.com', '+1-555-0103', '14 Oak Lane', 'Nashua', '03060', 'NH');
 
 -- Seed access routers
-INSERT INTO access_routers (router_name, giaddr, bng_id) VALUES
-    ('srl-access',  '10.0.0.2', 'bng-01'),
-    ('srl2-access', '10.0.0.3', 'bng-01');
+INSERT INTO access_routers (router_name, giaddr, bng_id, total_interfaces) VALUES
+    ('cstm-relay-01', '10.0.0.2', 'bng-01', 3),
+    ('cstm-relay-02', '10.0.0.3', 'bng-01', 2);
 
--- Seed default service: Acme Bakery on srl-access, Gold plan
--- RADIUS username: bng-01/000000000002/srl-access=7Cdefault=7Cirb1=7C1:0
+-- Seed default service: Acme Bakery on cstm-relay-01 port eth2, Gold plan
+-- RADIUS username: bng-01/cstm-relay-01/1/0/2
 INSERT INTO services (customer_id, plan_id, circuit_id, remote_id) VALUES
-    (1, 3, 'srl-access|default|irb1|1:0', '000000000002');
+    (1, 3, '1/0/2', 'cstm-relay-01');
