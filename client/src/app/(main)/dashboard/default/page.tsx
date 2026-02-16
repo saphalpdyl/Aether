@@ -1,20 +1,22 @@
-import { ChartAreaInteractive } from "./_components/chart-area-interactive";
-import SessionsTable from "./_components/sessions-table";
-import SessionsHistoryTable from "./_components/sessions-history-table";
-import SessionsEventsTable from "./_components/sessions-events-table";
-import RoutersTable from "./_components/routers-table";
-import CustomersTable from "./_components/customers-table";
-import { SectionCards } from "./_components/section-cards";
-import { BngHealthCards } from "./_components/bng-health-cards";
+import { Server } from "lucide-react";
+
 import Logo from "@/components/logo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Server } from "lucide-react";
+
+import { BngHealthCards } from "./_components/bng-health-cards";
+import { ChartAreaInteractive } from "./_components/chart-area-interactive";
+import CustomersTable from "./_components/customers-table";
+import RoutersTable from "./_components/routers-table";
+import { SectionCards } from "./_components/section-cards";
+import SessionsEventsTable from "./_components/sessions-events-table";
+import SessionsHistoryTable from "./_components/sessions-history-table";
+import SessionsTable from "./_components/sessions-table";
 
 export default function Page() {
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
       <div className="flex gap-2 items-baseline">
-        <Logo height={100} width={100} variant="isolated-monochrome-black" className="dark:invert"/>
+        <Logo height={100} width={100} variant="isolated-monochrome-black" className="dark:invert" />
         <span className="text-lg font-light">| OSS Dashboard</span>
       </div>
       <SectionCards />
@@ -24,7 +26,7 @@ export default function Page() {
         Broadband Network Gateways ( BNGs )
       </span>
       <BngHealthCards />
-      {/* <ChartAreaInteractive /> */}
+      <ChartAreaInteractive />
       <Tabs defaultValue="active" className="w-full">
         <TabsList>
           <TabsTrigger value="active">Active Sessions</TabsTrigger>

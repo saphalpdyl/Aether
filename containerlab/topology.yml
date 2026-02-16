@@ -108,6 +108,8 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-01"
         GIADDR: "10.0.1.1"
+        RELAY_UPLINK_IFACE: "eth3"
+        RELAY_ACCESS_IFACES: "eth1,eth2,eth4,eth5,eth6"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth4=1/0/4,eth5=1/0/5,eth6=1/0/6"
         RELAY_BR_IP_CIDR: "10.0.1.1/26"
         RELAY_UPLINK_IP_CIDR: "10.0.0.2/24"
@@ -133,6 +135,8 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-02"
         GIADDR: "10.0.1.65"
+        RELAY_UPLINK_IFACE: "eth2"
+        RELAY_ACCESS_IFACES: "eth1,eth3,eth4"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth3=1/0/3,eth4=1/0/4"
         RELAY_BR_IP_CIDR: "10.0.1.65/26"
         RELAY_UPLINK_IP_CIDR: "10.0.0.3/24"
@@ -158,6 +162,8 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-11"
         GIADDR: "10.0.3.1"
+        RELAY_UPLINK_IFACE: "eth3"
+        RELAY_ACCESS_IFACES: "eth1,eth2"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2"
         RELAY_BR_IP_CIDR: "10.0.3.1/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.2/24"
@@ -183,6 +189,8 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-12"
         GIADDR: "10.0.3.65"
+        RELAY_UPLINK_IFACE: "eth2"
+        RELAY_ACCESS_IFACES: "eth1"
         CIRCUIT_ID_MAP: "eth1=1/0/1"
         RELAY_BR_IP_CIDR: "10.0.3.65/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.3/24"
@@ -205,6 +213,8 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-13"
         GIADDR: "10.0.4.1"
+        RELAY_UPLINK_IFACE: "eth2"
+        RELAY_ACCESS_IFACES: "eth1"
         CIRCUIT_ID_MAP: "eth1=1/0/1"
         RELAY_BR_IP_CIDR: "10.0.4.1/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.4/24"
@@ -227,6 +237,8 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-14"
         GIADDR: "10.0.4.65"
+        RELAY_UPLINK_IFACE: "eth2"
+        RELAY_ACCESS_IFACES: "eth1"
         CIRCUIT_ID_MAP: "eth1=1/0/1"
         RELAY_BR_IP_CIDR: "10.0.4.65/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.5/24"
@@ -249,6 +261,8 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-15"
         GIADDR: "10.0.4.129"
+        RELAY_UPLINK_IFACE: "eth2"
+        RELAY_ACCESS_IFACES: "eth1"
         CIRCUIT_ID_MAP: "eth1=1/0/1"
         RELAY_BR_IP_CIDR: "10.0.4.129/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.6/24"
