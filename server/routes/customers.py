@@ -34,11 +34,11 @@ def list_customers_listing():
             SELECT count(*)::int AS active_count
             FROM services s
             JOIN sessions_active sa ON 
-                -- Extract router name from circuit_id and look up bng_id to construct username
+                -- remote_id is the router name in the new identity model
                 sa.username = (
                     SELECT ar.bng_id || '/' || s.remote_id || '/' || s.circuit_id
                     FROM access_routers ar
-                    WHERE ar.router_name = SPLIT_PART(s.circuit_id, '|', 1)
+                    WHERE ar.router_name = s.remote_id
                 )
             WHERE s.customer_id = c.id
         ) act ON true
@@ -46,11 +46,11 @@ def list_customers_listing():
             SELECT count(*)::int AS recent_count
             FROM services s
             JOIN sessions_history sh ON 
-                -- Extract router name from circuit_id and look up bng_id to construct username
+                -- remote_id is the router name in the new identity model
                 sh.username = (
                     SELECT ar.bng_id || '/' || s.remote_id || '/' || s.circuit_id
                     FROM access_routers ar
-                    WHERE ar.router_name = SPLIT_PART(s.circuit_id, '|', 1)
+                    WHERE ar.router_name = s.remote_id
                 )
             WHERE s.customer_id = c.id AND sh.session_end > now() - interval '24 hours'
         ) hist ON true
@@ -66,11 +66,11 @@ def list_customer_sessions(customer_id: int):
         SELECT sa.*
         FROM services s
         JOIN sessions_active sa ON 
-            -- Extract router name from circuit_id and look up bng_id to construct username
+            -- remote_id is the router name in the new identity model
             sa.username = (
                 SELECT ar.bng_id || '/' || s.remote_id || '/' || s.circuit_id
                 FROM access_routers ar
-                WHERE ar.router_name = SPLIT_PART(s.circuit_id, '|', 1)
+                WHERE ar.router_name = s.remote_id
             )
         WHERE s.customer_id = %(customer_id)s
         ORDER BY sa.start_time DESC
