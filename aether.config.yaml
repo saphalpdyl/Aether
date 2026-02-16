@@ -1,0 +1,72 @@
+bngs:
+  - bng-id: bng-01
+
+    topology:
+      interfaces:
+        subscriber: eth1
+        upstream: eth2
+        dhcp-uplink: eth3
+
+      ipv4:
+        subscriber-cidr: 10.0.0.1/24
+        upstream-cidr: 192.0.2.1/30
+        dhcp-uplink-cidr: 198.18.0.1/24
+        default-gw: 192.0.2.2
+        nat-source-cidr: 10.0.0.0/24
+
+      services:
+        dhcp-server-ip: 198.18.0.3
+        radius-server-ip: 198.18.0.2
+        nas-ip: 198.18.0.1
+        redis-host: 198.18.0.10
+        oss-api-url: http://198.18.0.21:8000
+        kea-ctrl-url: http://198.18.0.3:6772
+
+    access-nodes:
+      - node-config:
+          remote-id: cstm-relay-01
+
+          topology:
+            interfaces:
+              count: 3
+              subscriber-ifaces: [eth1, eth2]
+              uplink-iface: eth3
+
+          dhcp:
+            ipv4:
+              addr: 10.0.1.1
+              subnet: 10.0.1.0/26
+              pool-start: 10.0.1.10
+              pool-end: 10.0.1.62
+
+          uplink:
+            ipv4-cidr: 10.0.0.2/24
+            default-gw: 10.0.0.1
+
+          bng-route:
+            subnet: 10.0.1.0/26
+            next-hop: 10.0.0.2
+
+      - node-config:
+          remote-id: cstm-relay-02
+
+          topology:
+            interfaces:
+              count: 2
+              subscriber-ifaces: [eth1]
+              uplink-iface: eth2
+
+          dhcp:
+            ipv4:
+              addr: 10.0.1.65
+              subnet: 10.0.1.64/26
+              pool-start: 10.0.1.66
+              pool-end: 10.0.1.126
+
+          uplink:
+            ipv4-cidr: 10.0.0.3/24
+            default-gw: 10.0.0.1
+
+          bng-route:
+            subnet: 10.0.1.64/26
+            next-hop: 10.0.0.3

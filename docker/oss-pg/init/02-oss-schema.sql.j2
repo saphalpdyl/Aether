@@ -68,7 +68,6 @@ INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
 
 -- Seed access routers
 INSERT INTO access_routers (router_name, giaddr, bng_id, total_interfaces) VALUES
-
-    ('cstm-relay-01', '10.0.0.2', 'bng-01', 3),
-
-    ('cstm-relay-02', '10.0.0.3', 'bng-01', 2);
+{% for node in access_nodes %}
+    ('{{ node.remote_id }}', '{{ node.uplink_ip }}', '{{ bng.bng_id }}', {{ node.iface_count }}){% if not loop.last %},{% else %};{% endif %}
+{% endfor %}

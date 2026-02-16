@@ -19,37 +19,22 @@
     "renew-timer": 60,
     "rebind-timer": 90,
     "subnet4": [
-
+{% for node in access_nodes %}
       {
-        "id": 1,
-        "subnet": "10.0.1.0/26",
+        "id": {{ loop.index }},
+        "subnet": "{{ node.dhcp_subnet }}",
         "relay": {
-          "ip-addresses": ["10.0.1.1"]
+          "ip-addresses": ["{{ node.dhcp_addr }}"]
         },
         "pools": [
-          {"pool": "10.0.1.10 - 10.0.1.62"}
+          {"pool": "{{ node.pool_start }} - {{ node.pool_end }}"}
         ],
         "option-data": [
-          {"name": "routers", "data": "10.0.1.1"},
+          {"name": "routers", "data": "{{ node.dhcp_addr }}"},
           {"name": "domain-name-servers", "data": "1.1.1.1, 8.8.8.8"}
         ]
-      },
-
-      {
-        "id": 2,
-        "subnet": "10.0.1.64/26",
-        "relay": {
-          "ip-addresses": ["10.0.1.65"]
-        },
-        "pools": [
-          {"pool": "10.0.1.66 - 10.0.1.126"}
-        ],
-        "option-data": [
-          {"name": "routers", "data": "10.0.1.65"},
-          {"name": "domain-name-servers", "data": "1.1.1.1, 8.8.8.8"}
-        ]
-      }
-
+      }{% if not loop.last %},{% endif %}
+{% endfor %}
     ],
     "loggers": [
       {

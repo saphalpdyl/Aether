@@ -59,14 +59,6 @@ INSERT INTO radgroupreply (groupname, attribute, op, value) VALUES
   ('Legacy 10/5', 'OSS-Download-Burst',   ':=', '500'),
   ('Legacy 10/5', 'OSS-Upload-Burst',     ':=', '250');
 
--- Seed default subscriber: Acme Bakery on cstm-relay-01 (Gold 300/100)
-DELETE FROM radcheck WHERE username = 'bng-01/cstm-relay-01/1/0/2';
-INSERT INTO radcheck (username, attribute, op, value) VALUES
-  ('bng-01/cstm-relay-01/1/0/2', 'Cleartext-Password', ':=', 'testing123');
-
-DELETE FROM radusergroup WHERE username = 'bng-01/cstm-relay-01/1/0/2';
-INSERT INTO radusergroup (username, groupname, priority) VALUES
-  ('bng-01/cstm-relay-01/1/0/2', 'Gold 300/100', 1);
 SQL
 
 #ln -sf /etc/freeradius/3.0/mods-available/files /etc/freeradius/3.0/mods-enabled/files

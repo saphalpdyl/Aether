@@ -2,160 +2,46 @@ name: isp-lab
 
 topology:
   nodes:
-
-    h-cstm-relay-01-eth1:
+{% for host in hosts %}
+    {{ host.name }}:
       kind: linux
       image: lab-host
       env:
-        HOST_MAC: "f6:bc:62:32:73:85"
+        HOST_MAC: {{ host.mac | tojson }}
 
-
-    h-cstm-relay-01-eth2:
-      kind: linux
-      image: lab-host
-      env:
-        HOST_MAC: "f6:0f:50:39:09:c9"
-
-
-    h-cstm-relay-02-eth1:
-      kind: linux
-      image: lab-host
-      env:
-        HOST_MAC: "36:69:8c:9e:28:26"
-
-
-
-    cstm-relay-01:
+{% endfor %}
+{% for node in access_nodes %}
+    {{ node.container_name }}:
       kind: linux
       image: lab-relay
       env:
-        REMOTE_ID: "cstm-relay-01"
-        GIADDR: "10.0.1.1"
-        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2"
-        RELAY_BR_IP_CIDR: "10.0.1.1/26"
-        RELAY_UPLINK_IP_CIDR: "10.0.0.2/24"
-        RELAY_DEFAULT_GW: "10.0.0.1"
+        REMOTE_ID: {{ node.remote_id | tojson }}
+        GIADDR: {{ node.dhcp_addr | tojson }}
+        CIRCUIT_ID_MAP: {{ node.circuit_id_map | tojson }}
+        RELAY_BR_IP_CIDR: {{ (node.dhcp_addr ~ '/' ~ node.subnet_prefix) | tojson }}
+        RELAY_UPLINK_IP_CIDR: {{ node.uplink_cidr | tojson }}
+        RELAY_DEFAULT_GW: {{ node.uplink_default_gw | tojson }}
       exec:
+{% for cmd in node.relay_exec %}
+        - {{ cmd | tojson }}
+{% endfor %}
 
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && break; sleep 0.2; done\""
-
-        - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
-
-        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up\""
-
-        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0\""
-
-        - "sh -c \"ip link set br0 up\""
-
-        - "sh -c \"ip addr replace 10.0.1.1/26 dev br0\""
-
-        - "sh -c \"ip addr replace 10.0.0.2/24 dev eth3\""
-
-        - "sh -c \"ip route replace default via 10.0.0.1 dev eth3\""
-
-        - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
-
-        - "sh -c \"ip link set eth0 down || true\""
-
-
-
-    cstm-relay-02:
-      kind: linux
-      image: lab-relay
-      env:
-        REMOTE_ID: "cstm-relay-02"
-        GIADDR: "10.0.1.65"
-        CIRCUIT_ID_MAP: "eth1=1/0/1"
-        RELAY_BR_IP_CIDR: "10.0.1.65/26"
-        RELAY_UPLINK_IP_CIDR: "10.0.0.3/24"
-        RELAY_DEFAULT_GW: "10.0.0.1"
-      exec:
-
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done\""
-
-        - "sh -c \"ip link set eth1 up && ip link set eth2 up\""
-
-        - "sh -c \"ip addr replace 10.0.1.65/26 dev eth1\""
-
-        - "sh -c \"ip addr replace 10.0.0.3/24 dev eth2\""
-
-        - "sh -c \"ip route replace default via 10.0.0.1 dev eth2\""
-
-        - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
-
-        - "sh -c \"ip link set eth0 down || true\""
-
-
-
+{% endfor %}
     agg:
       kind: linux
       image: lab-agg
 
-    bng-01:
+    {{ bng.bng_node_name }}:
       kind: linux
       image: lab-bng
       env:
-
-        BNG_IDENTIFIER: "bng-01"
-
-        BNG_SUBSCRIBER_IFACE: "eth1"
-
-        BNG_UPLINK_IFACE: "eth2"
-
-        BNG_DHCP_UPLINK_IFACE: "eth3"
-
-        BNG_SUBSCRIBER_IP_CIDR: "10.0.0.1/24"
-
-        BNG_UPLINK_IP_CIDR: "192.0.2.1/30"
-
-        BNG_DHCP_UPLINK_IP_CIDR: "198.18.0.1/24"
-
-        BNG_DEFAULT_GW: "192.0.2.2"
-
-        BNG_NAT_SOURCE_CIDR: "10.0.0.0/24"
-
-        BNG_DHCP_SERVER_IP: "198.18.0.3"
-
-        BNG_RADIUS_SERVER_IP: "198.18.0.2"
-
-        BNG_NAS_IP: "198.18.0.1"
-
-        BNG_REDIS_HOST: "198.18.0.10"
-
-        BNG_OSS_API_URL: "http://198.18.0.21:8000"
-
-        BNG_KEA_CTRL_URL: "http://198.18.0.3:6772"
-
-        BNG_RELAY1_SUBNET_CIDR: "10.0.1.0/26"
-
-        BNG_RELAY1_NEXT_HOP: "10.0.0.2"
-
-        BNG_RELAY2_SUBNET_CIDR: "10.0.1.64/26"
-
-        BNG_RELAY2_NEXT_HOP: "10.0.0.3"
-
+{% for key, value in bng_env.items() %}
+        {{ key }}: {{ value | tojson }}
+{% endfor %}
       exec:
-
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && break; sleep 0.2; done; PYTHONUNBUFFERED=1 python3 -u /opt/bng/bng_main.py --bng-id $BNG_IDENTIFIER >>/proc/1/fd/1 2>>/proc/1/fd/2 &\""
-
-        - "sh -c \"coad >/proc/1/fd/1 2>/proc/1/fd/2 &\""
-
-        - "sh -c \"iperf3 -s -D\""
-
-        - "sh -c \"ip link set eth0 down || true\""
-
-        - "tc qdisc add dev eth1 root handle 1: htb r2q 100 default 9999"
-
-        - "tc class add dev eth1 parent 1: classid 1:1 htb rate 1gbit"
-
-        - "tc class add dev eth1 parent 1:1 classid 1:9999 htb rate 1gbit"
-
-        - "tc qdisc add dev eth2 root handle 1: htb r2q 100 default 9999"
-
-        - "tc class add dev eth2 parent 1: classid 1:1 htb rate 1gbit"
-
-        - "tc class add dev eth2 parent 1:1 classid 1:9999 htb rate 1gbit"
-
+{% for cmd in bng_exec %}
+        - {{ cmd | tojson }}
+{% endfor %}
 
     mgmt:
       kind: linux
@@ -301,57 +187,23 @@ topology:
       kind: linux
       image: alpine:latest
       exec:
-
-        - "apk add --no-cache iptables dhcpcd curl iperf3 ethtool"
-
-        - "dhcpcd eth11"
-
-        - "sleep 5"
-
-        - "sysctl -w net.ipv4.ip_forward=1"
-
-        - "ip link set eth1 up"
-
-        - "ip link set eth2 up"
-
-        - "ip addr add 192.0.2.2/30 dev eth1"
-
-        - "ip addr add 198.18.0.254/24 dev eth2"
-
-        - "iptables -t nat -A POSTROUTING -s 198.18.0.0/24 -o eth11 -j MASQUERADE"
-
-        - "iptables -t nat -A POSTROUTING -s 10.0.1.0/26 -o eth11 -j MASQUERADE"
-
-        - "iptables -t nat -A POSTROUTING -s 10.0.1.64/26 -o eth11 -j MASQUERADE"
-
-        - "ip route replace 10.0.1.0/26 via 192.0.2.1"
-
-        - "ip route replace 10.0.1.64/26 via 192.0.2.1"
-
-        - "sh -c \"ip link set eth0 down || true\""
-
-        - "sh -c \"iperf3 -s -D\""
-
+{% for cmd in upstream_exec %}
+        - {{ cmd | tojson }}
+{% endfor %}
 
   links:
+{% for link in host_links %}
+    - endpoints: [{{ link.host | tojson }}, {{ link.access | tojson }}]
+{% endfor %}
 
-    - endpoints: ["h-cstm-relay-01-eth1:eth1", "cstm-relay-01:eth1"]
+{% for node in access_nodes %}
+    - endpoints: [{{ (node.container_name ~ ':' ~ node.uplink_iface) | tojson }}, {{ ('agg:' ~ node.agg_iface) | tojson }}]
+{% endfor %}
 
-    - endpoints: ["h-cstm-relay-01-eth2:eth1", "cstm-relay-01:eth2"]
+    - endpoints: [{{ ('agg:' ~ agg_bng_iface) | tojson }}, {{ (bng.bng_node_name ~ ':' ~ bng.subscriber_iface) | tojson }}]
+    - endpoints: [{{ (bng.bng_node_name ~ ':' ~ bng.upstream_iface) | tojson }}, "upstream:eth1"]
 
-    - endpoints: ["h-cstm-relay-02-eth1:eth1", "cstm-relay-02:eth1"]
-
-
-
-    - endpoints: ["cstm-relay-01:eth3", "agg:eth1"]
-
-    - endpoints: ["cstm-relay-02:eth2", "agg:eth2"]
-
-
-    - endpoints: ["agg:eth3", "bng-01:eth1"]
-    - endpoints: ["bng-01:eth2", "upstream:eth1"]
-
-    - endpoints: ["bng-01:eth3", "mgmt:eth1"]
+    - endpoints: [{{ (bng.bng_node_name ~ ':' ~ bng.dhcp_uplink_iface) | tojson }}, "mgmt:eth1"]
     - endpoints: ["upstream:eth2", "mgmt:eth2"]
     - endpoints: ["kea:eth1", "mgmt:eth3"]
     - endpoints: ["radius:eth1", "mgmt:eth4"]
