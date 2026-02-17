@@ -1,12 +1,35 @@
 import random
 import threading
+import requests
+import time
 
 from fastapi import FastAPI
 
-from config import log
+from config import log, OSS_BACKEND_HOST, OSS_BACKEND_PORT, OSS_BACKEND_MAX_RETRY, OSS_RETRY_INTERVAL
 from oss import fetch_customers_and_plans, routers_to_bng_id_hashmap, create_service_in_oss
 from containers import __LAB_ONLY_get_host_containers, get_host_access_node_name_and_iface_from_container_name
 from traffic import dhcp_acquire_all, traffic_loop
+
+oss_backend_url = f"http://{OSS_BACKEND_HOST}:{OSS_BACKEND_PORT}"
+
+# Wait for OSS-backend to be ready
+wait_retry_count = 0
+while True:
+    try:
+        response = requests.get(f"{oss_backend_url}/health")
+        if response.status_code == 200:
+            log.info("OSS-backend is ready")
+            break
+
+    except requests.exceptions.ConnectionError:
+        if wait_retry_count > OSS_BACKEND_MAX_RETRY:
+            log.error("Failed to connect to OSS-backend after maximum retries")
+            raise
+
+        wait_retry_count += 1
+        log.info(f"Waiting for OSS-backend to be ready... ({wait_retry_count}/{OSS_BACKEND_MAX_RETRY})")
+    finally:
+        time.sleep(OSS_RETRY_INTERVAL)
 
 def startup():
     # Get initial customers and plans
