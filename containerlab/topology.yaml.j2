@@ -203,6 +203,23 @@ topology:
         - "ip addr add 198.18.0.21/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
         - "sh -c \"for i in $(seq 1 60); do python3 -c 'import socket; s=socket.create_connection((\\\"198.18.0.11\\\",5432),2); s.close()' 2>/dev/null && break; sleep 1; done\""
+        - "sh -c \"for i in $(seq 1 60); do python3 -c \\\"import psycopg2; c=psycopg2.connect(host='198.18.0.6',dbname='radius',user='radius',password='test'); cur=c.cursor(); cur.execute(\\\\\\\"SELECT 1 FROM radusergroup LIMIT 1\\\\\\\"); c.close()\\\" 2>/dev/null && break; sleep 1; done\""
+        - "sh -c \"uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
+
+    executor:
+      kind: linux
+      image: lab-executor
+      mgmt-ipv4: 172.20.20.22
+      env:
+        OSS_BACKEND_HOST: "198.18.0.21"
+      binds:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - /home/test/lab/simulator.config.json:/opt/executor/simulator.config.json
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.22/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
         - "sh -c \"uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
 
     {{ shared.upstream["upstream-node-name"] }}:

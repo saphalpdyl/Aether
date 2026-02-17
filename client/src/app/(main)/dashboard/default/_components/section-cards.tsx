@@ -62,7 +62,7 @@ export function SectionCards() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [routers, setRouters] = useState<RoutersData | null>(null);
   const [trafficHistory, setTrafficHistory] = useState<TrafficHistoryPoint[]>([]);
-  const lastTrafficSampleRef = useRef<{
+  const baselineTrafficRef = useRef<{
     tsMs: number;
     inputOctets: number;
     outputOctets: number;
@@ -80,46 +80,45 @@ export function SectionCards() {
           const inputOctets = Number(data.active_traffic?.input_octets || 0);
           const outputOctets = Number(data.active_traffic?.output_octets || 0);
 
-          const lastTrafficSample = lastTrafficSampleRef.current;
-          if (lastTrafficSample) {
-            const elapsedSeconds = Math.max((nowMs - lastTrafficSample.tsMs) / 1000, 0.001);
-            const inDelta = Math.max(inputOctets - lastTrafficSample.inputOctets, 0);
-            const outDelta = Math.max(outputOctets - lastTrafficSample.outputOctets, 0);
-            const inBps = (inDelta * 8) / elapsedSeconds;
-            const outBps = (outDelta * 8) / elapsedSeconds;
-
-            setTrafficHistory((prev) => {
-              const next = [
-                ...prev,
-                {
-                  ts: new Date(nowMs).toISOString(),
-                  in_bps: inBps,
-                  out_bps: outBps,
-                  total_bps: inBps + outBps,
-                },
-              ];
-              return next.slice(-40);
-            });
-          } else {
-            setTrafficHistory((prev) => {
-              const next = [
-                ...prev,
-                {
-                  ts: new Date(nowMs).toISOString(),
-                  in_bps: 0,
-                  out_bps: 0,
-                  total_bps: 0,
-                },
-              ];
-              return next.slice(-40);
-            });
+          // Initialize baseline if not set
+          if (!baselineTrafficRef.current) {
+            baselineTrafficRef.current = {
+              tsMs: nowMs,
+              inputOctets,
+              outputOctets,
+            };
           }
 
-          lastTrafficSampleRef.current = {
-            tsMs: nowMs,
-            inputOctets,
-            outputOctets,
-          };
+          // Calculate bps over 5-minute window
+          const fiveMinutesMs = 5 * 60 * 1000;
+          const baselineTraffic = baselineTrafficRef.current;
+          const elapsedSeconds = Math.max((nowMs - baselineTraffic.tsMs) / 1000, 0.001);
+          const inDelta = Math.max(inputOctets - baselineTraffic.inputOctets, 0);
+          const outDelta = Math.max(outputOctets - baselineTraffic.outputOctets, 0);
+          const inBps = (inDelta * 8) / elapsedSeconds;
+          const outBps = (outDelta * 8) / elapsedSeconds;
+
+          // Reset baseline every 5 minutes
+          if (nowMs - baselineTraffic.tsMs >= fiveMinutesMs) {
+            baselineTrafficRef.current = {
+              tsMs: nowMs,
+              inputOctets,
+              outputOctets,
+            };
+          }
+
+          setTrafficHistory((prev) => {
+            const next = [
+              ...prev,
+              {
+                ts: new Date(nowMs).toISOString(),
+                in_bps: inBps,
+                out_bps: outBps,
+                total_bps: inBps + outBps,
+              },
+            ];
+            return next.slice(-40);
+          });
         }
       } catch (error) {
         console.error("Failed to fetch stats:", error);

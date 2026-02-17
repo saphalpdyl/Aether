@@ -94,6 +94,7 @@ def create_service(body: ServiceCreate):
         upsert_radius_usergroup(username, plan_rows[0]["name"])
         upsert_radius_usercheck(username)
     except Exception as e:
+        print(f"Error syncing service to RADIUS: {e}")
         raise HTTPException(status_code=502, detail=f"Failed to sync service to RADIUS: {e}")
 
     created = query_oss(

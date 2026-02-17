@@ -3,6 +3,9 @@
 ## In Progress
 - **Alerting** — Notify on router down, BNG health degradation, or session anomalies
 - **Historical analytics** — Per-subscriber traffic trends, peak usage hours, session duration distributions
+- **Distributed BNG system** — Multiple BNG instances operating as a coordinated cluster, each owning a slice of the access network. Session state replicated across instances via Redis for sub-second failover. Centralized OSS aggregates events from all BNGs with per-instance health tracking already in place. VRRP on gateway IPs for transparent subscriber failover.
+- **Declarative topology generation** — Define the entire distributed BNG deployment in a single YAML file: number of BNG instances, IP allocations, access router assignments, DHCP pools, RADIUS targets, and subscriber density per node. A Jinja2 templating engine generates the full Containerlab topology, SR Linux configs, Kea subnets, and BNG environment variables from this single source of truth. Spin up a 1-BNG lab or a 10-BNG mesh with one config change.
+- **Lab simulation UI** — A non-traditional operator interface purpose-built for the lab environment. Instead of mimicking a production NOC dashboard, exposes direct control over subscriber hosts through Containerlab's Docker bridge. Demo users can simulate real subscriber behavior — trigger DHCP discover/release, bring interfaces up/down, and watch sessions appear and tear down in real time — all from the browser without touching a terminal.
 
 ## Planned
 
@@ -11,10 +14,7 @@
 
 ## Future
 
-- **Declarative topology generation** — Define the entire distributed BNG deployment in a single YAML file: number of BNG instances, IP allocations, access router assignments, DHCP pools, RADIUS targets, and subscriber density per node. A Jinja2 templating engine generates the full Containerlab topology, SR Linux configs, Kea subnets, and BNG environment variables from this single source of truth. Spin up a 1-BNG lab or a 10-BNG mesh with one config change.
-- **Distributed BNG system** — Multiple BNG instances operating as a coordinated cluster, each owning a slice of the access network. Session state replicated across instances via Redis for sub-second failover. Centralized OSS aggregates events from all BNGs with per-instance health tracking already in place. VRRP on gateway IPs for transparent subscriber failover.
 - **Traffic intelligence** — Classify subscriber traffic by protocol at the data plane layer. Identify DNS, HTTP, TLS (via SNI), QUIC, and streaming protocols from packet headers. Tag flows and export per-subscriber traffic breakdowns (streaming, gaming, web, other) to the OSS for visualization on the dashboard. Enables usage-based insights without full DPI.
-- **Lab simulation UI** — A non-traditional operator interface purpose-built for the lab environment. Instead of mimicking a production NOC dashboard, exposes direct control over subscriber hosts through Containerlab's Docker bridge. Demo users can simulate real subscriber behavior — trigger DHCP discover/release, bring interfaces up/down, and watch sessions appear and tear down in real time — all from the browser without touching a terminal.
 - **XDP/eBPF data plane** — Replace the current raw socket DHCP relay and nftables accounting with an XDP program for line-rate packet processing. DHCP packets redirected to userspace via `AF_XDP` sockets, per-subscriber traffic counters maintained in eBPF maps, and policy enforcement (allow/deny/rate-limit) applied in the kernel before packets ever reach the network stack.
 
 ## Done

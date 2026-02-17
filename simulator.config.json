@@ -1,0 +1,33 @@
+{
+  "traffic_commands": [
+    {
+      "name": "curl",
+      "commands": [
+        "curl -so /dev/null -w '%{http_code}' --max-time 10 http://example.com",
+        "curl -so /dev/null -w '%{http_code}' --max-time 10 http://info.cern.ch",
+        "curl -so /dev/null -w '%{http_code}' --max-time 10 http://httpbin.org/get"
+      ],
+      "weight": 4,
+      "sleep_range": [5, 20]
+    },
+    {
+      "name": "dig",
+      "commands": [
+        "dig +short google.com",
+        "dig +short cloudflare.com",
+        "dig +short example.com"
+      ],
+      "weight": 4,
+      "sleep_range": [5, 15]
+    },
+    {
+      "name": "iperf3",
+      "commands": [
+        "iperf3 -c 192.0.2.2 -t 3 -P 1",
+        "iperf3 -c 192.0.2.2 -t 3 -P 1 -R"
+      ],
+      "weight": 2,
+      "sleep_range": [10, 25]
+    }
+  ]
+}

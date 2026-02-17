@@ -64,7 +64,15 @@ INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
     ('Acme Bakery', 'ops@acmebakery.example', '+1-555-0100', '101 Market St', 'Springfield', '01103', 'MA'),
     ('Northside Clinic', 'it@northsideclinic.example', '+1-555-0101', '22 Health Ave', 'Hartford', '06103', 'CT'),
     ('River Apartments', 'manager@riverapts.example', '+1-555-0102', '78 River Rd', 'Providence', '02903', 'RI'),
-    ('Maya Patel', 'maya.patel@example.com', '+1-555-0103', '14 Oak Lane', 'Nashua', '03060', 'NH');
+    ('Maya Patel', 'maya.patel@example.com', '+1-555-0103', '14 Oak Lane', 'Nashua', '03060', 'NH'),
+    ('Downtown Deli', 'info@downtowndeli.example', '+1-555-0104', '55 Main St', 'Boston', '02108', 'MA'),
+    ('Elm Street Dental', 'front@elmstreetdental.example', '+1-555-0105', '9 Elm St', 'Worcester', '01608', 'MA'),
+    ('Harbor View Hotel', 'it@harborview.example', '+1-555-0106', '300 Wharf Blvd', 'Portland', '04101', 'ME'),
+    ('Lakeside Gym', 'admin@lakesidegym.example', '+1-555-0107', '42 Lake Dr', 'Burlington', '05401', 'VT'),
+    ('Pine Ridge School', 'tech@pineridge.example', '+1-555-0108', '88 Pine Rd', 'Concord', '03301', 'NH'),
+    ('Summit Coffee', 'hello@summitcoffee.example', '+1-555-0109', '7 Summit Ave', 'Stamford', '06901', 'CT'),
+    ('Jade Garden Restaurant', 'mgr@jadegarden.example', '+1-555-0110', '163 Garden Way', 'New Haven', '06510', 'CT'),
+    ('Coastal Realty', 'office@coastalrealty.example', '+1-555-0111', '205 Shore Dr', 'Newport', '02840', 'RI');
 
 -- Seed access routers
 INSERT INTO access_routers (router_name, giaddr, bng_id, total_interfaces) VALUES

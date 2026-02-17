@@ -33,3 +33,4 @@ app.include_router(customers.router)
 app.include_router(services.router)
 app.include_router(stats.router)
 
+app.get("/health")(lambda: {"status": "ok"})
