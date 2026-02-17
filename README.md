@@ -7,7 +7,7 @@ A full-stack operations support system for managing broadband subscriber session
 
 14 containerized services on an isolated `192.0.2.0/24` network, orchestrated by [Containerlab](https://containerlab.dev).
 
-![System Architecture](docs/architecture.png)
+![System Architecture](docs/architecture.svg)
 
 ### Data Plane
 
@@ -67,7 +67,7 @@ Session lifecycle events flow from the BNG's event dispatcher into a Redis Strea
 
 ## Network Topology
 
-<img width="4836" height="3453" alt="topology" src="https://github.com/user-attachments/assets/dc02de4b-da03-4261-a0b2-269cb02ef8d6" />
+![System Architecture](docs/network_topology.png)
 
 ## Screenshots
 
