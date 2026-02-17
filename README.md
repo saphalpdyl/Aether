@@ -66,7 +66,7 @@ Session lifecycle events flow from the BNG's event dispatcher into a Redis Strea
 | Frontend | Next.js, React |
 
 ## Network Topology
-
+This is the network topology for a standard two-BNG configuration.
 ![System Architecture](docs/network_topology.svg)
 
 ## Screenshots
