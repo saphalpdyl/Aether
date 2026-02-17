@@ -5,14 +5,14 @@ A full-stack operations support system for managing broadband subscriber session
 
 ## Architecture
 
-14 containerized services on an isolated `192.0.2.0/24` network, orchestrated by [Containerlab](https://containerlab.dev).
+A lot of containerized services orchestrated by [Containerlab](https://containerlab.dev).
 
 ![System Architecture](docs/architecture.svg)
 
 ### Data Plane
 
 - **BNG** — Custom Python-based broadband network gateway. Intercepts DHCP traffic via raw `AF_PACKET` sockets, modifies Option 82 sub-options (circuit-id, remote-id, relay-id), and relays between subscribers and the DHCP server. Manages per-subscriber lifecycle including nftables-based traffic accounting, RADIUS authorization, and idle session detection.
-- **Access Routers** — Nokia SR Linux switches acting as DHCP relay agents, injecting Option 82 metadata encoding the access port and subscriber ONU identifier.
+- **Access Routers** — Custom Python-based switches acting as DHCP relay agents, injecting Option 82 metadata encoding the access port and subscriber identifier.
 - **Kea DHCP** — ISC Kea DHCPv4 server with PostgreSQL lease storage and a control agent API used for lease reconciliation.
 - **FreeRADIUS** — Handles Access-Request/Accept/Reject and Accounting (Start/Interim-Update/Stop) with PostgreSQL-backed user profiles.
 
@@ -71,4 +71,8 @@ This is the network topology for a standard two-BNG configuration.
 
 ## Screenshots
 
-<img width="1274" height="1255" alt="dashboard" src="https://github.com/user-attachments/assets/8e1eed83-ca80-4887-a6ed-90103d480a41" />
+<img width="2481" height="1418" alt="image" src="https://github.com/user-attachments/assets/1d14f888-fd88-4baa-bf61-2e69e29fd0e3" />
+<img width="2471" height="1410" alt="image" src="https://github.com/user-attachments/assets/57881cb0-6a13-45f0-b2c9-b588ac27a508" />
+<img width="2481" height="1434" alt="image" src="https://github.com/user-attachments/assets/0aff4905-93d8-4a59-88ca-ec854803d654" />
+
+
