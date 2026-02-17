@@ -67,7 +67,7 @@ Session lifecycle events flow from the BNG's event dispatcher into a Redis Strea
 
 ## Network Topology
 
-![System Architecture](docs/network_topology.png)
+![System Architecture](docs/network_topology.svg)
 
 ## Screenshots
 
