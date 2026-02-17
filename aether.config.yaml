@@ -27,7 +27,7 @@ shared:
       - bng_ingestor:eth1
       - frontend:eth1
       - backend:eth1
-      - executor:eth1
+      - simulator:eth1
 
 bngs:
   - bng-id: bng-01

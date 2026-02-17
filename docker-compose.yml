@@ -76,8 +76,8 @@ services:
       context: .
       dockerfile: docker/backend/Dockerfile
     image: lab-backend
-  executor:
+  simulator:
     build:
       context: .
-      dockerfile: docker/executor/Dockerfile
-    image: lab-executor
+      dockerfile: docker/simulator/Dockerfile
+    image: lab-simulator
