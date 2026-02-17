@@ -5,12 +5,11 @@ import time
 
 from fastapi import FastAPI
 
-from config import log, OSS_BACKEND_HOST, OSS_BACKEND_PORT, OSS_BACKEND_MAX_RETRY, OSS_RETRY_INTERVAL
+from config import log, OSS_BACKEND_MAX_RETRY, OSS_RETRY_INTERVAL, oss_backend_url
 from oss import fetch_customers_and_plans, routers_to_bng_id_hashmap, create_service_in_oss
 from containers import __LAB_ONLY_get_host_containers, get_host_access_node_name_and_iface_from_container_name
 from traffic import dhcp_acquire_all, traffic_loop
 
-oss_backend_url = f"http://{OSS_BACKEND_HOST}:{OSS_BACKEND_PORT}"
 
 # Wait for OSS-backend to be ready
 wait_retry_count = 0

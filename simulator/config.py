@@ -17,3 +17,5 @@ structlog.configure(
 )
 
 log = structlog.get_logger()
+
+oss_backend_url = f"http://{OSS_BACKEND_HOST}:{OSS_BACKEND_PORT}"
