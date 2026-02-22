@@ -60,10 +60,10 @@ export function Combobox({
           className={cn("w-full justify-between", className)}
           disabled={disabled}
         >
-          <span className="truncate">
+          <span className="truncate min-w-0 flex-1 text-left">
             {selectedOption ? selectedOption.label : placeholder}
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 flex-none" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0">

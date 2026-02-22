@@ -28,6 +28,20 @@
       ],
       "weight": 2,
       "sleep_range": [10, 25]
+    },
+    "dhclient_init": {
+      "disable_in_automated_simulation": true,
+      "allow_for_demo_simulation": true,
+      "commands": [
+        "dhclient -v -1 eth1"
+      ]
+    },
+    "dhclient_release": {
+      "disable_in_automated_simulation": true,
+      "allow_for_demo_simulation": true,
+      "commands": [
+        "dhclient -v -r -d eth1"
+      ]
     }
   }
 }

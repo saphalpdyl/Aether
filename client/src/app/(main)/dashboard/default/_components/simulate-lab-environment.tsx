@@ -6,6 +6,7 @@ import { ChevronDown, Home, Network, Bug, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import simulateEnvIll from "@/assets/illustrations/simulate_env_ill.png";
 
@@ -39,6 +40,28 @@ export function SimulateLabEnvironment() {
   const [selectedCommandGroup, setSelectedCommandGroup] = useState<string>("");
   const [selectedCommand, setSelectedCommand] = useState<string>("");
   const [simulating, setSimulating] = useState(false);
+  const [output, setOutput] = useState<string>("");
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+
+  // Timer effect for elapsed time
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    let startTime: number;
+
+    if (simulating) {
+      startTime = Date.now();
+      setElapsedTime(0);
+      interval = setInterval(() => {
+        setElapsedTime((Date.now() - startTime) / 1000);
+      }, 10); // Update every 10ms for smooth display
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [simulating]);
 
   // Fetch services on component mount
   useEffect(() => {
@@ -118,6 +141,7 @@ export function SimulateLabEnvironment() {
 
     try {
       setSimulating(true);
+      setOutput(""); // Clear previous output
       const response = await fetch("/api/simulation/cmd", {
         method: "POST",
         headers: {
@@ -136,9 +160,19 @@ export function SimulateLabEnvironment() {
 
       const result = await response.json();
       console.log("Simulation result:", result);
+      
+      // Set the output from the response
+      if (typeof result === 'string') {
+        setOutput(result);
+      } else if (result.output) {
+        setOutput(result.output);
+      } else {
+        setOutput(JSON.stringify(result, null, 2));
+      }
       // You can add a toast notification here for success
     } catch (error) {
       console.error("Error executing simulation:", error);
+      setOutput(`Error: ${error instanceof Error ? error.message : 'Failed to execute command'}`);
       // You can add a toast notification here for error
     } finally {
       setSimulating(false);
@@ -168,52 +202,61 @@ export function SimulateLabEnvironment() {
         </div>
 
         {/* Service Selection */}
-        <div className="space-y-2 flex items-end gap-2">
-          <Home className="size-6 text-muted-foreground" />
-          <Combobox
-            options={serviceOptions}
-            value={selectedService}
-            onValueChange={setSelectedService}
-            placeholder={loading ? "Loading services..." : "Select a service..."}
-            searchPlaceholder="Search services..."
-            emptyText="No active services found."
-            disabled={loading}
-            className="flex-1"
-          />
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground font-medium">Customer Service</label>
+          <div className="flex items-end gap-2">
+            <Home className="size-6 text-muted-foreground" />
+            <Combobox
+              options={serviceOptions}
+              value={selectedService}
+              onValueChange={setSelectedService}
+              placeholder={loading ? "Loading services..." : "Select a service..."}
+              searchPlaceholder="Search services..."
+              emptyText="No active services found."
+              disabled={loading}
+              className="flex-1"
+            />
+          </div>
         </div>
 
         {/* Command Group Selection - Only show when service is selected */}
         {selectedService && (
-          <div className="space-y-2 flex items-end gap-2">
-            <Network className="size-6 text-muted-foreground" />
-            <Combobox
-              options={commandGroupOptions}
-              value={selectedCommandGroup}
-              onValueChange={(value) => {
-                setSelectedCommandGroup(value);
-                setSelectedCommand(""); // Reset command when group changes
-              }}
-              placeholder="Select command group..."
-              searchPlaceholder="Search command groups..."
-              emptyText="No command groups available."
-              className="flex-1"
-            />
+          <div className="space-y-2">
+            <label className="text-xs text-muted-foreground font-medium">Command Group</label>
+            <div className="flex items-end gap-2">
+              <Network className="size-6 text-muted-foreground" />
+              <Combobox
+                options={commandGroupOptions}
+                value={selectedCommandGroup}
+                onValueChange={(value) => {
+                  setSelectedCommandGroup(value);
+                  setSelectedCommand(""); // Reset command when group changes
+                }}
+                placeholder="Select command group..."
+                searchPlaceholder="Search command groups..."
+                emptyText="No command groups available."
+                className="flex-1"
+              />
+            </div>
           </div>
         )}
 
         {/* Command Selection - Only show when command group is selected */}
         {selectedService && selectedCommandGroup && (
-          <div className="space-y-2 flex items-end gap-2">
-            <Bug className="size-6 text-muted-foreground" />
-            <Combobox
-              options={commandOptions}
-              value={selectedCommand}
-              onValueChange={setSelectedCommand}
-              placeholder="Select command..."
-              searchPlaceholder="Search commands..."
-              emptyText="No commands available."
-              className="flex-1"
-            />
+          <div className="space-y-2">
+            <label className="text-xs text-muted-foreground font-medium">Command</label>
+            <div className="flex items-end gap-2">
+              <Bug className="size-6 text-muted-foreground" />
+              <Combobox
+                options={commandOptions}
+                value={selectedCommand}
+                onValueChange={setSelectedCommand}
+                placeholder="Select command..."
+                searchPlaceholder="Search commands..."
+                emptyText="No commands available."
+                className="flex-1"
+              />
+            </div>
           </div>
         )}
 
@@ -226,6 +269,34 @@ export function SimulateLabEnvironment() {
         >
           {simulating ? "Simulating..." : "Simulate Subscriber"}
         </Button>
+
+        {/* Elapsed Time Spinner - Show while simulating */}
+        {simulating && (
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="size-4" />
+            <span className="font-mono">{elapsedTime.toFixed(2)}s</span>
+          </div>
+        )}
+
+        {/* Output Display - Show when output exists */}
+        {output && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium">Output</h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setOutput("")}
+                className="h-7 text-xs"
+              >
+                Clear
+              </Button>
+            </div>
+            <div className="rounded-md bg-muted p-4 font-mono text-xs overflow-x-auto">
+              <pre className="whitespace-pre-wrap break-words">{output}</pre>
+            </div>
+          </div>
+        )}
 
         {/* Description */}
         <p className="text-xs text-muted-foreground">

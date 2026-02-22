@@ -6,9 +6,11 @@ from typing import List
 from config import log, SIMULATOR_CONFIG
 
 # Load traffic simulation config — hashmap keyed by name; expand into list for weighted sampling
+# Skip commands with disable_in_automated_simulation = true
 TRAFFIC_COMMANDS = [
     {"name": name, **data}
     for name, data in SIMULATOR_CONFIG["traffic_commands"].items()
+    if not data.get("disable_in_automated_simulation", False)
 ]
 
 DHCP_MAX_RETRIES = 5

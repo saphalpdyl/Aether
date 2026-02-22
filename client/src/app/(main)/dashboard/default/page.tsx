@@ -12,7 +12,6 @@ import SessionsEventsTable from "./_components/sessions-events-table";
 import SessionsHistoryTable from "./_components/sessions-history-table";
 import SessionsTable from "./_components/sessions-table";
 import { SimulateLabEnvironment } from "./_components/simulate-lab-environment";
-import { TopAlerts } from "./_components/top-alerts";
 
 export default function Page() {
   return (
@@ -50,7 +49,6 @@ export default function Page() {
         {/* Right Sidebar */}
         <div className="flex flex-col gap-4 @5xl/main:w-sm w-full shrink-0">
           <SimulateLabEnvironment />
-          <TopAlerts />
         </div>
       </div>
     </div>

@@ -33,20 +33,6 @@ def get_simulate_options() -> GetSimulateOptionsResponse:
                 )
             )
 
-    # Add dhclient options
-    options.append(
-        SimulateOption(
-            name="dhclient_init",
-            commands=["dhclient -v eth1"]
-        ),
-    )
-    options.append(
-        SimulateOption(
-            name="dhclient_release",
-            commands=["dhclient -v -r eth1"]
-        ),
-    )
-
     return GetSimulateOptionsResponse(
         count=len(options),
         options=options,
@@ -89,6 +75,7 @@ def execute_cmd(body: CmdRequest):
     if body.name not in traffic_commands:
         raise HTTPException(status_code=400, detail=f"Unknown command group: {body.name!r}")
 
+    # This is to prevent Remote Code Execution - we only allow commands that are predefined in simulator.config.json
     allowed_commands = traffic_commands[body.name]["commands"]
     if body.command not in allowed_commands:
         raise HTTPException(status_code=400, detail="Command not in allowed list")

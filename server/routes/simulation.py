@@ -19,7 +19,7 @@ async def proxy_to_simulator(request: Request) -> JSONResponse:
         if k.lower() not in ("host", "content-length")
     }
 
-    async with httpx.AsyncClient(trust_env=False) as client:
+    async with httpx.AsyncClient(trust_env=False, timeout=120.0) as client:
         response = await client.request(
             method=request.method,
             url=url,
