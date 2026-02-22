@@ -1,40 +1,148 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { ChevronDown, Home, Network, Bug, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import simulateEnvIll from "@/assets/illustrations/simulate_env_ill.png";
 
+interface Service {
+  id: number;
+  customer_id: number;
+  plan_id: number;
+  customer_name: string;
+  plan_name: string;
+  circuit_id: string;
+  remote_id: string;
+  relay_id?: string;
+  status: "ACTIVE" | "SUSPENDED" | "TERMINATED";
+}
+
+interface SimulateOption {
+  name: string;
+  commands: string[];
+}
+
+interface SimulateOptionsResponse {
+  count: number;
+  options: SimulateOption[];
+}
+
 export function SimulateLabEnvironment() {
-  const [selectedRouter, setSelectedRouter] = useState("r01");
-  const [dhcpEnabled, setDhcpEnabled] = useState(true);
-  const [trafficEnabled, setTrafficEnabled] = useState(true);
-  const [debuggingEnabled, setDebuggingEnabled] = useState(false);
+  const [selectedService, setSelectedService] = useState<string>("");
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [simulateOptions, setSimulateOptions] = useState<SimulateOption[]>([]);
+  const [selectedCommandGroup, setSelectedCommandGroup] = useState<string>("");
+  const [selectedCommand, setSelectedCommand] = useState<string>("");
+  const [simulating, setSimulating] = useState(false);
 
-  const routers = [
-    { id: "r01", name: "R01 - WDSL 40 Mbps" },
-    { id: "r02", name: "R02 - Fiber 100 Mbps" },
-    { id: "r03", name: "R03 - Cable 50 Mbps" },
-  ];
+  // Fetch services on component mount
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/services");
+        if (!response.ok) {
+          throw new Error("Failed to fetch services");
+        }
+        const data = await response.json();
+        setServices(data.data || []);
+      } catch (error) {
+        console.error("Error fetching services:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleSimulate = () => {
-    console.log("Simulating with:", {
-      router: selectedRouter,
-      dhcp: dhcpEnabled,
-      traffic: trafficEnabled,
-      debugging: debuggingEnabled,
-    });
-    // Add simulation logic here
+    fetchServices();
+  }, []);
+
+  // Fetch simulation options on component mount
+  useEffect(() => {
+    const fetchSimulateOptions = async () => {
+      try {
+        const response = await fetch("/api/simulation/get_simulate_options");
+        if (!response.ok) {
+          throw new Error("Failed to fetch simulation options");
+        }
+        const data: SimulateOptionsResponse = await response.json();
+        setSimulateOptions(data.options || []);
+      } catch (error) {
+        console.error("Error fetching simulation options:", error);
+      }
+    };
+
+    fetchSimulateOptions();
+  }, []);
+
+  // Convert services to combobox options
+  const serviceOptions: ComboboxOption[] = services
+    .filter((service) => service.status === "ACTIVE")
+    .map((service) => ({
+      value: `${service.id}|${service.customer_name} ${service.plan_name}`,
+      label: `${service.customer_name} - ${service.plan_name}`,
+      subtitle: `Circuit: ${service.circuit_id} | Remote: ${service.remote_id}`,
+    }));
+
+  // Convert command groups to combobox options
+  const commandGroupOptions: ComboboxOption[] = simulateOptions.map((option) => {
+    // Format label: capitalize first letter and replace underscores with spaces
+    const formattedLabel = option.name
+      .replace(/_/g, ' ').toUpperCase();    
+    return {
+      value: option.name,
+      label: formattedLabel,
+    };
+  });
+
+  // Get commands for selected group
+  const selectedGroup = simulateOptions.find((opt) => opt.name === selectedCommandGroup);
+  const commandOptions: ComboboxOption[] = selectedGroup
+    ? selectedGroup.commands.map((cmd) => ({
+        value: cmd,
+        label: cmd,
+      }))
+    : [];
+
+  const handleSimulate = async () => {
+    if (!selectedService || !selectedCommandGroup || !selectedCommand) {
+      return;
+    }
+
+    // Extract service ID from the value (format: "id|name plan")
+    const serviceId = selectedService.split("|")[0];
+
+    try {
+      setSimulating(true);
+      const response = await fetch("/api/simulation/cmd", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          service_id: parseInt(serviceId, 10),
+          name: selectedCommandGroup,
+          command: selectedCommand,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to execute simulation command");
+      }
+
+      const result = await response.json();
+      console.log("Simulation result:", result);
+      // You can add a toast notification here for success
+    } catch (error) {
+      console.error("Error executing simulation:", error);
+      // You can add a toast notification here for error
+    } finally {
+      setSimulating(false);
+    }
   };
 
   return (
@@ -59,68 +167,64 @@ export function SimulateLabEnvironment() {
             />
         </div>
 
-        {/* Router Selection */}
+        {/* Service Selection */}
         <div className="space-y-2 flex items-end gap-2">
-            <Home className="size-6 text-muted-foreground" />
-          <Select value={selectedRouter} onValueChange={setSelectedRouter}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {routers.map((router) => (
-                <SelectItem key={router.id} value={router.id}>
-                  {router.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Home className="size-6 text-muted-foreground" />
+          <Combobox
+            options={serviceOptions}
+            value={selectedService}
+            onValueChange={setSelectedService}
+            placeholder={loading ? "Loading services..." : "Select a service..."}
+            searchPlaceholder="Search services..."
+            emptyText="No active services found."
+            disabled={loading}
+            className="flex-1"
+          />
         </div>
 
-        {/* Options */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={() => setDhcpEnabled(!dhcpEnabled)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-              dhcpEnabled
-                ? "bg-muted text-foreground"
-                : "bg-transparent text-muted-foreground hover:bg-muted/50"
-            }`}
-          >
-            <Network className="size-4" />
-            DHCP
-            {dhcpEnabled && (
-              <div className="size-2 rounded-full bg-green-500" />
-            )}
-          </button>
+        {/* Command Group Selection - Only show when service is selected */}
+        {selectedService && (
+          <div className="space-y-2 flex items-end gap-2">
+            <Network className="size-6 text-muted-foreground" />
+            <Combobox
+              options={commandGroupOptions}
+              value={selectedCommandGroup}
+              onValueChange={(value) => {
+                setSelectedCommandGroup(value);
+                setSelectedCommand(""); // Reset command when group changes
+              }}
+              placeholder="Select command group..."
+              searchPlaceholder="Search command groups..."
+              emptyText="No command groups available."
+              className="flex-1"
+            />
+          </div>
+        )}
 
-          <button
-            onClick={() => setTrafficEnabled(!trafficEnabled)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-              trafficEnabled
-                ? "bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20"
-                : "bg-transparent text-muted-foreground hover:bg-muted/50"
-            }`}
-          >
-            <div className="size-2 rounded-full bg-green-500" />
-            Traffic
-          </button>
-
-          <button
-            onClick={() => setDebuggingEnabled(!debuggingEnabled)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-              debuggingEnabled
-                ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
-                : "bg-transparent text-muted-foreground hover:bg-muted/50"
-            }`}
-          >
-            <div className="size-2 rounded-full bg-blue-500" />
-            Debugging
-          </button>
-        </div>
+        {/* Command Selection - Only show when command group is selected */}
+        {selectedService && selectedCommandGroup && (
+          <div className="space-y-2 flex items-end gap-2">
+            <Bug className="size-6 text-muted-foreground" />
+            <Combobox
+              options={commandOptions}
+              value={selectedCommand}
+              onValueChange={setSelectedCommand}
+              placeholder="Select command..."
+              searchPlaceholder="Search commands..."
+              emptyText="No commands available."
+              className="flex-1"
+            />
+          </div>
+        )}
 
         {/* Simulate Button */}
-        <Button onClick={handleSimulate} className="w-full" size="lg">
-          Simulate Subscriber
+        <Button 
+          onClick={handleSimulate} 
+          className="w-full" 
+          size="lg"
+          disabled={!selectedService || !selectedCommandGroup || !selectedCommand || loading || simulating}
+        >
+          {simulating ? "Simulating..." : "Simulate Subscriber"}
         </Button>
 
         {/* Description */}

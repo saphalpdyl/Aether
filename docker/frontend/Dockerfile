@@ -10,4 +10,4 @@ RUN pnpm install
 
 COPY client/ .
 
-CMD ["pnpm", "dev", "--hostname", "0.0.0.0"]
+CMD ["sleep", "infinity"]

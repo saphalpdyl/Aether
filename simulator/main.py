@@ -10,6 +10,8 @@ from oss import fetch_customers_and_plans, routers_to_bng_id_hashmap, create_ser
 from containers import __LAB_ONLY_get_host_containers, get_host_access_node_name_and_iface_from_container_name
 from traffic import dhcp_acquire_all, traffic_loop
 
+from routers.simulate_user import router as simulate_user_router
+
 
 # Wait for OSS-backend to be ready
 wait_retry_count = 0
@@ -97,6 +99,7 @@ def startup():
     log.info("All traffic threads spawned", count=len(leased_containers))
 
 app = FastAPI()
+app.include_router(simulate_user_router, prefix="/simulation")
 
 startup()
 

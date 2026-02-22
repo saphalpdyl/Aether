@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import init_pools, close_pools
-from routes import sessions, events, routers, bngs, plans, customers, services, stats
+from routes import sessions, events, routers, bngs, plans, customers, services, stats, simulation
 
 
 @asynccontextmanager
@@ -32,5 +32,6 @@ app.include_router(plans.router)
 app.include_router(customers.router)
 app.include_router(services.router)
 app.include_router(stats.router)
+app.include_router(simulation.router)
 
 app.get("/health")(lambda: {"status": "ok"})

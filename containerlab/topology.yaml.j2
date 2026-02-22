@@ -197,6 +197,7 @@ topology:
         PG_USER: oss
         PG_PASSWORD: oss
         RADIUS_PG_HOST: 198.18.0.6
+        SIMULATOR_URL: "http://198.18.0.22:8000"
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
         - "ip link set eth1 up"

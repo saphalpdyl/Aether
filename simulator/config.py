@@ -1,6 +1,7 @@
 import os
 
 import structlog
+import json
 
 OSS_BACKEND_HOST = os.environ["OSS_BACKEND_HOST"]
 OSS_BACKEND_PORT = os.environ.get("OSS_BACKEND_PORT", "8000")
@@ -19,3 +20,6 @@ structlog.configure(
 log = structlog.get_logger()
 
 oss_backend_url = f"http://{OSS_BACKEND_HOST}:{OSS_BACKEND_PORT}"
+
+with open("simulator.config.json") as f:
+    SIMULATOR_CONFIG = json.load(f)

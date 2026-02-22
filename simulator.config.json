@@ -1,7 +1,7 @@
 {
-  "traffic_commands": [
-    {
-      "name": "curl",
+  "traffic_commands": {
+    "curl": {
+      "allow_for_demo_simulation": true,
       "commands": [
         "curl -so /dev/null -w '%{http_code}' --max-time 10 http://example.com",
         "curl -so /dev/null -w '%{http_code}' --max-time 10 http://info.cern.ch",
@@ -10,8 +10,8 @@
       "weight": 4,
       "sleep_range": [5, 20]
     },
-    {
-      "name": "dig",
+    "dig": {
+      "allow_for_demo_simulation": true,
       "commands": [
         "dig +short google.com",
         "dig +short cloudflare.com",
@@ -20,8 +20,8 @@
       "weight": 4,
       "sleep_range": [5, 15]
     },
-    {
-      "name": "iperf3",
+    "iperf3": {
+      "allow_for_demo_simulation": true,
       "commands": [
         "iperf3 -c 192.0.2.2 -t 3 -P 1",
         "iperf3 -c 192.0.2.2 -t 3 -P 1 -R"
@@ -29,5 +29,5 @@
       "weight": 2,
       "sleep_range": [10, 25]
     }
-  ]
+  }
 }

@@ -2,3 +2,4 @@ fastapi
 uvicorn[standard]
 psycopg2-binary
 pyrad
+httpx

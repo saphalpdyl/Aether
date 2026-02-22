@@ -3,12 +3,13 @@ import time
 import random
 from typing import List
 
-from config import log
+from config import log, SIMULATOR_CONFIG
 
-# Load traffic simulation config
-with open("simulator.config.json") as f:
-    SIMULATOR_CONFIG = json.load(f)
-TRAFFIC_COMMANDS = SIMULATOR_CONFIG["traffic_commands"]
+# Load traffic simulation config — hashmap keyed by name; expand into list for weighted sampling
+TRAFFIC_COMMANDS = [
+    {"name": name, **data}
+    for name, data in SIMULATOR_CONFIG["traffic_commands"].items()
+]
 
 DHCP_MAX_RETRIES = 5
 DHCP_RETRY_INTERVAL = 2
