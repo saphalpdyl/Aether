@@ -13,6 +13,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
+import { DisconnectButton } from "./disconnect-button";
 import type { CustomerListing } from "./customers-schema";
 
 interface Service {
@@ -25,6 +26,7 @@ interface Service {
 
 interface ActiveSession {
   session_id: string;
+  username: string;
   ip_address: string | null;
   mac_address: string | null;
   start_time: string;
@@ -183,7 +185,7 @@ export function CustomerDetailSheet({ customer, open, onOpenChange }: CustomerDe
                     {sessions.map((sess) => (
                       <div
                         key={sess.session_id}
-                        className="rounded-md border p-3 text-sm flex flex-col gap-1"
+                        className="rounded-md border p-3 text-sm flex flex-col gap-2"
                       >
                         <div className="font-mono text-xs truncate">
                           {sess.session_id}
@@ -199,6 +201,7 @@ export function CustomerDetailSheet({ customer, open, onOpenChange }: CustomerDe
                           <span>In: {formatBytes(sess.input_octets)}</span>
                           <span>Out: {formatBytes(sess.output_octets)}</span>
                         </div>
+                        <DisconnectButton sessionId={sess.session_id} username={sess.username} />
                       </div>
                     ))}
                   </div>

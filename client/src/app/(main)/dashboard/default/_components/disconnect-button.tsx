@@ -13,13 +13,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 interface DisconnectButtonProps {
   sessionId: string;
   username: string;
+  variant?: "compact" | "full";
 }
 
-export function DisconnectButton({ sessionId, username }: DisconnectButtonProps) {
+export function DisconnectButton({ sessionId, username, variant = "compact" }: DisconnectButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -51,12 +53,17 @@ export function DisconnectButton({ sessionId, username }: DisconnectButtonProps)
   return (
     <>
       <Button
-        variant="link"
-        size="icon"
-        className="h-7 w-7 text-red-500"
+        variant={variant == "full" ? "default" : "link"}
+        className={cn(
+          "cursor-pointer",
+          variant === "full" ? "bg-red-500/80 text-white hover:bg-red-300" : "text-red-500 hover:bg-transparent",
+          variant === "full" && "px-2",
+          variant === "compact" && "h-7 w-7",
+        )}
         onClick={() => setIsOpen(true)}
         title="Disconnect session"
       >
+        {variant === "full" && "Disconnect"}
         <Unplug className="h-3 w-3" />
       </Button>
 

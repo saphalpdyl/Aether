@@ -22,6 +22,7 @@ import {
 
 import { customersColumns } from "./customers-columns";
 import type { CustomerListing } from "./customers-schema";
+import { DisconnectButton } from "./disconnect-button";
 
 interface DataTableCustomersProps {
   data: CustomerListing[];
@@ -31,6 +32,7 @@ interface DataTableCustomersProps {
 
 interface ActiveSession {
   session_id: string;
+  username: string;
   ip_address: string | null;
   mac_address: string | null;
   start_time: string;
@@ -165,8 +167,9 @@ function CustomerDetailRow({ customer }: { customer: CustomerListing }) {
                 {sessions.map((sess) => (
                   <div
                     key={sess.session_id}
-                    className="rounded-lg border bg-card p-3 text-sm space-y-2"
+                    className="rounded-lg border bg-card p-3 text-sm flex items-center gap-2"
                   >
+                    <DisconnectButton variant="full" sessionId={sess.session_id} username={sess.username} />
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                       <div>
                         <span className="text-muted-foreground">IP:</span>{" "}
