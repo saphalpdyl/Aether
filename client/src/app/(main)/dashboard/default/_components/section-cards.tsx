@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import Image from "next/image";
+import { useTheme } from "next-themes";
 
 import { Activity, ArrowDown, ArrowUp, Calendar, Server } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
@@ -59,6 +60,7 @@ function formatRate(bps: number): { value: string; unit: string } {
 }
 
 export function SectionCards() {
+  const { resolvedTheme } = useTheme();
   const [stats, setStats] = useState<StatsData | null>(null);
   const [routers, setRouters] = useState<RoutersData | null>(null);
   const [trafficHistory, setTrafficHistory] = useState<TrafficHistoryPoint[]>([]);
@@ -166,6 +168,10 @@ export function SectionCards() {
   const latestTraffic = trafficHistory[trafficHistory.length - 1] ?? { in_bps: 0, out_bps: 0, total_bps: 0 };
   const inRate = formatRate(latestTraffic.in_bps);
   const outRate = formatRate(latestTraffic.out_bps);
+
+  const isDark = resolvedTheme === "dark";
+  const gradientColor = isDark ? "hsl(var(--chart-1))" : "hsl(var(--primary))";
+  const gradientOpacity = isDark ? 0.4 : 0.3;
 
   return (
     <div className="grid @5xl/main:grid-cols-[1fr_1fr_1fr_1.7fr] @xl/main:grid-cols-2 grid-cols-1 gap-4">
@@ -278,14 +284,14 @@ export function SectionCards() {
             <AreaChart data={trafficHistory}>
               <defs>
                 <linearGradient id="trafficGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  <stop offset="0%" stopColor={gradientColor} stopOpacity={gradientOpacity} />
+                  <stop offset="100%" stopColor={gradientColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <Area
                 type="monotone"
                 dataKey="total_bps"
-                stroke="hsl(var(--primary))"
+                stroke={gradientColor}
                 fill="url(#trafficGradient)"
                 strokeWidth={2}
                 isAnimationActive={false}

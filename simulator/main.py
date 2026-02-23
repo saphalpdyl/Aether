@@ -5,7 +5,7 @@ import time
 
 from fastapi import FastAPI
 
-from config import log, OSS_BACKEND_MAX_RETRY, OSS_RETRY_INTERVAL, oss_backend_url
+from config import log, OSS_BACKEND_MAX_RETRY, OSS_RETRY_INTERVAL, oss_backend_url, SIMULATOR_CONFIG
 from oss import fetch_customers_and_plans, routers_to_bng_id_hashmap, create_service_in_oss
 from containers import __LAB_ONLY_get_host_containers, get_host_access_node_name_and_iface_from_container_name
 from traffic import dhcp_acquire_all, traffic_loop
@@ -43,13 +43,17 @@ def startup():
 
     print("Routers hashmap: ", routers_hmap)
 
-    # Remove random host_containers from the list
-    to_remove_host_containers = random.sample(host_container_names, len(host_container_names) // 2)
-    host_container_names = [name for name in host_container_names if name not in to_remove_host_containers]
+    sim_cfg = SIMULATOR_CONFIG.get("simulation", {})
+    container_fraction = float(sim_cfg.get("container_fraction", 0.5))
+    customer_fraction = float(sim_cfg.get("customer_fraction", 0.5))
 
-    # Remove random customers from the list
-    to_remove_customers = random.sample(total_customers, len(total_customers) // 2)
-    total_customers = [customer for customer in total_customers if customer not in to_remove_customers]
+    # Select a random subset of containers based on configured fraction
+    n_containers = max(1, round(len(host_container_names) * container_fraction))
+    host_container_names = random.sample(host_container_names, min(n_containers, len(host_container_names)))
+
+    # Select a random subset of customers based on configured fraction
+    n_customers = max(1, round(len(total_customers) * customer_fraction))
+    total_customers = random.sample(total_customers, min(n_customers, len(total_customers)))
 
     # Build a name->container lookup for the selected hosts
     container_by_name = {c.name: c for c in all_host_containers}

@@ -1,4 +1,8 @@
 {
+  "simulation": {
+    "container_fraction": 0.6,
+    "customer_fraction": 0.7
+  },
   "traffic_commands": {
     "curl": {
       "description": "HTTP GET requests",

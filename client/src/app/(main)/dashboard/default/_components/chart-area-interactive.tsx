@@ -22,15 +22,15 @@ type TrafficPoint = {
 const chartConfig = {
   bps_in: {
     label: "Ingress",
-    color: "var(--chart-1)",
+    color: "var(--color-emerald-500)",
   },
   bps_out: {
     label: "Egress",
-    color: "var(--chart-2)",
+    color: "var(--color-amber-500)",
   },
   bps_total: {
     label: "Total",
-    color: "var(--chart-3)",
+    color: "var(--color-blue-500)",
   },
 } satisfies ChartConfig;
 
@@ -162,7 +162,7 @@ export function ChartAreaInteractive() {
               : "No traffic samples yet"}
         </div>
         <ChartContainer config={chartConfig} className="aspect-auto h-62 w-full">
-          <AreaChart data={chartData}>
+          <AreaChart data={chartData} >
             <defs>
               <linearGradient id="fillIn" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="var(--color-bps_in)" stopOpacity={0.9} />
@@ -200,7 +200,10 @@ export function ChartAreaInteractive() {
                       second: "2-digit",
                     })
                   }
-                  formatter={(value, name) => [formatRate(Number(value)), String(name)]}
+                  formatter={(value, name) => {
+                    const label = chartConfig[name as keyof typeof chartConfig]?.label || String(name);
+                    return [formatRate(Number(value)), " ", label.toLowerCase()];
+                  }}
                   indicator="dot"
                 />
               }
@@ -211,8 +214,16 @@ export function ChartAreaInteractive() {
               fill="url(#fillOut)"
               stroke="var(--color-bps_out)"
               strokeWidth={2}
+              isAnimationActive={false}
             />
-            <Area dataKey="bps_in" type="monotone" fill="url(#fillIn)" stroke="var(--color-bps_in)" strokeWidth={2} />
+            <Area
+              dataKey="bps_in"
+              type="monotone"
+              fill="url(#fillIn)"
+              stroke="var(--color-bps_in)"
+              strokeWidth={2}
+              isAnimationActive={false}
+            />
           </AreaChart>
         </ChartContainer>
       </CardContent>
