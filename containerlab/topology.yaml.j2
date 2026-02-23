@@ -167,6 +167,8 @@ topology:
       kind: linux
       image: lab-frontend
       mgmt-ipv4: 172.20.20.20
+      env:
+        SIMULATOR_URL: {{ ("http://" ~ services.simulator_ip ~ ":" ~ services.simulator_port) | tojson }}
       binds:
         - /home/test/lab/client/src:/app/src
       exec:
@@ -235,6 +237,7 @@ topology:
       binds:
         - /var/run/docker.sock:/var/run/docker.sock
         - /home/test/lab/simulator.config.json:/opt/simulator/simulator.config.json
+        - /home/test/lab/containerlab/topology.yml:/opt/simulator/topology.yaml
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
         - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""

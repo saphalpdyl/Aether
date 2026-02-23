@@ -111,3 +111,27 @@ startup()
 async def health():
     log.info("health_check")
     return {"status": "ok"}
+
+@app.get("/simulation/topology")
+async def get_topology():
+    """
+    Returns the topology YAML file content.
+    The topology is mounted at /opt/simulator/topology.yaml
+    """
+    import yaml
+    from pathlib import Path
+    
+    topology_path = Path("/opt/simulator/topology.yaml")
+    
+    try:
+        with open(topology_path, "r") as f:
+            topology_content = yaml.safe_load(f)
+        
+        log.info("topology_fetched")
+        return topology_content
+    except FileNotFoundError:
+        log.error("topology_file_not_found", path=str(topology_path))
+        return {"error": "Topology file not found"}, 404
+    except Exception as e:
+        log.error("topology_fetch_error", error=str(e))
+        return {"error": str(e)}, 500

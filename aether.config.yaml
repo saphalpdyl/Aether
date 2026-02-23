@@ -163,7 +163,7 @@ bngs:
 
           topology:
             interfaces:
-              count: 4
+              count: 10
 
           dhcp:
             ipv4:

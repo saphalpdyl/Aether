@@ -1,32 +1,8 @@
-"use server";
-
-import { cookies } from "next/headers";
-import type { TopologyData, TopoNode, TopoLink } from "@/app/api/topology/route";
+import { NextResponse } from "next/server";
 import { BACKEND_URL } from "@/config/backend";
 
-export async function getValueFromCookie(key: string): Promise<string | undefined> {
-  const cookieStore = await cookies();
-  return cookieStore.get(key)?.value;
-}
 
-export async function setValueToCookie(
-  key: string,
-  value: string,
-  options: { path?: string; maxAge?: number } = {},
-): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set(key, value, {
-    path: options.path ?? "/",
-    maxAge: options.maxAge ?? 60 * 60 * 24 * 7, // default: 7 days
-  });
-}
-
-export async function getPreference<T extends string>(key: string, allowed: readonly T[], fallback: T): Promise<T> {
-  const cookieStore = await cookies();
-  const cookie = cookieStore.get(key);
-  const value = cookie ? cookie.value.trim() : undefined;
-  return allowed.includes(value as T) ? (value as T) : fallback;
-}
+export const dynamic = "force-dynamic";
 
 interface ClabNode {
   kind?: string;
@@ -42,6 +18,28 @@ interface ClabTopology {
   };
 }
 
+export interface TopoNode {
+  id: string;
+  label: string;
+  group: "bng" | "agg" | "relay" | "host" | "wan" | "service";
+  image?: string;
+  kind?: string;
+}
+
+export interface TopoLink {
+  id: number;
+  from: string;
+  to: string;
+  fromPort: string;
+  toPort: string;
+}
+
+export interface TopologyData {
+  name: string;
+  nodes: TopoNode[];
+  links: TopoLink[];
+}
+
 function getGroup(name: string): TopoNode["group"] {
   if (/^bng-\d/.test(name)) return "bng";
   if (/^agg-/.test(name)) return "agg";
@@ -51,7 +49,7 @@ function getGroup(name: string): TopoNode["group"] {
   return "service";
 }
 
-export async function getTopology(): Promise<TopologyData | { error: string }> {
+export async function GET() {
   const topologyUrl = `${BACKEND_URL}/api/simulation/topology`;
 
   try {
@@ -85,8 +83,9 @@ export async function getTopology(): Promise<TopologyData | { error: string }> {
     });
 
     const data: TopologyData = { name: topo.name ?? "topology", nodes, links };
-    return data;
-  } catch (error) {
-    return { error: String(error) };
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
+

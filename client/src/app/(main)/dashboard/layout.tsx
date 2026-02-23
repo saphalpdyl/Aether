@@ -1,17 +1,18 @@
 import type { ReactNode } from "react";
 
 import Link from "next/link";
-import { LayoutDashboard, Settings } from "lucide-react";
 
-import { Separator } from "@/components/ui/separator";
+import { LayoutDashboard, Network, Settings } from "lucide-react";
+
+import Logo from "@/components/logo";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { users } from "@/data/users";
 import { cn } from "@/lib/utils";
 
 import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
-import Logo from "@/components/logo";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   return (
@@ -38,6 +39,12 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                 <Link href="/dashboard/crm">
                   <Settings className="size-4 mr-2" />
                   Provisioning
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/dashboard/topology">
+                  <Network className="size-4 mr-2" />
+                  Topology
                 </Link>
               </Button>
             </nav>
