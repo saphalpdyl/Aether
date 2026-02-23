@@ -83,7 +83,8 @@ def _normalize_access_node(raw: dict[str, Any], bng_id: str, idx: int) -> dict[s
     if iface_count < 2:
         raise ConfigError(f"access node '{remote_id}': interface count must be >= 2")
 
-    uplink_iface = _require(iface_cfg, "uplink-iface", f"access-nodes[{idx}].node-config.topology.interfaces")
+    # uplink-iface defaults to the last interface (ethN) when not specified
+    uplink_iface = iface_cfg.get("uplink-iface", f"eth{iface_count}")
     uplink_idx = _parse_iface_index(uplink_iface, f"access node '{remote_id}' uplink-iface")
     if uplink_idx > iface_count:
         raise ConfigError(
