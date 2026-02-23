@@ -20,7 +20,14 @@ export default function Page() {
       <div className="flex @5xl/main:flex-row flex-col gap-4 items-start">
         {/* Main Content Column */}
         <div className="flex flex-col gap-4 md:gap-6 flex-1 min-w-0">
-          <CustomersTable />
+          <div className="flex gap-4">
+            <div className="flex-8">
+              <CustomersTable />
+            </div>
+            <div className="flex flex-col gap-4 @5xl/main:w-sm w-full shrink-0 mt-16">
+              <SimulateLabEnvironment />
+            </div>
+          </div>
           <span className="text-2xl font-bold inline-flex items-center gap-2">
             <Server className="inline-block h-5 w-5 mr-1" />
             Broadband Network Gateways ( BNGs )
@@ -46,10 +53,6 @@ export default function Page() {
           <RoutersTable />
         </div>
 
-        {/* Right Sidebar */}
-        <div className="flex flex-col gap-4 @5xl/main:w-sm w-full shrink-0">
-          <SimulateLabEnvironment />
-        </div>
       </div>
     </div>
   );

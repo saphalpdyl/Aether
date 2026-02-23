@@ -124,7 +124,7 @@ export function BngHealthCards() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,32rem),2fr))] gap-4">
       {bngs.map((bng) => {
         const isAlive = bng.is_alive.toLowerCase() === 'true';
         const cpuUsage = parseFloat(bng.cpu_usage);
