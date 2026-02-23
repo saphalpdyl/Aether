@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Activity } from "lucide-react";
 
 interface SessionEvent {
@@ -33,10 +34,21 @@ interface CustomerSessionActivityChartProps {
   customerId: string;
 }
 
+type TimeRange = "1" | "3" | "6" | "12" | "24";
+
+const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
+  { value: "1", label: "Last hour" },
+  { value: "3", label: "Last 3 hours" },
+  { value: "6", label: "Last 6 hours" },
+  { value: "12", label: "Last 12 hours" },
+  { value: "24", label: "Last 24 hours" },
+];
+
 export default function CustomerSessionActivityChart({ customerId }: CustomerSessionActivityChartProps) {
   const [events, setEvents] = React.useState<SessionEvent[]>([]);
   const [serviceTimelines, setServiceTimelines] = React.useState<ServiceTimeline[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [timeRange, setTimeRange] = React.useState<TimeRange>("24");
 
   // Fetch customer events
   React.useEffect(() => {
@@ -210,7 +222,7 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
   // Calculate common timeline bounds across all services
   const getCommonTimelineBounds = () => {
     const now = new Date();
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const hoursAgo = new Date(now.getTime() - parseInt(timeRange) * 60 * 60 * 1000);
     
     // Find the earliest start time across all services
     let earliestStart = now;
@@ -222,9 +234,9 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
       });
     });
 
-    // Use the earlier of: 24h ago or the earliest event
-    const timelineStart = earliestStart.getTime() < oneDayAgo.getTime() 
-      ? oneDayAgo 
+    // Use the earlier of: selected hours ago or the earliest event
+    const timelineStart = earliestStart.getTime() < hoursAgo.getTime() 
+      ? hoursAgo 
       : earliestStart;
     
     return {
@@ -283,6 +295,21 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
     }
   };
 
+  // Format milliseconds into a readable duration string (days, hours, minutes)
+  const formatDuration = (ms: number) => {
+    const totalMinutes = Math.floor(ms / 1000 / 60);
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
+
+    return parts.join(" ");
+  };
+
   if (loading) {
     return (
       <Card>
@@ -308,7 +335,21 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
             <Activity className="h-5 w-5" />
             Session Activity Timeline
           </CardTitle>
-          <CardDescription>Last 24 hours of session activity</CardDescription>
+          <CardDescription className="flex items-center justify-between">
+            <span>No session activity data available</span>
+            <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
+              <SelectTrigger className="w-37.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIME_RANGE_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-center text-muted-foreground py-8">No session activity data available</p>
@@ -319,6 +360,9 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
 
   const allPeriods = getAllPeriods();
   const commonBounds = getCommonTimelineBounds();
+  
+  // Get time range label for display
+  const timeRangeLabel = TIME_RANGE_OPTIONS.find(opt => opt.value === timeRange)?.label || "Last 24 hours";
 
   return (
     <Card>
@@ -327,9 +371,23 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
           <Activity className="h-5 w-5" />
           Session Activity Timeline
         </CardTitle>
-        <CardDescription>
-          Last 24 hours of session activity
-          {serviceTimelines.length > 1 && ` (${serviceTimelines.length} services)`}
+        <CardDescription className="flex items-center justify-between">
+          <span>
+            {timeRangeLabel} of session activity
+            {serviceTimelines.length > 1 && ` (${serviceTimelines.length} services)`}
+          </span>
+          <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
+            <SelectTrigger className="w-37.5">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TIME_RANGE_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -407,8 +465,8 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
 
         {/* Time markers */}
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>24h ago</span>
-          <span>12h ago</span>
+          <span>{timeRange}h ago</span>
+          <span>{Math.round(parseInt(timeRange) / 2)}h ago</span>
           <span>Now</span>
         </div>
 
@@ -417,21 +475,21 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
           <div>
             <p className="text-xs text-muted-foreground">Total Active Time</p>
             <p className="text-lg font-semibold text-green-600">
-              {Math.round(
+              {formatDuration(
                 allPeriods
                   .filter(p => p.status === "active")
-                  .reduce((acc, p) => acc + (p.end.getTime() - p.start.getTime()), 0) / 1000 / 60
-              )} min
+                  .reduce((acc, p) => acc + (p.end.getTime() - p.start.getTime()), 0)
+              )}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Total Idle Time</p>
             <p className="text-lg font-semibold text-orange-400">
-              {Math.round(
+              {formatDuration(
                 allPeriods
                   .filter(p => p.status === "idle")
-                  .reduce((acc, p) => acc + (p.end.getTime() - p.start.getTime()), 0) / 1000 / 60
-              )} min
+                  .reduce((acc, p) => acc + (p.end.getTime() - p.start.getTime()), 0)
+              )}
             </p>
           </div>
           

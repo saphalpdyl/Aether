@@ -139,15 +139,15 @@ function getNodeImage(id: string, group: string): string {
 function getNodeSize(group: string): number {
   switch (group) {
     case "bng":
-      return 26;
+      return 30;
     case "agg":
-      return 24;
+      return 26;
     case "relay":
       return 22;
     case "wan":
       return 22;
     default:
-      return 20;
+      return 16;
   }
 }
 
