@@ -96,6 +96,10 @@ This is the network topology for a standard two-BNG configuration.
 
 ## Screenshots
 
-<img width="2481" height="1418" alt="image" src="https://github.com/user-attachments/assets/1d14f888-fd88-4baa-bf61-2e69e29fd0e3" />
-<img width="2471" height="1410" alt="image" src="https://github.com/user-attachments/assets/57881cb0-6a13-45f0-b2c9-b588ac27a508" />
-<img width="2481" height="1434" alt="image" src="https://github.com/user-attachments/assets/0aff4905-93d8-4a59-88ca-ec854803d654" />
+<img width="2480" height="1436" alt="image" src="https://github.com/user-attachments/assets/2d3a12a0-d8d6-47fd-b0a5-f30e9be497fb" />
+<img width="2491" height="1439" alt="image" src="https://github.com/user-attachments/assets/ddd53519-4363-47c4-a754-cbc4b2293ee0" />
+<img width="2483" height="1372" alt="image" src="https://github.com/user-attachments/assets/618bb68a-a28a-407c-a84e-7a74754f8894" />
+<img width="1650" height="1323" alt="image" src="https://github.com/user-attachments/assets/718f963e-8b9e-4187-ad20-7b7ea0767b16" />
+
+
+
