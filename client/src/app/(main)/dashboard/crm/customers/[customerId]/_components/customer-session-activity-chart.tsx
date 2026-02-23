@@ -426,7 +426,7 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Total Idle Time</p>
-            <p className="text-lg font-semibold text-orange-600">
+            <p className="text-lg font-semibold text-orange-400">
               {Math.round(
                 allPeriods
                   .filter(p => p.status === "idle")
@@ -434,16 +434,7 @@ export default function CustomerSessionActivityChart({ customerId }: CustomerSes
               )} min
             </p>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total Offline Time</p>
-            <p className="text-lg font-semibold text-muted-foreground">
-              {Math.round(
-                allPeriods
-                  .filter(p => p.status === "offline")
-                  .reduce((acc, p) => acc + (p.end.getTime() - p.start.getTime()), 0) / 1000 / 60
-              )} min
-            </p>
-          </div>
+          
         </div>
       </CardContent>
     </Card>
