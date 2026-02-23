@@ -65,8 +65,7 @@ def list_customer_sessions(customer_id: int):
     rows = query_oss("""
         SELECT sa.*
         FROM services s
-        JOIN sessions_active sa ON 
-            -- remote_id is the router name in the new identity model
+        JOIN sessions_active sa ON
             sa.username = (
                 SELECT ar.bng_id || '/' || s.remote_id || '/' || s.circuit_id
                 FROM access_routers ar
@@ -74,6 +73,42 @@ def list_customer_sessions(customer_id: int):
             )
         WHERE s.customer_id = %(customer_id)s
         ORDER BY sa.start_time DESC
+    """, {"customer_id": customer_id})
+    return {"data": rows, "count": len(rows)}
+
+
+@router.get("/{customer_id}/sessions/history")
+def list_customer_sessions_history(customer_id: int):
+    """List historical sessions for a customer."""
+    rows = query_oss("""
+        SELECT sh.*
+        FROM services s
+        JOIN sessions_history sh ON
+            sh.username = (
+                SELECT ar.bng_id || '/' || s.remote_id || '/' || s.circuit_id
+                FROM access_routers ar
+                WHERE ar.router_name = s.remote_id
+            )
+        WHERE s.customer_id = %(customer_id)s
+        ORDER BY sh.session_end DESC
+    """, {"customer_id": customer_id})
+    return {"data": rows, "count": len(rows)}
+
+
+@router.get("/{customer_id}/events")
+def list_customer_events(customer_id: int):
+    """List session events for a customer."""
+    rows = query_oss("""
+        SELECT se.*
+        FROM services s
+        JOIN session_events se ON
+            se.username = (
+                SELECT ar.bng_id || '/' || s.remote_id || '/' || s.circuit_id
+                FROM access_routers ar
+                WHERE ar.router_name = s.remote_id
+            )
+        WHERE s.customer_id = %(customer_id)s
+        ORDER BY se.ts DESC
     """, {"customer_id": customer_id})
     return {"data": rows, "count": len(rows)}
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query, HTTPException
 from db import query_oss, execute_oss
 from models import ServiceCreate, ServiceUpdate
 from radius_helpers import (
+    RADIUS_RELAY_ID,
     service_username,
     upsert_radius_usergroup,
     upsert_radius_usercheck,
@@ -89,7 +90,8 @@ def create_service(body: ServiceCreate):
     if duplicate:
         raise HTTPException(status_code=409, detail="Service with this circuit_id/remote_id already exists")
 
-    username = service_username(body.circuit_id, body.remote_id, body.relay_id)
+    resolved_relay_id = body.relay_id or RADIUS_RELAY_ID
+    username = service_username(body.circuit_id, body.remote_id, resolved_relay_id)
     try:
         upsert_radius_usergroup(username, plan_rows[0]["name"])
         upsert_radius_usercheck(username)
@@ -99,13 +101,14 @@ def create_service(body: ServiceCreate):
 
     created = query_oss(
         """
-        INSERT INTO services (customer_id, plan_id, circuit_id, remote_id, status)
-        VALUES (%(customer_id)s, %(plan_id)s, %(circuit_id)s, %(remote_id)s, %(status)s)
+        INSERT INTO services (customer_id, plan_id, relay_id, circuit_id, remote_id, status)
+        VALUES (%(customer_id)s, %(plan_id)s, %(relay_id)s, %(circuit_id)s, %(remote_id)s, %(status)s)
         RETURNING id
         """,
         {
             "customer_id": body.customer_id,
             "plan_id": body.plan_id,
+            "relay_id": resolved_relay_id,
             "circuit_id": body.circuit_id,
             "remote_id": body.remote_id,
             "status": body.status,
@@ -158,8 +161,9 @@ def update_service(service_id: int, body: ServiceUpdate):
     if duplicate:
         raise HTTPException(status_code=409, detail="Service with this circuit_id/remote_id already exists")
 
-    old_username = service_username(current["circuit_id"], current["remote_id"])
-    new_username = service_username(new_circuit_id, new_remote_id, body.relay_id)
+    old_username = service_username(current["circuit_id"], current["remote_id"], current["relay_id"])
+    new_relay_id = body.relay_id if body.relay_id is not None else current["relay_id"]
+    new_username = service_username(new_circuit_id, new_remote_id, new_relay_id)
     new_status = body.status if body.status is not None else current["status"]
 
     try:
@@ -189,6 +193,9 @@ def update_service(service_id: int, body: ServiceUpdate):
     if body.plan_id is not None:
         sets.append("plan_id = %(plan_id)s")
         params["plan_id"] = body.plan_id
+    if body.relay_id is not None:
+        sets.append("relay_id = %(relay_id)s")
+        params["relay_id"] = body.relay_id
     if body.circuit_id is not None:
         sets.append("circuit_id = %(circuit_id)s")
         params["circuit_id"] = body.circuit_id
@@ -217,11 +224,11 @@ def update_service(service_id: int, body: ServiceUpdate):
 @router.delete("/{service_id}")
 def delete_service(service_id: int):
     """Delete a service."""
-    rows = query_oss("SELECT id, circuit_id, remote_id FROM services WHERE id = %(id)s", {"id": service_id})
+    rows = query_oss("SELECT id, relay_id, circuit_id, remote_id FROM services WHERE id = %(id)s", {"id": service_id})
     if not rows:
         raise HTTPException(status_code=404, detail="Service not found")
 
-    username = service_username(rows[0]["circuit_id"], rows[0]["remote_id"])
+    username = service_username(rows[0]["circuit_id"], rows[0]["remote_id"], rows[0]["relay_id"])
     try:
         delete_radius_usergroup(username)
         delete_radius_usercheck(username)

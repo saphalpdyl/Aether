@@ -1,6 +1,7 @@
 "use client";
 
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,14 @@ export function CustomerTab({
             ) : (
               filteredCustomers.map((customer) => (
                 <TableRow key={customer.id}>
-                  <TableCell className="font-medium">{customer.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link 
+                      href={`/dashboard/crm/customers/${customer.id}`}
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      {customer.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>{customer.email || "-"}</TableCell>
                   <TableCell>{customer.phone || "-"}</TableCell>
                   <TableCell>{[customer.city, customer.state].filter(Boolean).join(", ") || "-"}</TableCell>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -122,7 +123,14 @@ export function ServiceTab({
             ) : (
               filteredServices.map((service) => (
                 <TableRow key={service.id}>
-                  <TableCell className="font-medium">{service.customer_name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link 
+                      href={`/dashboard/crm/customers/${service.customer_id}`}
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      {service.customer_name}
+                    </Link>
+                  </TableCell>
                   <TableCell>{service.plan_name}</TableCell>
                   <TableCell>{service.circuit_id}</TableCell>
                   <TableCell>{service.remote_id}</TableCell>

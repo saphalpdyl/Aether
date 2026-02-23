@@ -36,6 +36,7 @@ CREATE TABLE services (
     plan_id          INTEGER     NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
 
     -- Network binding: identifies the subscriber's physical attachment on the BNG
+    relay_id         TEXT        NOT NULL,  -- BNG identifier (e.g. bng-01)
     circuit_id       TEXT        NOT NULL,
     remote_id        TEXT        NOT NULL,
 

@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Circle, Wifi } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,7 +63,15 @@ export const customersColumns: ColumnDef<CustomerListing>[] = [
   {
     accessorKey: "name",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
-    cell: ({ row }) => <span className="font-medium">{row.getValue("name")}</span>,
+    cell: ({ row }) => (
+      <Link 
+        href={`/dashboard/crm/customers/${row.original.id}`}
+        className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {row.getValue("name")}
+      </Link>
+    ),
   },
   {
     accessorKey: "status",
