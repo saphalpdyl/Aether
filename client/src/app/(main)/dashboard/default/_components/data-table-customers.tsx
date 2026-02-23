@@ -231,7 +231,7 @@ export function DataTableCustomers({ data: initialData, onRowClick, expandedRow 
           <DataTableViewOptions table={table} />
         </div>
       </div>
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <Table>
           <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (

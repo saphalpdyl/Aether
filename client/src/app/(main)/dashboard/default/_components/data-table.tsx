@@ -54,7 +54,7 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof sessionS
         </div>
       </div>
       <TabsContent value="outline" className="relative flex flex-col gap-4 overflow-auto">
-        <div className="overflow-hidden rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border">
           <DataTableNew dndEnabled table={table} columns={columns} onReorder={setData} />
         </div>
         <DataTablePagination table={table} />

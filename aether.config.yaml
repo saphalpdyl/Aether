@@ -241,9 +241,9 @@ bngs:
 
           topology:
             interfaces:
-              count: 2
-              subscriber-ifaces: [eth1]
-              uplink-iface: eth2
+              count: 15
+              subscriber-ifaces: [eth1, eth2, eth3, eth4, eth5, eth6, eth7, eth8, eth9, eth10, eth11, eth12, eth13, eth14]
+              uplink-iface: eth15
 
           dhcp:
             ipv4:

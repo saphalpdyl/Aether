@@ -39,7 +39,7 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof sessionH
         </div>
         <DataTableViewOptions table={table} />
       </div>
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border">
         <DataTableNew table={table} columns={columns} />
       </div>
       <DataTablePagination table={table} />

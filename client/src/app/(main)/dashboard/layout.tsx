@@ -18,7 +18,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     <div className="flex min-h-screen flex-col">
       <header
         className={cn(
-          "flex h-14 shrink-0 items-center gap-2 border-b sticky top-0 z-50 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60",
+          "flex h-14 shrink-0 items-center gap-2 border-b sticky top-0 z-50 bg-card backdrop-blur supports-backdrop-filter:bg-card/95",
         )}
       >
         <div className="flex w-full items-center justify-between px-4 lg:px-6">
@@ -49,7 +49,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           </div>
         </div>
       </header>
-      <main className="flex-1 p-4 md:p-6">{children}</main>
+      <main className="flex-1 p-4 md:p-6 w-full max-w-400 mx-auto">{children}</main>
     </div>
   );
 }

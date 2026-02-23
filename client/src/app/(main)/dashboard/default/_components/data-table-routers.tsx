@@ -60,7 +60,7 @@ export function DataTableRouters({ data: initialData, onNewRouter, onEdit, onDel
           <DataTableViewOptions table={table} />
         </div>
       </div>
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border">
         <DataTable dndEnabled table={table} columns={columns} onReorder={setData} />
       </div>
       <DataTablePagination table={table} />

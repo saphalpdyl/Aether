@@ -20,11 +20,11 @@ export default function Page() {
       <div className="flex @5xl/main:flex-row flex-col gap-4 items-start">
         {/* Main Content Column */}
         <div className="flex flex-col gap-4 md:gap-6 flex-1 min-w-0">
-          <div className="flex gap-4">
-            <div className="flex-8">
+          <div className="flex gap-4 flex-col lg:flex-row">
+            <div className="flex-8 min-w-0">
               <CustomersTable />
             </div>
-            <div className="flex flex-col gap-4 @5xl/main:w-sm w-full shrink-0 mt-16">
+            <div className="flex flex-col gap-4 @5xl/main:w-sm w-full shrink-0 lg:mt-16">
               <SimulateLabEnvironment />
             </div>
           </div>
@@ -32,25 +32,31 @@ export default function Page() {
             <Server className="inline-block h-5 w-5 mr-1" />
             Broadband Network Gateways ( BNGs )
           </span>
-          <BngHealthCards />
-          <ChartAreaInteractive />
-          <Tabs defaultValue="active" className="w-full">
+          <div className="min-w-0">
+            <BngHealthCards />
+          </div>
+          <div className="min-w-0">
+            <ChartAreaInteractive />
+          </div>
+          <Tabs defaultValue="active" className="w-full min-w-0">
             <TabsList>
               <TabsTrigger value="active">Active Sessions</TabsTrigger>
               <TabsTrigger value="history">Session History</TabsTrigger>
               <TabsTrigger value="events">Events</TabsTrigger>
             </TabsList>
-            <TabsContent value="active">
+            <TabsContent value="active" className="min-w-0">
               <SessionsTable />
             </TabsContent>
-            <TabsContent value="history">
+            <TabsContent value="history" className="min-w-0">
               <SessionsHistoryTable />
             </TabsContent>
-            <TabsContent value="events">
+            <TabsContent value="events" className="min-w-0">
               <SessionsEventsTable />
             </TabsContent>
           </Tabs>
-          <RoutersTable />
+          <div className="min-w-0">
+            <RoutersTable />
+          </div>
         </div>
 
       </div>

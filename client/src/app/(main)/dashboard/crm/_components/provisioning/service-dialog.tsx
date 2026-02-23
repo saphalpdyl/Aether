@@ -212,12 +212,12 @@ export function ServiceDialog({
                             className={cn(
                               "flex flex-col items-center justify-center aspect-square rounded-lg border-2 transition-colors p-2 cursor-pointer",
                               isUplink
-                                ? "bg-slate-100 border-slate-400 cursor-not-allowed"
+                                ? "bg-slate-100 dark:bg-slate-800 border-slate-400 dark:border-slate-600 cursor-not-allowed"
                                 : isAvailable
                                 ? isSelected
-                                  ? "bg-teal-700 border-teal-700"
-                                  : "bg-teal-50 border-teal-400 hover:bg-teal-100"
-                                : "bg-red-100 border-red-400 cursor-not-allowed"
+                                  ? "bg-teal-700 dark:bg-teal-600 border-teal-700 dark:border-teal-600"
+                                  : "bg-teal-50 dark:bg-teal-950/50 border-teal-400 dark:border-teal-700 hover:bg-teal-100 dark:hover:bg-teal-900/50"
+                                : "bg-red-100 dark:bg-red-950/50 border-red-400 dark:border-red-700 cursor-not-allowed"
                             )}
                             disabled={!isAvailable || isUplink}
                             title={isUplink ? "Uplink Port (Reserved)" : isAvailable ? "Available" : "Occupied"}
@@ -226,17 +226,17 @@ export function ServiceDialog({
                               className={cn(
                                 "w-8 h-8",
                                 isUplink 
-                                  ? "text-slate-600" 
+                                  ? "text-slate-600 dark:text-slate-400" 
                                   : isAvailable 
                                   ? isSelected 
                                     ? "text-white" 
-                                    : "text-teal-600" 
-                                  : "text-red-600"
+                                    : "text-teal-600 dark:text-teal-400" 
+                                  : "text-red-600 dark:text-red-400"
                               )}
                             />
                             <span className={cn(
                               "text-xs font-medium",
-                              isSelected && isAvailable && "text-white"
+                              isSelected && isAvailable ? "text-white" : "dark:text-muted-foreground"
                             )}>{portNum}</span>
                           </button>
                         );
@@ -251,15 +251,15 @@ export function ServiceDialog({
 
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-red-200 border border-red-400" />
+                    <div className="w-4 h-4 rounded bg-red-200 dark:bg-red-950/50 border border-red-400 dark:border-red-700" />
                     <span className="text-muted-foreground">Occupied</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-teal-200 border border-teal-400" />
+                    <div className="w-4 h-4 rounded bg-teal-200 dark:bg-teal-950/50 border border-teal-400 dark:border-teal-700" />
                     <span className="text-muted-foreground">Available</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-slate-300 border border-slate-400" />
+                    <div className="w-4 h-4 rounded bg-slate-300 dark:bg-slate-800 border border-slate-400 dark:border-slate-600" />
                     <span className="text-muted-foreground">Uplink</span>
                   </div>
                 </div>
