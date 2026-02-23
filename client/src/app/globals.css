@@ -232,3 +232,34 @@ html {
 .disable-transitions * {
   transition: none !important;
 }
+
+/* Animated counter dial effect - rolling upwards like an odometer */
+@keyframes roll-up-exit {
+  0% {
+    transform: translateY(0%);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+}
+
+@keyframes roll-up-enter {
+  0% {
+    transform: translateY(120%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0%);
+    opacity: 1;
+  }
+}
+
+.animate-roll-up-exit {
+  animation: roll-up-exit 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-roll-up-enter {
+  animation: roll-up-enter 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}

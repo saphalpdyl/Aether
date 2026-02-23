@@ -11,6 +11,7 @@ import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import activeTrafficIll from "@/assets/illustrations/active_traffic_ill.png";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 interface StatsData {
   active_sessions: number;
@@ -179,7 +180,7 @@ export function SectionCards() {
         <CardHeader>
           <CardDescription>Active Sessions</CardDescription>
           <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
-            {stats.active_sessions}
+            <AnimatedCounter value={stats.active_sessions} duration={0.8} />
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
@@ -200,7 +201,7 @@ export function SectionCards() {
         <CardHeader>
           <CardDescription>Access nodes online</CardDescription>
           <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
-            {onlineRouters} / {routers.count}
+            <AnimatedCounter value={onlineRouters} duration={0.8} /> / <AnimatedCounter value={routers.count} duration={0.8} />
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">
@@ -221,7 +222,7 @@ export function SectionCards() {
         <CardHeader>
           <CardDescription>Total Events</CardDescription>
           <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
-            {stats.total_events}
+            <AnimatedCounter value={stats.total_events} duration={0.8} />
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
@@ -246,7 +247,9 @@ export function SectionCards() {
               <div className="flex gap-1.5 divide-x-2 space-x-4 w-full">
                 <div className="flex flex-col items-baseline gap-1.5 pr-8">
                   <div className="space-x-1">
-                    <span className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">{inRate.value}</span>
+                    <span className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
+                      <AnimatedCounter value={parseFloat(inRate.value)} duration={0.6} decimals={1} />
+                    </span>
                     <span className="text-lg font-semibold text-cyan-500">{inRate.unit}</span>
                   </div>
                   <span className="ml-2 text-xs text-muted-foreground flex items-center gap-1">
@@ -256,7 +259,9 @@ export function SectionCards() {
                 </div>
                 <div className="flex items-baseline gap-1.5 flex-col">
                   <div className="space-x-1">
-                    <span className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">{outRate.value}</span>
+                    <span className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
+                      <AnimatedCounter value={parseFloat(outRate.value)} duration={0.6} decimals={1} />
+                    </span>
                     <span className="text-lg font-semibold text-green-500">{outRate.unit}</span>
                   </div>
                   <span className="ml-2 text-xs text-muted-foreground flex items-center gap-1">

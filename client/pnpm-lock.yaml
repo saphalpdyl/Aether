@@ -65,6 +65,9 @@ importers:
       react:
         specifier: ^19.2.4
         version: 19.2.4
+      react-countup:
+        specifier: ^6.5.3
+        version: 6.5.3(react@19.2.4)
       react-day-picker:
         specifier: ^9.13.0
         version: 9.13.1(react@19.2.4)
@@ -1445,6 +1448,9 @@ packages:
     resolution: {integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==}
     engines: {node: '>=18'}
 
+  countup.js@2.9.0:
+    resolution: {integrity: sha512-llqrvyXztRFPp6+i8jx25phHWcVWhrHO4Nlt0uAOSKHB8778zzQswa4MU3qKBvkXfJKftRYFJuVHez67lyKdHg==}
+
   create-require@1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
 
@@ -1933,6 +1939,11 @@ packages:
         optional: true
       '@types/react-dom':
         optional: true
+
+  react-countup@6.5.3:
+    resolution: {integrity: sha512-udnqVQitxC7QWADSPDOxVWULkLvKUWrDapn5i53HE4DPRVgs+Y5rr4bo25qEl8jSh+0l2cToJgGMx+clxPM3+w==}
+    peerDependencies:
+      react: '>= 16.3.0'
 
   react-day-picker@9.13.1:
     resolution: {integrity: sha512-9nx2lBBJ0VZw5jJekId3DishwnJLiqY1Me1JvCrIyqbWwcflBTVaEkiK+w1bre5oMNWYo722eu+8UAMXWMqktw==}
@@ -3464,6 +3475,8 @@ snapshots:
 
   commander@13.1.0: {}
 
+  countup.js@2.9.0: {}
+
   create-require@1.1.1: {}
 
   cross-spawn@7.0.6:
@@ -3938,6 +3951,11 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.13
       '@types/react-dom': 19.2.3(@types/react@19.2.13)
+
+  react-countup@6.5.3(react@19.2.4):
+    dependencies:
+      countup.js: 2.9.0
+      react: 19.2.4
 
   react-day-picker@9.13.1(react@19.2.4):
     dependencies:

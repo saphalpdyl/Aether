@@ -6,6 +6,7 @@ import { Area, AreaChart, XAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 interface BngData {
   bng_id: string;
@@ -186,7 +187,9 @@ export function BngHealthCards() {
                     <p className="text-xs text-muted-foreground">CPU Usage</p>
                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                   </div>
-                  <p className="text-2xl font-bold tabular-nums mt-1">{cpuUsage.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold tabular-nums mt-1">
+                    <AnimatedCounter value={cpuUsage} duration={0.6} decimals={1} suffix="%" />
+                  </p>
                   <p className="text-xs text-muted-foreground">3d Avg</p>
                 </div>
                 <div className="pl-4">
@@ -194,7 +197,9 @@ export function BngHealthCards() {
                     <p className="text-xs text-muted-foreground">Memory</p>
                     <div className="w-2 h-2 rounded-full bg-green-500" />
                   </div>
-                  <p className="text-2xl font-bold tabular-nums mt-1">{memPercent}%</p>
+                  <p className="text-2xl font-bold tabular-nums mt-1">
+                    <AnimatedCounter value={parseFloat(memPercent)} duration={0.6} decimals={1} suffix="%" />
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {formatMemory(memUsage)} / {formatMemory(memMax)}
                   </p>

@@ -3,7 +3,6 @@
 ## In Progress
 - **Alerting** — Notify on router down, BNG health degradation, or session anomalies
 - **Historical analytics** — Per-subscriber traffic trends, peak usage hours, session duration distributions
-- **Lab simulation UI** — A non-traditional operator interface purpose-built for the lab environment. Instead of mimicking a production NOC dashboard, exposes direct control over subscriber hosts through Containerlab's Docker bridge. Demo users can simulate real subscriber behavior — trigger DHCP discover/release, bring interfaces up/down, and watch sessions appear and tear down in real time — all from the browser without touching a terminal.
 
 ## Planned
 
@@ -30,3 +29,4 @@
 - Test and harden the event pipeline for multiple BNG instances reporting to the same OSS
 - Define the entire distributed BNG deployment in a single YAML file: number of BNG instances, IP allocations, access router assignments, DHCP pools, RADIUS targets, and subscriber density per node. A Jinja2 templating engine generates the full Containerlab topology, SR Linux configs, Kea subnets, and BNG environment variables from this single source of truth. Spin up a 1-BNG lab or a 10-BNG mesh with one config change.
 - Multiple BNG instances operating as a coordinated cluster, each owning a slice of the access network. Session state replicated across instances via Redis for sub-second failover. Centralized OSS aggregates events from all BNGs with per-instance health tracking already in place. 
+- A non-traditional operator interface purpose-built for the lab environment. Instead of mimicking a production NOC dashboard, exposes direct control over subscriber hosts through Containerlab's Docker bridge. Demo users can simulate real subscriber behavior — trigger DHCP discover/release, bring interfaces up/down, and watch sessions appear and tear down in real time — all from the browser without touching a terminal.
