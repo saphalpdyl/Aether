@@ -2,11 +2,18 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Home, Network, Bug, Info, AlertTriangle } from "lucide-react";
+import { Home, Network, Bug, Info, AlertTriangle, Maximize2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import simulateEnvIll from "@/assets/illustrations/simulate_env_ill.png";
 
 interface Service {
@@ -53,6 +60,7 @@ export function SimulateLabEnvironment() {
   const [simulating, setSimulating] = useState(false);
   const [output, setOutput] = useState<string>("");
   const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [outputDialogOpen, setOutputDialogOpen] = useState(false);
 
   // Timer effect for elapsed time
   useEffect(() => {
@@ -313,16 +321,27 @@ export function SimulateLabEnvironment() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium">Output</h4>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setOutput("")}
-                className="h-7 text-xs"
-              >
-                Clear
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOutputDialogOpen(true)}
+                  className="h-7 text-xs"
+                >
+                  <Maximize2 className="size-3 mr-1" />
+                  Expand
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOutput("")}
+                  className="h-7 text-xs"
+                >
+                  Clear
+                </Button>
+              </div>
             </div>
-            <div className="rounded-md bg-muted p-4 font-mono text-xs overflow-x-auto">
+            <div className="rounded-md bg-muted p-4 font-mono text-xs overflow-x-auto max-h-40 overflow-y-auto">
               <pre className="whitespace-pre-wrap wrap-break-word">{output}</pre>
             </div>
           </div>
@@ -334,6 +353,39 @@ export function SimulateLabEnvironment() {
           the dashboard without requiring SSH or manual CLI commands.
         </p>
       </div>
+
+      {/* Output Dialog */}
+      <Dialog open={outputDialogOpen} onOpenChange={setOutputDialogOpen}>
+        <DialogContent className="max-w-6xl lg:min-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Command Output</DialogTitle>
+            <DialogDescription>
+              Full output from the simulation command
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto rounded-md bg-muted p-4 font-mono text-sm">
+            <pre className="whitespace-pre-wrap wrap-break-word">{output}</pre>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(output);
+              }}
+            >
+              Copy to Clipboard
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOutputDialogOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
