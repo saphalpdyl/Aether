@@ -80,7 +80,11 @@ def execute_cmd(body: CmdRequest):
     if body.command not in allowed_commands:
         raise HTTPException(status_code=400, detail="Command not in allowed list")
 
-    container = _get_container_for_service(body.service_id)
+    try:
+        container = _get_container_for_service(body.service_id)
+    except Exception as e:
+        print(f"Error fetching container for service {body.service_id}: {e}")
+        raise e
 
     try:
         result = container.exec_run(["sh", "-c", body.command], demux=False)

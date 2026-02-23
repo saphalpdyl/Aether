@@ -28,6 +28,36 @@ shared:
       - frontend:eth1
       - backend:eth1
       - simulator:eth1
+      - nginx:eth1
+
+  # Static IPv4 addresses and ports for every mgmt-network container.
+  # Single source of truth — all templates and BNG env vars derive from here.
+  services:
+    kea:
+      ip: 198.18.0.3
+      ctrl-port: 6772
+    radius:
+      ip: 198.18.0.2
+    radius-pg:
+      ip: 198.18.0.6
+    dhcp-pg:
+      ip: 198.18.0.4
+    redis:
+      ip: 198.18.0.10
+    oss-pg:
+      ip: 198.18.0.11
+    bng-ingestor:
+      ip: 198.18.0.12
+    frontend:
+      ip: 198.18.0.20
+    backend:
+      ip: 198.18.0.21
+      port: 8000
+    simulator:
+      ip: 198.18.0.22
+      port: 8000
+    nginx:
+      ip: 198.18.0.23
 
 bngs:
   - bng-id: bng-01
@@ -45,14 +75,6 @@ bngs:
         default-gw: 192.0.2.2
         nat-source-cidr: 10.0.0.0/24
 
-      services:
-        dhcp-server-ip: 198.18.0.3
-        radius-server-ip: 198.18.0.2
-        nas-ip: 198.18.0.1
-        redis-host: 198.18.0.10
-        oss-api-url: http://198.18.0.21:8000
-        kea-ctrl-url: http://198.18.0.3:6772
-
     access-nodes:
       - node-config:
           remote-id: cstm-relay-01
@@ -60,8 +82,8 @@ bngs:
           topology:
             interfaces:
               count: 6
-              subscriber-ifaces: [eth1, eth2, eth4, eth5, eth6]
-              uplink-iface: eth3
+              subscriber-ifaces: [eth1, eth2, eth4, eth5, eth3]
+              uplink-iface: eth6
 
           dhcp:
             ipv4:
@@ -84,8 +106,8 @@ bngs:
           topology:
             interfaces:
               count: 4
-              subscriber-ifaces: [eth1, eth3, eth4]
-              uplink-iface: eth2
+              subscriber-ifaces: [eth1, eth3, eth2]
+              uplink-iface: eth4
 
           dhcp:
             ipv4:
@@ -116,14 +138,6 @@ bngs:
         dhcp-uplink-cidr: 198.18.0.101/24
         default-gw: 192.0.2.2
         nat-source-cidr: 10.0.2.0/24
-
-      services:
-        dhcp-server-ip: 198.18.0.3
-        radius-server-ip: 198.18.0.2
-        nas-ip: 198.18.0.101
-        redis-host: 198.18.0.10
-        oss-api-url: http://198.18.0.21:8000
-        kea-ctrl-url: http://198.18.0.3:6772
 
     access-nodes:
       - node-config:

@@ -76,6 +76,11 @@ services:
       context: .
       dockerfile: docker/backend/Dockerfile
     image: lab-backend
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    image: lab-nginx
   simulator:
     build:
       context: .

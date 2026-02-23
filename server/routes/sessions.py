@@ -16,7 +16,7 @@ def list_active_sessions(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
-    """List active PPPoE sessions."""
+    """List active IPoE sessions."""
     rows = query_oss(
         """
         SELECT * FROM sessions_active

@@ -563,6 +563,17 @@ topology:
         - "ip route replace default via 198.18.0.254"
         - "sh -c \"ip link set eth0 down || true\""
 
+    nginx:
+      kind: linux
+      image: lab-nginx
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.23/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
+        - "nginx -g 'daemon off;' >/proc/1/fd/1 2>/proc/1/fd/2 &"
+        - "sh -c \"ip link set eth0 down || true\""
+
     backend:
       kind: linux
       image: lab-backend
@@ -708,5 +719,7 @@ topology:
     - endpoints: ["frontend:eth1", "mgmt:eth11"]
 
     - endpoints: ["backend:eth1", "mgmt:eth12"]
+
+    - endpoints: ["nginx:eth1", "mgmt:eth13"]
 
     - endpoints: ["upstream:eth11", "macvlan:enp1s0"]

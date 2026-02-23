@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import init_pools, close_pools
-from routes import sessions, events, routers, bngs, plans, customers, services, stats, simulation
+from routes import sessions, events, routers, bngs, plans, customers, services, stats
 
 
 @asynccontextmanager
@@ -14,7 +14,12 @@ async def lifespan(app: FastAPI):
     close_pools()
 
 
-app = FastAPI(title="OSS API", lifespan=lifespan)
+app = FastAPI(
+    title="OSS API", 
+    lifespan=lifespan,
+    docs_url="/docs",
+    openapi_url="/api/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +37,5 @@ app.include_router(plans.router)
 app.include_router(customers.router)
 app.include_router(services.router)
 app.include_router(stats.router)
-app.include_router(simulation.router)
 
 app.get("/health")(lambda: {"status": "ok"})

@@ -30,6 +30,9 @@ OSS_SEED_OUTPUT_PATH = ROOT / "docker/oss-pg/init/02-oss-schema.sql"
 RADIUS_CLIENTS_TEMPLATE_PATH = ROOT / "docker/radius/raddb/clients.conf.j2"
 RADIUS_CLIENTS_OUTPUT_PATH = ROOT / "docker/radius/raddb/clients.conf"
 
+NGINX_CONF_TEMPLATE_PATH = ROOT / "docker/nginx/nginx.conf.j2"
+NGINX_CONF_OUTPUT_PATH = ROOT / "docker/nginx/nginx.conf"
+
 
 class ConfigError(ValueError):
     pass
@@ -154,7 +157,43 @@ def _normalize_access_node(raw: dict[str, Any], bng_id: str, idx: int) -> dict[s
     }
 
 
-def _normalize_bng(raw: dict[str, Any], idx: int) -> dict[str, Any]:
+def _parse_shared_services(raw: dict[str, Any]) -> dict[str, Any]:
+    """Flatten shared.services into a dict with Python-friendly keys and sensible defaults."""
+    def _svc(name: str) -> dict:
+        v = raw.get(name)
+        return v if isinstance(v, dict) else {}
+
+    kea         = _svc("kea")
+    radius      = _svc("radius")
+    radius_pg   = _svc("radius-pg")
+    dhcp_pg     = _svc("dhcp-pg")
+    redis       = _svc("redis")
+    oss_pg      = _svc("oss-pg")
+    bng_ingestor = _svc("bng-ingestor")
+    frontend    = _svc("frontend")
+    backend     = _svc("backend")
+    simulator   = _svc("simulator")
+    nginx       = _svc("nginx")
+
+    return {
+        "kea_ip":           str(kea.get("ip",           "198.18.0.3")),
+        "kea_ctrl_port":    str(kea.get("ctrl-port",    "6772")),
+        "radius_ip":        str(radius.get("ip",        "198.18.0.2")),
+        "radius_pg_ip":     str(radius_pg.get("ip",     "198.18.0.6")),
+        "dhcp_pg_ip":       str(dhcp_pg.get("ip",       "198.18.0.4")),
+        "redis_ip":         str(redis.get("ip",         "198.18.0.10")),
+        "oss_pg_ip":        str(oss_pg.get("ip",        "198.18.0.11")),
+        "bng_ingestor_ip":  str(bng_ingestor.get("ip", "198.18.0.12")),
+        "frontend_ip":      str(frontend.get("ip",      "198.18.0.20")),
+        "backend_ip":       str(backend.get("ip",       "198.18.0.21")),
+        "backend_port":     str(backend.get("port",     "8000")),
+        "simulator_ip":     str(simulator.get("ip",     "198.18.0.22")),
+        "simulator_port":   str(simulator.get("port",   "8000")),
+        "nginx_ip":         str(nginx.get("ip",         "198.18.0.23")),
+    }
+
+
+def _normalize_bng(raw: dict[str, Any], idx: int, services_cfg: dict[str, Any]) -> dict[str, Any]:
     bng_id = _require(raw, "bng-id", f"bngs[{idx}]")
     if not isinstance(bng_id, str) or not bng_id.strip():
         raise ConfigError(f"bngs[{idx}].bng-id must be a non-empty string")
@@ -162,7 +201,6 @@ def _normalize_bng(raw: dict[str, Any], idx: int) -> dict[str, Any]:
     topo = _require(raw, "topology", f"bngs[{idx}]")
     iface = _require(topo, "interfaces", f"bngs[{idx}].topology")
     ipv4 = _require(topo, "ipv4", f"bngs[{idx}].topology")
-    services = _require(topo, "services", f"bngs[{idx}].topology")
 
     for key in ["subscriber", "upstream", "dhcp-uplink"]:
         _require(iface, key, f"bngs[{idx}].topology.interfaces")
@@ -170,15 +208,22 @@ def _normalize_bng(raw: dict[str, Any], idx: int) -> dict[str, Any]:
     for key in ["subscriber-cidr", "upstream-cidr", "dhcp-uplink-cidr", "default-gw", "nat-source-cidr"]:
         _require(ipv4, key, f"bngs[{idx}].topology.ipv4")
 
-    for key in [
-        "dhcp-server-ip",
-        "radius-server-ip",
-        "nas-ip",
-        "redis-host",
-        "oss-api-url",
-        "kea-ctrl-url",
-    ]:
-        _require(services, key, f"bngs[{idx}].topology.services")
+    # services section is optional — all fields derived from shared.services with optional overrides
+    svc_overrides = topo.get("services") or {}
+    if not isinstance(svc_overrides, dict):
+        raise ConfigError(f"bngs[{idx}].topology.services must be a mapping when provided")
+    nas_ip = svc_overrides.get("nas-ip") or _cidr_ip(str(ipv4["dhcp-uplink-cidr"]))
+    services = {
+        "nas-ip":           nas_ip,
+        "dhcp-server-ip":   svc_overrides.get("dhcp-server-ip",  services_cfg["kea_ip"]),
+        "radius-server-ip": svc_overrides.get("radius-server-ip", services_cfg["radius_ip"]),
+        "redis-host":       svc_overrides.get("redis-host",       services_cfg["redis_ip"]),
+        "oss-api-url":      svc_overrides.get("oss-api-url",
+                                f"http://{services_cfg['backend_ip']}:{services_cfg['backend_port']}"),
+        "kea-ctrl-url":     svc_overrides.get("kea-ctrl-url",
+                                f"http://{services_cfg['kea_ip']}:{services_cfg['kea_ctrl_port']}"),
+        "radius-client-secret": svc_overrides.get("radius-client-secret", "testing123"),
+    }
 
     access_nodes_raw = _require(raw, "access-nodes", f"bngs[{idx}]")
     if not isinstance(access_nodes_raw, list) or not access_nodes_raw:
@@ -234,6 +279,11 @@ def load_and_validate_config(config_path: Path) -> dict[str, Any]:
         "mgmt-nat-source-cidr": str(upstream_shared.get("mgmt-nat-source-cidr", "198.18.0.0/24")),
     }
 
+    services_raw = shared_raw.get("services") or {}
+    if not isinstance(services_raw, dict):
+        raise ConfigError("config.shared.services must be a mapping when provided")
+    services_cfg = _parse_shared_services(services_raw)
+
     mgmt_cfg = {
         "node-name": str(mgmt_shared.get("node-name", "mgmt")),
         "static-endpoints": mgmt_shared.get(
@@ -261,7 +311,7 @@ def load_and_validate_config(config_path: Path) -> dict[str, Any]:
     if not isinstance(bngs_raw, list) or not bngs_raw:
         raise ConfigError("config.bngs must be a non-empty list")
 
-    bngs = [_normalize_bng(item, i) for i, item in enumerate(bngs_raw)]
+    bngs = [_normalize_bng(item, i, services_cfg) for i, item in enumerate(bngs_raw)]
 
     seen_bng: set[str] = set()
     seen_remote: set[str] = set()
@@ -309,6 +359,7 @@ def load_and_validate_config(config_path: Path) -> dict[str, Any]:
         "shared": {
             "upstream": upstream_cfg,
             "mgmt": mgmt_cfg,
+            "services": services_cfg,
         },
     }
 
@@ -468,6 +519,7 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
         }
     )
 
+    mgmt_ip_cidr = cfg["shared"]["upstream"]["mgmt-ip-cidr"]
     return {
         "bngs": cfg["bngs"],
         "host_nodes": host_nodes,
@@ -481,6 +533,9 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
         "shared": cfg["shared"],
         "upstream_default_gw": cfg["upstream_default_gw"],
         "upstream_prefix": cfg["upstream_prefix"],
+        "services": cfg["shared"]["services"],
+        "mgmt_gw": _cidr_ip(mgmt_ip_cidr),
+        "mgmt_prefix": _cidr_prefix(mgmt_ip_cidr),
     }
 
 
@@ -512,6 +567,7 @@ def generate(cfg: dict[str, Any]) -> None:
     render_to_file(KEA_TEMPLATE_PATH, KEA_OUTPUT_PATH, ctx, env)
     render_to_file(OSS_SEED_TEMPLATE_PATH, OSS_SEED_OUTPUT_PATH, ctx, env)
     render_to_file(RADIUS_CLIENTS_TEMPLATE_PATH, RADIUS_CLIENTS_OUTPUT_PATH, ctx, env)
+    render_to_file(NGINX_CONF_TEMPLATE_PATH, NGINX_CONF_OUTPUT_PATH, ctx, env)
 
 
 
@@ -535,7 +591,7 @@ def main() -> int:
         print(f"Config validation successful: {cfg_path}")
         return 0
 
-    for path in [TOPOLOGY_TEMPLATE_PATH, KEA_TEMPLATE_PATH, OSS_SEED_TEMPLATE_PATH, RADIUS_CLIENTS_TEMPLATE_PATH]:
+    for path in [TOPOLOGY_TEMPLATE_PATH, KEA_TEMPLATE_PATH, OSS_SEED_TEMPLATE_PATH, RADIUS_CLIENTS_TEMPLATE_PATH, NGINX_CONF_TEMPLATE_PATH]:
         if not path.exists():
             print(f"Config error: template file not found: {path}")
             return 1
@@ -545,6 +601,7 @@ def main() -> int:
     print(f"Rendered {KEA_OUTPUT_PATH} from {KEA_TEMPLATE_PATH}")
     print(f"Rendered {OSS_SEED_OUTPUT_PATH} from {OSS_SEED_TEMPLATE_PATH}")
     print(f"Rendered {RADIUS_CLIENTS_OUTPUT_PATH} from {RADIUS_CLIENTS_TEMPLATE_PATH}")
+    print(f"Rendered {NGINX_CONF_OUTPUT_PATH} from {NGINX_CONF_TEMPLATE_PATH}")
     return 0
 
 

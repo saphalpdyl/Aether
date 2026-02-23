@@ -72,7 +72,17 @@ INSERT INTO customers (name, email, phone, street, city, zip_code, state) VALUES
     ('Pine Ridge School', 'tech@pineridge.example', '+1-555-0108', '88 Pine Rd', 'Concord', '03301', 'NH'),
     ('Summit Coffee', 'hello@summitcoffee.example', '+1-555-0109', '7 Summit Ave', 'Stamford', '06901', 'CT'),
     ('Jade Garden Restaurant', 'mgr@jadegarden.example', '+1-555-0110', '163 Garden Way', 'New Haven', '06510', 'CT'),
-    ('Coastal Realty', 'office@coastalrealty.example', '+1-555-0111', '205 Shore Dr', 'Newport', '02840', 'RI');
+    ('Coastal Realty', 'office@coastalrealty.example', '+1-555-0111', '205 Shore Dr', 'Newport', '02840', 'RI'),
+    ('Blue Wave Surf Shop', 'info@bluewavesurf.example', '+1-555-0112', '18 Ocean Ave', 'Gloucester', '01930', 'MA'),
+    ('Greenfield Co-op', 'member@greenfieldcoop.example', '+1-555-0113', '34 Meadow Ln', 'Brattleboro', '05301', 'VT'),
+    ('Iron Works Brewery', 'tap@ironworksbrewery.example', '+1-555-0114', '77 Foundry St', 'Lowell', '01852', 'MA'),
+    ('Sunrise Yoga Studio', 'namaste@sunriseyoga.example', '+1-555-0115', '5 Hilltop Rd', 'Keene', '03431', 'NH'),
+    ('Westport Auto Repair', 'service@westportauto.example', '+1-555-0116', '412 Route 1', 'Westport', '06880', 'CT'),
+    ('Marco Rossi', 'marco.rossi@example.com', '+1-555-0117', '29 Maple Ave', 'Bangor', '04401', 'ME'),
+    ('Harborlight Marina', 'dock@harborlightmarina.example', '+1-555-0118', '1 Marina Way', 'Rockland', '04841', 'ME'),
+    ('Priya Nair', 'priya.nair@example.com', '+1-555-0119', '62 Birchwood Dr', 'Rutland', '05701', 'VT'),
+    ('Capitol Hill Bookstore', 'books@capitolhillbooks.example', '+1-555-0120', '91 Capitol Ave', 'Augusta', '04330', 'ME'),
+    ('Fern Valley Farm', 'produce@fernvalleyfarm.example', '+1-555-0121', '320 Valley Rd', 'Pittsfield', '01201', 'MA');
 
 -- Seed access routers
 INSERT INTO access_routers (router_name, giaddr, bng_id, total_interfaces) VALUES

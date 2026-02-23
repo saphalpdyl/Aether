@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       }),
     });
     
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json().catch(console.error);
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error('Error executing simulation command:', error);

@@ -78,11 +78,12 @@ topology:
       image: lab-kea
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.3/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
-        - "sh -c \"for i in $(seq 1 60); do pg_isready -h 198.18.0.4 -U kea >/dev/null 2>&1 && break; sleep 0.5; done\""
-        - "sh -c \"kea-admin db-init pgsql -u kea -p test -n kea_lease_db -h 198.18.0.4 || true\""
+        - {{ ("ip addr add " ~ services.kea_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
+        - {{ ("sh -c \"for i in $(seq 1 60); do pg_isready -h " ~ services.dhcp_pg_ip ~ " -U kea >/dev/null 2>&1 && break; sleep 0.5; done\"") | tojson }}
+        - {{ ("sh -c \"kea-admin db-init pgsql -u kea -p test -n kea_lease_db -h " ~ services.dhcp_pg_ip ~ " || true\"") | tojson }}
         - "mkdir -p /run/kea && chmod 777 /run/kea"
         - "sh -c \"KEA_LOCKFILE_DIR=none kea-dhcp4 -c /etc/kea/kea-dhcp4.conf >/tmp/kea-dhcp4.log 2>&1 &\""
         - "sh -c \"rm -f /run/kea/kea-ctrl-agent.*.pid\""
@@ -108,9 +109,10 @@ topology:
         POSTGRES_PASSWORD: test
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.6/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
+        - {{ ("ip addr add " ~ services.radius_pg_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
         - "sh -c \"for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U radius >/dev/null 2>&1 && break; sleep 0.5; done\""
         - "sh -c \"/docker-entrypoint-initdb.d/00-radius-hba.sh || true\""
         - "sh -c \"pg_ctl -D \\\"$PGDATA\\\" reload || true\""
@@ -126,18 +128,20 @@ topology:
         POSTGRES_PASSWORD: test
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.4/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
+        - {{ ("ip addr add " ~ services.dhcp_pg_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
 
     redis:
       kind: linux
       image: lab-redis
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.10/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
+        - {{ ("ip addr add " ~ services.redis_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
         - "sh -c \"ip link set eth0 down || true\""
 
     oss_pg:
@@ -151,9 +155,10 @@ topology:
         POSTGRES_PASSWORD: oss
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.11/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
+        - {{ ("ip addr add " ~ services.oss_pg_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
         - "sh -c \"for i in $(seq 1 60); do pg_isready -h 127.0.0.1 -U oss >/dev/null 2>&1 && break; sleep 0.5; done\""
         - "sh -c \"/docker-entrypoint-initdb.d/00-oss-hba.sh || true\""
         - "sh -c \"pg_ctl -D \\\"$PGDATA\\\" reload || true\""
@@ -166,45 +171,59 @@ topology:
         - /home/test/lab/client/src:/app/src
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.20/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
+        - {{ ("ip addr add " ~ services.frontend_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
         - "sh -c \"pnpm dev --hostname 0.0.0.0 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
 
     bng_ingestor:
       kind: linux
       image: lab-bng-ingestor
       env:
-        REDIS_HOST: 198.18.0.10
-        PG_HOST: 198.18.0.11
+        REDIS_HOST: {{ services.redis_ip }}
+        PG_HOST: {{ services.oss_pg_ip }}
         PG_DB: oss
         PG_USER: oss
         PG_PASSWORD: oss
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.12/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
+        - {{ ("ip addr add " ~ services.bng_ingestor_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
         - "sh -c \"ip link set eth0 down || true\""
+
+    nginx:
+      kind: linux
+      image: lab-nginx
+      mgmt-ipv4: 172.20.20.23
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
+        - "ip link set eth1 up"
+        - {{ ("ip addr add " ~ services.nginx_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
+        - "sh -c \"nginx -g 'daemon off;' >/proc/1/fd/1 2>/proc/1/fd/2 &\""
 
     backend:
       kind: linux
       image: lab-backend
       mgmt-ipv4: 172.20.20.21
       env:
-        PG_HOST: 198.18.0.11
+        PG_HOST: {{ services.oss_pg_ip }}
         PG_DB: oss
         PG_USER: oss
         PG_PASSWORD: oss
-        RADIUS_PG_HOST: 198.18.0.6
-        SIMULATOR_URL: "http://198.18.0.22:8000"
+        RADIUS_PG_HOST: {{ services.radius_pg_ip }}
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.21/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
-        - "sh -c \"for i in $(seq 1 60); do python3 -c 'import socket; s=socket.create_connection((\\\"198.18.0.11\\\",5432),2); s.close()' 2>/dev/null && break; sleep 1; done\""
-        - "sh -c \"for i in $(seq 1 60); do python3 -c \\\"import psycopg2; c=psycopg2.connect(host='198.18.0.6',dbname='radius',user='radius',password='test'); cur=c.cursor(); cur.execute(\\\\\\\"SELECT 1 FROM radusergroup LIMIT 1\\\\\\\"); c.close()\\\" 2>/dev/null && break; sleep 1; done\""
+        - {{ ("ip addr add " ~ services.backend_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
+        - {{ ("sh -c \"for i in $(seq 1 60); do python3 -c 'import socket; s=socket.create_connection((\\\"" ~ services.oss_pg_ip ~ "\\\",5432),2); s.close()' 2>/dev/null && break; sleep 1; done\"") | tojson }}
+        - {{ ("sh -c \"for i in $(seq 1 60); do python3 -c \\\"import psycopg2; c=psycopg2.connect(host='" ~ services.radius_pg_ip ~ "',dbname='radius',user='radius',password='test'); cur=c.cursor(); cur.execute(\\\\\\\"SELECT 1 FROM radusergroup LIMIT 1\\\\\\\"); c.close()\\\" 2>/dev/null && break; sleep 1; done\"") | tojson }}
         - "sh -c \"uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
 
     simulator:
@@ -212,15 +231,16 @@ topology:
       image: lab-simulator
       mgmt-ipv4: 172.20.20.22
       env:
-        OSS_BACKEND_HOST: "198.18.0.21"
+        OSS_BACKEND_HOST: {{ services.backend_ip }}
       binds:
         - /var/run/docker.sock:/var/run/docker.sock
         - /home/test/lab/simulator.config.json:/opt/simulator/simulator.config.json
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
-        - "ip addr add 198.18.0.22/24 dev eth1"
-        - "ip route replace default via 198.18.0.254"
+        - {{ ("ip addr add " ~ services.simulator_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
+        - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
         - "sh -c \"uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
 
     {{ shared.upstream["upstream-node-name"] }}:
