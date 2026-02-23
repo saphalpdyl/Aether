@@ -21,7 +21,7 @@
         { "command": "dig +short example.com", "description": "Resolve example.com" }
       ],
       "weight": 4,
-      "sleep_range": [5, 15]
+      "sleep_range": [30,50]
     },
     "iperf3": {
       "description": "TCP throughput tests",
@@ -35,7 +35,7 @@
         { "command": "iperf3 -c 192.0.2.2 -t 3 -P 1 -R", "description": "Download throughput test" }
       ],
       "weight": 2,
-      "sleep_range": [10, 25]
+      "sleep_range": [60,90]
     },
     "dhclient_init": {
       "description": "Acquire DHCP lease",
