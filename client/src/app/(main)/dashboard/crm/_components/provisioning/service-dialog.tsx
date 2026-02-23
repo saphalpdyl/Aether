@@ -315,7 +315,7 @@ export function ServiceDialog({
                         <Search className="h-4 w-4 text-muted-foreground" />
                         <span>
                           {serviceForm.customer_id
-                            ? customers.find((c) => c.id === Number(serviceForm.customer_id))?.name
+                            ? customers.find((c) => String(c.id) === String(serviceForm.customer_id))?.name
                             : "Search customer..."}
                         </span>
                       </div>
@@ -338,7 +338,7 @@ export function ServiceDialog({
                             <Check
                               className={cn(
                                 "mr-2 h-4 w-4",
-                                serviceForm.customer_id === String(customer.id) ? "opacity-100" : "opacity-0"
+                                String(serviceForm.customer_id) === String(customer.id) ? "opacity-100" : "opacity-0"
                               )}
                             />
                             {customer.name}
@@ -352,7 +352,7 @@ export function ServiceDialog({
 
               {/* Customer Details Card */}
               {serviceForm.customer_id && (() => {
-                const selectedCustomer = customers.find((c) => c.id === Number(serviceForm.customer_id));
+                const selectedCustomer = customers.find((c) => c.id == Number(serviceForm.customer_id));
                 return selectedCustomer ? (
                   <div className="rounded-lg border bg-card p-4 mb-6">
                     <div className="flex items-start gap-3">

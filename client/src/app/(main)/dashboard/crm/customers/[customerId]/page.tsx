@@ -707,30 +707,32 @@ export default function CustomerDetailPage() {
       <CustomerEventsTable customerId={customerId} />
 
       {/* Service Dialog */}
-      <ServiceDialog
-        open={serviceDialogOpen}
-        onOpenChange={setServiceDialogOpen}
-        serviceEdit={serviceEdit}
-        serviceForm={serviceForm}
-        setServiceForm={setServiceForm}
-        selectedBngId={selectedBngId}
-        setSelectedBngId={setSelectedBngId}
-        selectedRouterForService={selectedRouterForService}
-        setSelectedRouterForService={setSelectedRouterForService}
-        selectedPortName={selectedPortName}
-        setSelectedPortName={setSelectedPortName}
-        routerPortDetails={routerPortDetails}
-        loadingRouterPorts={loadingRouterPorts}
-        serviceSaving={serviceSaving}
-        plans={plans}
-        customers={customer ? [customer] : []}
-        bngs={bngs}
-        routers={routers}
-        filteredRouters={filteredRouters}
-        onSave={handleServiceSave}
-        onBngChange={handleBngChange}
-        onRouterChange={handleRouterChange}
-      />
+      {customer && (
+        <ServiceDialog
+          open={serviceDialogOpen}
+          onOpenChange={setServiceDialogOpen}
+          serviceEdit={serviceEdit}
+          serviceForm={serviceForm}
+          setServiceForm={setServiceForm}
+          selectedBngId={selectedBngId}
+          setSelectedBngId={setSelectedBngId}
+          selectedRouterForService={selectedRouterForService}
+          setSelectedRouterForService={setSelectedRouterForService}
+          selectedPortName={selectedPortName}
+          setSelectedPortName={setSelectedPortName}
+          routerPortDetails={routerPortDetails}
+          loadingRouterPorts={loadingRouterPorts}
+          serviceSaving={serviceSaving}
+          plans={plans}
+          customers={[customer]}
+          bngs={bngs}
+          routers={routers}
+          filteredRouters={filteredRouters}
+          onSave={handleServiceSave}
+          onBngChange={handleBngChange}
+          onRouterChange={handleRouterChange}
+        />
+      )}
     </div>
   );
 }
