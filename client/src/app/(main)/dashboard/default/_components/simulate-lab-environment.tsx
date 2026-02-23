@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { ChevronDown, Home, Network, Bug, Info } from "lucide-react";
+import { Home, Network, Bug, Info, AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import simulateEnvIll from "@/assets/illustrations/simulate_env_ill.png";
@@ -22,9 +21,21 @@ interface Service {
   status: "ACTIVE" | "SUSPENDED" | "TERMINATED";
 }
 
+interface SimulateCommand {
+  command: string;
+  description: string;
+}
+
+interface SimulateNote {
+  type: "info" | "warning";
+  text: string;
+}
+
 interface SimulateOption {
   name: string;
-  commands: string[];
+  description: string;
+  commands: SimulateCommand[];
+  note?: SimulateNote;
 }
 
 interface SimulateOptionsResponse {
@@ -112,22 +123,19 @@ export function SimulateLabEnvironment() {
     }));
 
   // Convert command groups to combobox options
-  const commandGroupOptions: ComboboxOption[] = simulateOptions.map((option) => {
-    // Format label: capitalize first letter and replace underscores with spaces
-    const formattedLabel = option.name
-      .replace(/_/g, ' ').toUpperCase();    
-    return {
-      value: option.name,
-      label: formattedLabel,
-    };
-  });
+  const commandGroupOptions: ComboboxOption[] = simulateOptions.map((option) => ({
+    value: option.name,
+    label: option.name.replace(/_/g, ' ').toUpperCase(),
+    subtitle: option.description,
+  }));
 
   // Get commands for selected group
   const selectedGroup = simulateOptions.find((opt) => opt.name === selectedCommandGroup);
   const commandOptions: ComboboxOption[] = selectedGroup
     ? selectedGroup.commands.map((cmd) => ({
-        value: cmd,
-        label: cmd,
+        value: cmd.command,
+        label: cmd.description,
+        subtitle: cmd.command,
       }))
     : [];
 
@@ -259,6 +267,29 @@ export function SimulateLabEnvironment() {
             </div>
           </div>
         )}
+
+        {/* Note Display - Show when command group is selected and has a note */}
+        {selectedCommandGroup && (() => {
+          const selectedGroupData = simulateOptions.find((opt) => opt.name === selectedCommandGroup);
+          if (!selectedGroupData?.note) return null;
+          
+          const isWarning = selectedGroupData.note.type === "warning";
+          
+          return (
+            <div className={`rounded-lg border p-3 flex items-start gap-3 ${
+              isWarning 
+                ? "bg-amber-50 border-amber-200 text-amber-900" 
+                : "bg-blue-50 border-blue-200 text-blue-900"
+            }`}>
+              {isWarning ? (
+                <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+              ) : (
+                <Info className="size-5 text-blue-600 shrink-0 mt-0.5" />
+              )}
+              <p className="text-xs italic">{selectedGroupData.note.text}</p>
+            </div>
+          );
+        })()}
 
         {/* Simulate Button */}
         <Button 

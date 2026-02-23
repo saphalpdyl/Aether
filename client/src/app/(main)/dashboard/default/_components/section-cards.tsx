@@ -232,9 +232,9 @@ export function SectionCards() {
         </CardFooter>
       </Card>
 
-      <Card className="@container/card flex flex-col p-0 overflow-hidden relative">
-        <div className="flex flex-row justify-between">
-          <CardHeader className="p-8 w-1/2 z-10">
+      <Card className="@container/card flex flex-col p-0 overflow-hidden relative w-full">
+        <div className="flex flex-row justify-between w-full">
+          <CardHeader className="p-8 w-2/3 z-10">
             <CardDescription>Active Traffic</CardDescription>
             <CardTitle className="space-y-2">
               <div className="flex gap-1.5 divide-x-2 space-x-4 w-full">

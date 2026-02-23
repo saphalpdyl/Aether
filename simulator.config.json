@@ -1,46 +1,56 @@
 {
   "traffic_commands": {
     "curl": {
+      "description": "HTTP GET requests",
       "allow_for_demo_simulation": true,
       "commands": [
-        "curl -so /dev/null -w '%{http_code}' --max-time 10 http://example.com",
-        "curl -so /dev/null -w '%{http_code}' --max-time 10 http://info.cern.ch",
-        "curl -so /dev/null -w '%{http_code}' --max-time 10 http://httpbin.org/get"
+        { "command": "curl -so /dev/null -w '%{http_code}' --max-time 10 http://google.com", "description": "Fetch google.com" },
+        { "command": "curl -so /dev/null -w '%{http_code}' --max-time 10 http://example.com", "description": "Fetch example.com" },
+        { "command": "curl -so /dev/null -w '%{http_code}' --max-time 10 http://info.cern.ch", "description": "Fetch info.cern.ch" },
+        { "command": "curl -so /dev/null -w '%{http_code}' --max-time 10 http://httpbin.org/get", "description": "Fetch httpbin.org" }
       ],
       "weight": 4,
       "sleep_range": [5, 20]
     },
     "dig": {
+      "description": "DNS resolution lookups",
       "allow_for_demo_simulation": true,
       "commands": [
-        "dig +short google.com",
-        "dig +short cloudflare.com",
-        "dig +short example.com"
+        { "command": "dig +short google.com", "description": "Resolve google.com" },
+        { "command": "dig +short cloudflare.com", "description": "Resolve cloudflare.com" },
+        { "command": "dig +short example.com", "description": "Resolve example.com" }
       ],
       "weight": 4,
       "sleep_range": [5, 15]
     },
     "iperf3": {
+      "description": "TCP throughput tests",
+      "note": {
+        "type": "warning",
+        "text": "Iperf3 might fail because iperf3-server can only handle one client at a time. If you see errors, please wait for a few seconds and try again."
+      },
       "allow_for_demo_simulation": true,
       "commands": [
-        "iperf3 -c 192.0.2.2 -t 3 -P 1",
-        "iperf3 -c 192.0.2.2 -t 3 -P 1 -R"
+        { "command": "iperf3 -c 192.0.2.2 -t 3 -P 1", "description": "Upload throughput test" },
+        { "command": "iperf3 -c 192.0.2.2 -t 3 -P 1 -R", "description": "Download throughput test" }
       ],
       "weight": 2,
       "sleep_range": [10, 25]
     },
     "dhclient_init": {
+      "description": "Acquire DHCP lease",
       "disable_in_automated_simulation": true,
       "allow_for_demo_simulation": true,
       "commands": [
-        "dhclient -v -1 eth1"
+        { "command": "dhclient -v -1 eth1", "description": "Request DHCP lease" }
       ]
     },
     "dhclient_release": {
+      "description": "Release DHCP lease",
       "disable_in_automated_simulation": true,
       "allow_for_demo_simulation": true,
       "commands": [
-        "dhclient -v -r -d eth1"
+        { "command": "dhclient -v -r -d eth1", "description": "Release DHCP lease" }
       ]
     }
   }

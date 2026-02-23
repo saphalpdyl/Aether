@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 import docker
 import requests
@@ -10,9 +11,16 @@ from config import SIMULATOR_CONFIG, log, oss_backend_url
 router = APIRouter()
 
 @dataclass
+class SimulateOptionNote:
+    type: Literal["info", "warning"]
+    text: str
+
+@dataclass
 class SimulateOption:
     name: str
-    commands: list[str]
+    description: str
+    commands: list[dict]
+    note: SimulateOptionNote | None = None
 
 @dataclass
 class GetSimulateOptionsResponse:
@@ -29,7 +37,9 @@ def get_simulate_options() -> GetSimulateOptionsResponse:
             options.append(
                 SimulateOption(
                     name=name,
-                    commands=cgroup["commands"]
+                    description=cgroup.get("description", ""),
+                    commands=cgroup["commands"],
+                    note=SimulateOptionNote(**cgroup["note"]) if "note" in cgroup else None
                 )
             )
 
@@ -76,7 +86,7 @@ def execute_cmd(body: CmdRequest):
         raise HTTPException(status_code=400, detail=f"Unknown command group: {body.name!r}")
 
     # This is to prevent Remote Code Execution - we only allow commands that are predefined in simulator.config.json
-    allowed_commands = traffic_commands[body.name]["commands"]
+    allowed_commands = [c["command"] for c in traffic_commands[body.name]["commands"]]
     if body.command not in allowed_commands:
         raise HTTPException(status_code=400, detail="Command not in allowed list")
 

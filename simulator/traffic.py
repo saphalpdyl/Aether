@@ -45,7 +45,7 @@ def traffic_loop(container):
         try:
             group = random.choices(TRAFFIC_COMMANDS, weights=weights, k=1)[0]
             cmd = random.choice(group["commands"])
-            result = container.exec_run(["sh", "-c", cmd])
+            result = container.exec_run(["sh", "-c", cmd["command"]])
             stdout_snippet = result.output.decode(errors="replace")[:200]
             log.info("traffic_cmd",
                      host=container.name,
