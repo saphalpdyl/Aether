@@ -8,6 +8,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 type RangeKey = "15m" | "1h" | "6h" | "24h";
@@ -45,6 +46,19 @@ function formatRate(bps: number): string {
     return `${(bps / 1_000).toFixed(2)} Kbps`;
   }
   return `${bps.toFixed(0)} bps`;
+}
+
+function splitRate(bps: number): { value: number; unit: string; decimals: number } {
+  if (bps >= 1_000_000_000) {
+    return { value: bps / 1_000_000_000, unit: "Gbps", decimals: 2 };
+  }
+  if (bps >= 1_000_000) {
+    return { value: bps / 1_000_000, unit: "Mbps", decimals: 2 };
+  }
+  if (bps >= 1_000) {
+    return { value: bps / 1_000, unit: "Kbps", decimals: 2 };
+  }
+  return { value: bps, unit: "bps", decimals: 0 };
 }
 
 function bucketSecondsForRange(range: RangeKey): number {
@@ -202,7 +216,16 @@ export function ChartAreaInteractive() {
                   }
                   formatter={(value, name) => {
                     const label = chartConfig[name as keyof typeof chartConfig]?.label || String(name);
-                    return [formatRate(Number(value)), " ", label.toLowerCase()];
+                    const rate = splitRate(Number(value));
+                    return (
+                      <div className="flex items-center gap-1 w-full justify-between">
+                        <span className="text-muted-foreground">{label}</span>
+                        <div className="flex items-center gap-0.5">
+                          <AnimatedCounter value={rate.value} decimals={rate.decimals} fontSize="12px" />
+                          <span className="text-xs">{rate.unit}</span>
+                        </div>
+                      </div>
+                    );
                   }}
                   indicator="dot"
                 />

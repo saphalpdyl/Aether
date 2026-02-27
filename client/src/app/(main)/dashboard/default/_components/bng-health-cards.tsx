@@ -188,7 +188,7 @@ export function BngHealthCards() {
                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                   </div>
                   <div className="text-2xl font-bold tabular-nums mt-1">
-                    <AnimatedCounter value={cpuUsage} decimals={1} suffix="%" />
+                    <AnimatedCounter invertColors value={cpuUsage} decimals={1} suffix="%" />
                   </div>
                   <p className="text-xs text-muted-foreground">3d Avg</p>
                 </div>
@@ -198,7 +198,7 @@ export function BngHealthCards() {
                     <div className="w-2 h-2 rounded-full bg-green-500" />
                   </div>
                   <div className="text-2xl font-bold tabular-nums mt-1">
-                    <AnimatedCounter value={parseFloat(memPercent)} decimals={1} suffix="%" />
+                    <AnimatedCounter invertColors value={parseFloat(memPercent)} decimals={1} suffix="%" />
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {formatMemory(memUsage)} / {formatMemory(memMax)}
@@ -217,12 +217,16 @@ export function BngHealthCards() {
                       <XAxis dataKey="time" hide />
                       <ChartTooltip
                         content={
-                          <ChartTooltipContent 
+                          <ChartTooltipContent
                             labelFormatter={(label) => `Time: ${label}`}
-                            formatter={(value, name) => [
-                              `${Number(value).toFixed(1)}%`,
-                              name === 'cpu' ? 'CPU' : 'Memory'
-                            ]}
+                            formatter={(value, name) => (
+                              <div className="flex items-center gap-1 w-full justify-between">
+                                <span className="text-muted-foreground">{name === 'cpu' ? 'CPU' : 'Memory'}</span>
+                                <div className="flex items-center">
+                                  <AnimatedCounter invertColors value={Number(value)} decimals={1} fontSize="12px" suffix="%" />
+                                </div>
+                              </div>
+                            )}
                           />
                         }
                       />
