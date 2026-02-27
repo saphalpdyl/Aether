@@ -187,9 +187,9 @@ export function BngHealthCards() {
                     <p className="text-xs text-muted-foreground">CPU Usage</p>
                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                   </div>
-                  <p className="text-2xl font-bold tabular-nums mt-1">
-                    <AnimatedCounter value={cpuUsage} duration={0.6} decimals={1} suffix="%" />
-                  </p>
+                  <div className="text-2xl font-bold tabular-nums mt-1">
+                    <AnimatedCounter value={cpuUsage} decimals={1} suffix="%" />
+                  </div>
                   <p className="text-xs text-muted-foreground">3d Avg</p>
                 </div>
                 <div className="pl-4">
@@ -197,9 +197,9 @@ export function BngHealthCards() {
                     <p className="text-xs text-muted-foreground">Memory</p>
                     <div className="w-2 h-2 rounded-full bg-green-500" />
                   </div>
-                  <p className="text-2xl font-bold tabular-nums mt-1">
-                    <AnimatedCounter value={parseFloat(memPercent)} duration={0.6} decimals={1} suffix="%" />
-                  </p>
+                  <div className="text-2xl font-bold tabular-nums mt-1">
+                    <AnimatedCounter value={parseFloat(memPercent)} decimals={1} suffix="%" />
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {formatMemory(memUsage)} / {formatMemory(memMax)}
                   </p>

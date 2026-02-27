@@ -90,14 +90,14 @@ INSERT INTO access_routers (router_name, giaddr, bng_id, total_interfaces) VALUE
 
     ('cstm-relay-01', '10.0.1.1', 'bng-01', 6),
 
-    ('cstm-relay-02', '10.0.1.65', 'bng-01', 4),
+    ('cstm-relay-02', '10.0.1.65', 'bng-01', 5),
 
-    ('cstm-relay-11', '10.0.3.1', 'bng-02', 3),
+    ('cstm-relay-11', '10.0.3.1', 'bng-02', 4),
 
-    ('cstm-relay-12', '10.0.3.65', 'bng-02', 2),
+    ('cstm-relay-12', '10.0.3.65', 'bng-02', 10),
 
-    ('cstm-relay-13', '10.0.4.1', 'bng-02', 2),
+    ('cstm-relay-13', '10.0.4.1', 'bng-02', 7),
 
-    ('cstm-relay-14', '10.0.4.65', 'bng-02', 2),
+    ('cstm-relay-14', '10.0.4.65', 'bng-02', 5),
 
-    ('cstm-relay-15', '10.0.4.129', 'bng-02', 2);
+    ('cstm-relay-15', '10.0.4.129', 'bng-02', 13);

@@ -17,6 +17,13 @@ topology:
         HOST_MAC: "f6:0f:50:39:09:c9"
 
 
+    h-cstm-relay-01-eth3:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "26:04:cb:a6:ce:42"
+
+
     h-cstm-relay-01-eth4:
       kind: linux
       image: lab-host
@@ -31,18 +38,18 @@ topology:
         HOST_MAC: "7a:ef:bc:08:51:eb"
 
 
-    h-cstm-relay-01-eth6:
-      kind: linux
-      image: lab-host
-      env:
-        HOST_MAC: "e6:ca:f3:0e:05:e3"
-
-
     h-cstm-relay-02-eth1:
       kind: linux
       image: lab-host
       env:
         HOST_MAC: "36:69:8c:9e:28:26"
+
+
+    h-cstm-relay-02-eth2:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "02:30:7f:2c:60:6e"
 
 
     h-cstm-relay-02-eth3:
@@ -73,11 +80,74 @@ topology:
         HOST_MAC: "02:c4:d2:bf:ad:fa"
 
 
+    h-cstm-relay-11-eth3:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "1a:99:e6:3c:b3:03"
+
+
     h-cstm-relay-12-eth1:
       kind: linux
       image: lab-host
       env:
         HOST_MAC: "7e:19:8f:2e:73:58"
+
+
+    h-cstm-relay-12-eth2:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "ee:e3:4a:c3:5e:22"
+
+
+    h-cstm-relay-12-eth3:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "86:b3:5d:a2:5c:83"
+
+
+    h-cstm-relay-12-eth4:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "26:07:2e:03:3b:e8"
+
+
+    h-cstm-relay-12-eth5:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "f2:75:66:fe:6f:b3"
+
+
+    h-cstm-relay-12-eth6:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "8a:ed:7b:13:89:bc"
+
+
+    h-cstm-relay-12-eth7:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "76:40:96:ea:44:1e"
+
+
+    h-cstm-relay-12-eth8:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "b2:9d:e7:ac:3d:37"
+
+
+    h-cstm-relay-12-eth9:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "c6:6b:10:74:a2:66"
 
 
     h-cstm-relay-13-eth1:
@@ -87,11 +157,67 @@ topology:
         HOST_MAC: "96:72:1b:4b:b9:d9"
 
 
+    h-cstm-relay-13-eth2:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "ee:48:ac:9c:a1:5a"
+
+
+    h-cstm-relay-13-eth3:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "0a:75:ab:d9:a6:8a"
+
+
+    h-cstm-relay-13-eth4:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "0a:7d:e3:a3:c2:0f"
+
+
+    h-cstm-relay-13-eth5:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "66:cf:44:73:86:25"
+
+
+    h-cstm-relay-13-eth6:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "92:80:8e:de:c3:0b"
+
+
     h-cstm-relay-14-eth1:
       kind: linux
       image: lab-host
       env:
         HOST_MAC: "7a:8e:9f:51:62:00"
+
+
+    h-cstm-relay-14-eth2:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "b6:d5:74:4d:f9:53"
+
+
+    h-cstm-relay-14-eth3:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "da:ee:9c:c3:a1:7e"
+
+
+    h-cstm-relay-14-eth4:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "32:b8:4b:91:b2:52"
 
 
     h-cstm-relay-15-eth1:
@@ -101,6 +227,83 @@ topology:
         HOST_MAC: "ae:7c:9d:49:5e:f5"
 
 
+    h-cstm-relay-15-eth2:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "7a:48:1d:67:07:53"
+
+
+    h-cstm-relay-15-eth3:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "66:fa:79:64:9d:98"
+
+
+    h-cstm-relay-15-eth4:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "12:80:8d:5a:52:4e"
+
+
+    h-cstm-relay-15-eth5:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "ce:6a:3c:8a:17:93"
+
+
+    h-cstm-relay-15-eth6:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "a6:99:73:2c:c0:f8"
+
+
+    h-cstm-relay-15-eth7:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "ea:c1:4d:78:4c:37"
+
+
+    h-cstm-relay-15-eth8:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "ea:7c:d9:58:4c:32"
+
+
+    h-cstm-relay-15-eth9:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "d6:95:d9:d4:85:28"
+
+
+    h-cstm-relay-15-eth10:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "de:be:5c:41:5d:7f"
+
+
+    h-cstm-relay-15-eth11:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "ea:c8:82:6f:ea:d7"
+
+
+    h-cstm-relay-15-eth12:
+      kind: linux
+      image: lab-host
+      env:
+        HOST_MAC: "fa:5a:f2:41:13:53"
+
+
 
     cstm-relay-01:
       kind: linux
@@ -108,9 +311,9 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-01"
         GIADDR: "10.0.1.1"
-        RELAY_UPLINK_IFACE: "eth3"
-        RELAY_ACCESS_IFACES: "eth1,eth2,eth4,eth5,eth6"
-        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth4=1/0/4,eth5=1/0/5,eth6=1/0/6"
+        RELAY_UPLINK_IFACE: "eth6"
+        RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4,eth5"
+        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4,eth5=1/0/5"
         RELAY_BR_IP_CIDR: "10.0.1.1/26"
         RELAY_UPLINK_IP_CIDR: "10.0.0.2/24"
         RELAY_DEFAULT_GW: "10.0.0.1"
@@ -119,12 +322,12 @@ topology:
 
         - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
         - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up && ip link set eth4 up && ip link set eth5 up && ip link set eth6 up\""
-        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0 && ip link set eth4 master br0 && ip link set eth5 master br0 && ip link set eth6 master br0\""
+        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0 && ip link set eth3 master br0 && ip link set eth4 master br0 && ip link set eth5 master br0\""
         - "sh -c \"ip link set br0 up\""
         - "sh -c \"ip addr replace 10.0.1.1/26 dev br0\""
 
-        - "sh -c \"ip addr replace 10.0.0.2/24 dev eth3\""
-        - "sh -c \"ip route replace default via 10.0.0.1 dev eth3\""
+        - "sh -c \"ip addr replace 10.0.0.2/24 dev eth6\""
+        - "sh -c \"ip route replace default via 10.0.0.1 dev eth6\""
         - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
         - "sh -c \"ip link set eth0 down || true\""
 
@@ -135,23 +338,23 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-02"
         GIADDR: "10.0.1.65"
-        RELAY_UPLINK_IFACE: "eth2"
-        RELAY_ACCESS_IFACES: "eth1,eth3,eth4"
-        CIRCUIT_ID_MAP: "eth1=1/0/1,eth3=1/0/3,eth4=1/0/4"
+        RELAY_UPLINK_IFACE: "eth5"
+        RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4"
+        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4"
         RELAY_BR_IP_CIDR: "10.0.1.65/26"
         RELAY_UPLINK_IP_CIDR: "10.0.0.3/24"
         RELAY_DEFAULT_GW: "10.0.0.1"
       exec:
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && ip link show eth4 >/dev/null 2>&1 && break; sleep 0.2; done\""
+        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && ip link show eth4 >/dev/null 2>&1 && ip link show eth5 >/dev/null 2>&1 && break; sleep 0.2; done\""
 
         - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
-        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up && ip link set eth4 up\""
-        - "sh -c \"ip link set eth1 master br0 && ip link set eth3 master br0 && ip link set eth4 master br0\""
+        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up && ip link set eth4 up && ip link set eth5 up\""
+        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0 && ip link set eth3 master br0 && ip link set eth4 master br0\""
         - "sh -c \"ip link set br0 up\""
         - "sh -c \"ip addr replace 10.0.1.65/26 dev br0\""
 
-        - "sh -c \"ip addr replace 10.0.0.3/24 dev eth2\""
-        - "sh -c \"ip route replace default via 10.0.0.1 dev eth2\""
+        - "sh -c \"ip addr replace 10.0.0.3/24 dev eth5\""
+        - "sh -c \"ip route replace default via 10.0.0.1 dev eth5\""
         - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
         - "sh -c \"ip link set eth0 down || true\""
 
@@ -162,23 +365,23 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-11"
         GIADDR: "10.0.3.1"
-        RELAY_UPLINK_IFACE: "eth3"
-        RELAY_ACCESS_IFACES: "eth1,eth2"
-        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2"
+        RELAY_UPLINK_IFACE: "eth4"
+        RELAY_ACCESS_IFACES: "eth1,eth2,eth3"
+        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3"
         RELAY_BR_IP_CIDR: "10.0.3.1/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.2/24"
         RELAY_DEFAULT_GW: "10.0.2.1"
       exec:
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && break; sleep 0.2; done\""
+        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && ip link show eth4 >/dev/null 2>&1 && break; sleep 0.2; done\""
 
         - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
-        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up\""
-        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0\""
+        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up && ip link set eth4 up\""
+        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0 && ip link set eth3 master br0\""
         - "sh -c \"ip link set br0 up\""
         - "sh -c \"ip addr replace 10.0.3.1/26 dev br0\""
 
-        - "sh -c \"ip addr replace 10.0.2.2/24 dev eth3\""
-        - "sh -c \"ip route replace default via 10.0.2.1 dev eth3\""
+        - "sh -c \"ip addr replace 10.0.2.2/24 dev eth4\""
+        - "sh -c \"ip route replace default via 10.0.2.1 dev eth4\""
         - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
         - "sh -c \"ip link set eth0 down || true\""
 
@@ -189,20 +392,23 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-12"
         GIADDR: "10.0.3.65"
-        RELAY_UPLINK_IFACE: "eth2"
-        RELAY_ACCESS_IFACES: "eth1"
-        CIRCUIT_ID_MAP: "eth1=1/0/1"
+        RELAY_UPLINK_IFACE: "eth10"
+        RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8,eth9"
+        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4,eth5=1/0/5,eth6=1/0/6,eth7=1/0/7,eth8=1/0/8,eth9=1/0/9"
         RELAY_BR_IP_CIDR: "10.0.3.65/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.3/24"
         RELAY_DEFAULT_GW: "10.0.2.1"
       exec:
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done\""
+        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && ip link show eth4 >/dev/null 2>&1 && ip link show eth5 >/dev/null 2>&1 && ip link show eth6 >/dev/null 2>&1 && ip link show eth7 >/dev/null 2>&1 && ip link show eth8 >/dev/null 2>&1 && ip link show eth9 >/dev/null 2>&1 && ip link show eth10 >/dev/null 2>&1 && break; sleep 0.2; done\""
 
-        - "sh -c \"ip link set eth1 up && ip link set eth2 up\""
-        - "sh -c \"ip addr replace 10.0.3.65/26 dev eth1\""
+        - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
+        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up && ip link set eth4 up && ip link set eth5 up && ip link set eth6 up && ip link set eth7 up && ip link set eth8 up && ip link set eth9 up && ip link set eth10 up\""
+        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0 && ip link set eth3 master br0 && ip link set eth4 master br0 && ip link set eth5 master br0 && ip link set eth6 master br0 && ip link set eth7 master br0 && ip link set eth8 master br0 && ip link set eth9 master br0\""
+        - "sh -c \"ip link set br0 up\""
+        - "sh -c \"ip addr replace 10.0.3.65/26 dev br0\""
 
-        - "sh -c \"ip addr replace 10.0.2.3/24 dev eth2\""
-        - "sh -c \"ip route replace default via 10.0.2.1 dev eth2\""
+        - "sh -c \"ip addr replace 10.0.2.3/24 dev eth10\""
+        - "sh -c \"ip route replace default via 10.0.2.1 dev eth10\""
         - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
         - "sh -c \"ip link set eth0 down || true\""
 
@@ -213,20 +419,23 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-13"
         GIADDR: "10.0.4.1"
-        RELAY_UPLINK_IFACE: "eth2"
-        RELAY_ACCESS_IFACES: "eth1"
-        CIRCUIT_ID_MAP: "eth1=1/0/1"
+        RELAY_UPLINK_IFACE: "eth7"
+        RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4,eth5,eth6"
+        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4,eth5=1/0/5,eth6=1/0/6"
         RELAY_BR_IP_CIDR: "10.0.4.1/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.4/24"
         RELAY_DEFAULT_GW: "10.0.2.1"
       exec:
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done\""
+        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && ip link show eth4 >/dev/null 2>&1 && ip link show eth5 >/dev/null 2>&1 && ip link show eth6 >/dev/null 2>&1 && ip link show eth7 >/dev/null 2>&1 && break; sleep 0.2; done\""
 
-        - "sh -c \"ip link set eth1 up && ip link set eth2 up\""
-        - "sh -c \"ip addr replace 10.0.4.1/26 dev eth1\""
+        - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
+        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up && ip link set eth4 up && ip link set eth5 up && ip link set eth6 up && ip link set eth7 up\""
+        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0 && ip link set eth3 master br0 && ip link set eth4 master br0 && ip link set eth5 master br0 && ip link set eth6 master br0\""
+        - "sh -c \"ip link set br0 up\""
+        - "sh -c \"ip addr replace 10.0.4.1/26 dev br0\""
 
-        - "sh -c \"ip addr replace 10.0.2.4/24 dev eth2\""
-        - "sh -c \"ip route replace default via 10.0.2.1 dev eth2\""
+        - "sh -c \"ip addr replace 10.0.2.4/24 dev eth7\""
+        - "sh -c \"ip route replace default via 10.0.2.1 dev eth7\""
         - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
         - "sh -c \"ip link set eth0 down || true\""
 
@@ -237,20 +446,23 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-14"
         GIADDR: "10.0.4.65"
-        RELAY_UPLINK_IFACE: "eth2"
-        RELAY_ACCESS_IFACES: "eth1"
-        CIRCUIT_ID_MAP: "eth1=1/0/1"
+        RELAY_UPLINK_IFACE: "eth5"
+        RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4"
+        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4"
         RELAY_BR_IP_CIDR: "10.0.4.65/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.5/24"
         RELAY_DEFAULT_GW: "10.0.2.1"
       exec:
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done\""
+        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && ip link show eth4 >/dev/null 2>&1 && ip link show eth5 >/dev/null 2>&1 && break; sleep 0.2; done\""
 
-        - "sh -c \"ip link set eth1 up && ip link set eth2 up\""
-        - "sh -c \"ip addr replace 10.0.4.65/26 dev eth1\""
+        - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
+        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up && ip link set eth4 up && ip link set eth5 up\""
+        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0 && ip link set eth3 master br0 && ip link set eth4 master br0\""
+        - "sh -c \"ip link set br0 up\""
+        - "sh -c \"ip addr replace 10.0.4.65/26 dev br0\""
 
-        - "sh -c \"ip addr replace 10.0.2.5/24 dev eth2\""
-        - "sh -c \"ip route replace default via 10.0.2.1 dev eth2\""
+        - "sh -c \"ip addr replace 10.0.2.5/24 dev eth5\""
+        - "sh -c \"ip route replace default via 10.0.2.1 dev eth5\""
         - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
         - "sh -c \"ip link set eth0 down || true\""
 
@@ -261,20 +473,23 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-15"
         GIADDR: "10.0.4.129"
-        RELAY_UPLINK_IFACE: "eth2"
-        RELAY_ACCESS_IFACES: "eth1"
-        CIRCUIT_ID_MAP: "eth1=1/0/1"
+        RELAY_UPLINK_IFACE: "eth13"
+        RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8,eth9,eth10,eth11,eth12"
+        CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4,eth5=1/0/5,eth6=1/0/6,eth7=1/0/7,eth8=1/0/8,eth9=1/0/9,eth10=1/0/10,eth11=1/0/11,eth12=1/0/12"
         RELAY_BR_IP_CIDR: "10.0.4.129/26"
         RELAY_UPLINK_IP_CIDR: "10.0.2.6/24"
         RELAY_DEFAULT_GW: "10.0.2.1"
       exec:
-        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && break; sleep 0.2; done\""
+        - "sh -c \"for i in $(seq 1 50); do ip link show eth1 >/dev/null 2>&1 && ip link show eth2 >/dev/null 2>&1 && ip link show eth3 >/dev/null 2>&1 && ip link show eth4 >/dev/null 2>&1 && ip link show eth5 >/dev/null 2>&1 && ip link show eth6 >/dev/null 2>&1 && ip link show eth7 >/dev/null 2>&1 && ip link show eth8 >/dev/null 2>&1 && ip link show eth9 >/dev/null 2>&1 && ip link show eth10 >/dev/null 2>&1 && ip link show eth11 >/dev/null 2>&1 && ip link show eth12 >/dev/null 2>&1 && ip link show eth13 >/dev/null 2>&1 && break; sleep 0.2; done\""
 
-        - "sh -c \"ip link set eth1 up && ip link set eth2 up\""
-        - "sh -c \"ip addr replace 10.0.4.129/26 dev eth1\""
+        - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
+        - "sh -c \"ip link set eth1 up && ip link set eth2 up && ip link set eth3 up && ip link set eth4 up && ip link set eth5 up && ip link set eth6 up && ip link set eth7 up && ip link set eth8 up && ip link set eth9 up && ip link set eth10 up && ip link set eth11 up && ip link set eth12 up && ip link set eth13 up\""
+        - "sh -c \"ip link set eth1 master br0 && ip link set eth2 master br0 && ip link set eth3 master br0 && ip link set eth4 master br0 && ip link set eth5 master br0 && ip link set eth6 master br0 && ip link set eth7 master br0 && ip link set eth8 master br0 && ip link set eth9 master br0 && ip link set eth10 master br0 && ip link set eth11 master br0 && ip link set eth12 master br0\""
+        - "sh -c \"ip link set br0 up\""
+        - "sh -c \"ip addr replace 10.0.4.129/26 dev br0\""
 
-        - "sh -c \"ip addr replace 10.0.2.6/24 dev eth2\""
-        - "sh -c \"ip route replace default via 10.0.2.1 dev eth2\""
+        - "sh -c \"ip addr replace 10.0.2.6/24 dev eth13\""
+        - "sh -c \"ip route replace default via 10.0.2.1 dev eth13\""
         - "sh -c \"sysctl -w net.ipv4.ip_forward=1 || true\""
         - "sh -c \"ip link set eth0 down || true\""
 
@@ -447,13 +662,14 @@ topology:
       exec:
         - "sh -c \"ip link add br0 type bridge 2>/dev/null || true\""
         - "sh -c \"ip link set br0 up\""
-        - "sh -c \"for i in $(seq 1 13); do ip link set eth${i} up; ip link set eth${i} master br0; done\""
+        - "sh -c \"for i in $(seq 1 15); do ip link set eth${i} up; ip link set eth${i} master br0; done\""
 
     kea:
       kind: linux
       image: lab-kea
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.3/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
@@ -484,6 +700,7 @@ topology:
         POSTGRES_PASSWORD: test
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.6/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
@@ -502,6 +719,7 @@ topology:
         POSTGRES_PASSWORD: test
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.4/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
@@ -511,6 +729,7 @@ topology:
       image: lab-redis
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.10/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
@@ -527,6 +746,7 @@ topology:
         POSTGRES_PASSWORD: oss
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.11/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
@@ -538,10 +758,13 @@ topology:
       kind: linux
       image: lab-frontend
       mgmt-ipv4: 172.20.20.20
+      env:
+        SIMULATOR_URL: "http://198.18.0.22:8000"
       binds:
         - /home/test/lab/client/src:/app/src
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.20/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
@@ -558,6 +781,7 @@ topology:
         PG_PASSWORD: oss
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.12/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
@@ -566,13 +790,14 @@ topology:
     nginx:
       kind: linux
       image: lab-nginx
+      mgmt-ipv4: 172.20.20.23
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.23/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
-        - "nginx -g 'daemon off;' >/proc/1/fd/1 2>/proc/1/fd/2 &"
-        - "sh -c \"ip link set eth0 down || true\""
+        - "sh -c \"nginx -g 'daemon off;' >/proc/1/fd/1 2>/proc/1/fd/2 &\""
 
     backend:
       kind: linux
@@ -586,10 +811,30 @@ topology:
         RADIUS_PG_HOST: 198.18.0.6
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - "ip addr add 198.18.0.21/24 dev eth1"
         - "ip route replace default via 198.18.0.254"
         - "sh -c \"for i in $(seq 1 60); do python3 -c 'import socket; s=socket.create_connection((\\\"198.18.0.11\\\",5432),2); s.close()' 2>/dev/null && break; sleep 1; done\""
+        - "sh -c \"for i in $(seq 1 60); do python3 -c \\\"import psycopg2; c=psycopg2.connect(host='198.18.0.6',dbname='radius',user='radius',password='test'); cur=c.cursor(); cur.execute(\\\\\\\"SELECT 1 FROM radusergroup LIMIT 1\\\\\\\"); c.close()\\\" 2>/dev/null && break; sleep 1; done\""
+        - "sh -c \"uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
+
+    simulator:
+      kind: linux
+      image: lab-simulator
+      mgmt-ipv4: 172.20.20.22
+      env:
+        OSS_BACKEND_HOST: 198.18.0.21
+      binds:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - /home/test/lab/simulator.config.json:/opt/simulator/simulator.config.json
+        - /home/test/lab/containerlab/topology.yml:/opt/simulator/topology.yaml
+      exec:
+        - "sh -c \"ip addr flush dev eth1 || true\""
+        - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
+        - "ip link set eth1 up"
+        - "ip addr add 198.18.0.22/24 dev eth1"
+        - "ip route replace default via 198.18.0.254"
         - "sh -c \"uvicorn main:app --host 0.0.0.0 --port 8000 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
 
     upstream:
@@ -644,21 +889,23 @@ topology:
 
   links:
 
-    - endpoints: ["cstm-relay-01:eth3", "agg-bng-01:eth1"]
+    - endpoints: ["cstm-relay-01:eth6", "agg-bng-01:eth1"]
 
     - endpoints: ["h-cstm-relay-01-eth1:eth1", "cstm-relay-01:eth1"]
 
     - endpoints: ["h-cstm-relay-01-eth2:eth1", "cstm-relay-01:eth2"]
 
+    - endpoints: ["h-cstm-relay-01-eth3:eth1", "cstm-relay-01:eth3"]
+
     - endpoints: ["h-cstm-relay-01-eth4:eth1", "cstm-relay-01:eth4"]
 
     - endpoints: ["h-cstm-relay-01-eth5:eth1", "cstm-relay-01:eth5"]
 
-    - endpoints: ["h-cstm-relay-01-eth6:eth1", "cstm-relay-01:eth6"]
-
-    - endpoints: ["cstm-relay-02:eth2", "agg-bng-01:eth2"]
+    - endpoints: ["cstm-relay-02:eth5", "agg-bng-01:eth2"]
 
     - endpoints: ["h-cstm-relay-02-eth1:eth1", "cstm-relay-02:eth1"]
+
+    - endpoints: ["h-cstm-relay-02-eth2:eth1", "cstm-relay-02:eth2"]
 
     - endpoints: ["h-cstm-relay-02-eth3:eth1", "cstm-relay-02:eth3"]
 
@@ -668,27 +915,83 @@ topology:
 
     - endpoints: ["bng-01:eth2", "wan:eth1"]
 
-    - endpoints: ["cstm-relay-11:eth3", "agg-bng-02:eth1"]
+    - endpoints: ["cstm-relay-11:eth4", "agg-bng-02:eth1"]
 
     - endpoints: ["h-cstm-relay-11-eth1:eth1", "cstm-relay-11:eth1"]
 
     - endpoints: ["h-cstm-relay-11-eth2:eth1", "cstm-relay-11:eth2"]
 
-    - endpoints: ["cstm-relay-12:eth2", "agg-bng-02:eth2"]
+    - endpoints: ["h-cstm-relay-11-eth3:eth1", "cstm-relay-11:eth3"]
+
+    - endpoints: ["cstm-relay-12:eth10", "agg-bng-02:eth2"]
 
     - endpoints: ["h-cstm-relay-12-eth1:eth1", "cstm-relay-12:eth1"]
 
-    - endpoints: ["cstm-relay-13:eth2", "agg-bng-02:eth3"]
+    - endpoints: ["h-cstm-relay-12-eth2:eth1", "cstm-relay-12:eth2"]
+
+    - endpoints: ["h-cstm-relay-12-eth3:eth1", "cstm-relay-12:eth3"]
+
+    - endpoints: ["h-cstm-relay-12-eth4:eth1", "cstm-relay-12:eth4"]
+
+    - endpoints: ["h-cstm-relay-12-eth5:eth1", "cstm-relay-12:eth5"]
+
+    - endpoints: ["h-cstm-relay-12-eth6:eth1", "cstm-relay-12:eth6"]
+
+    - endpoints: ["h-cstm-relay-12-eth7:eth1", "cstm-relay-12:eth7"]
+
+    - endpoints: ["h-cstm-relay-12-eth8:eth1", "cstm-relay-12:eth8"]
+
+    - endpoints: ["h-cstm-relay-12-eth9:eth1", "cstm-relay-12:eth9"]
+
+    - endpoints: ["cstm-relay-13:eth7", "agg-bng-02:eth3"]
 
     - endpoints: ["h-cstm-relay-13-eth1:eth1", "cstm-relay-13:eth1"]
 
-    - endpoints: ["cstm-relay-14:eth2", "agg-bng-02:eth4"]
+    - endpoints: ["h-cstm-relay-13-eth2:eth1", "cstm-relay-13:eth2"]
+
+    - endpoints: ["h-cstm-relay-13-eth3:eth1", "cstm-relay-13:eth3"]
+
+    - endpoints: ["h-cstm-relay-13-eth4:eth1", "cstm-relay-13:eth4"]
+
+    - endpoints: ["h-cstm-relay-13-eth5:eth1", "cstm-relay-13:eth5"]
+
+    - endpoints: ["h-cstm-relay-13-eth6:eth1", "cstm-relay-13:eth6"]
+
+    - endpoints: ["cstm-relay-14:eth5", "agg-bng-02:eth4"]
 
     - endpoints: ["h-cstm-relay-14-eth1:eth1", "cstm-relay-14:eth1"]
 
-    - endpoints: ["cstm-relay-15:eth2", "agg-bng-02:eth5"]
+    - endpoints: ["h-cstm-relay-14-eth2:eth1", "cstm-relay-14:eth2"]
+
+    - endpoints: ["h-cstm-relay-14-eth3:eth1", "cstm-relay-14:eth3"]
+
+    - endpoints: ["h-cstm-relay-14-eth4:eth1", "cstm-relay-14:eth4"]
+
+    - endpoints: ["cstm-relay-15:eth13", "agg-bng-02:eth5"]
 
     - endpoints: ["h-cstm-relay-15-eth1:eth1", "cstm-relay-15:eth1"]
+
+    - endpoints: ["h-cstm-relay-15-eth2:eth1", "cstm-relay-15:eth2"]
+
+    - endpoints: ["h-cstm-relay-15-eth3:eth1", "cstm-relay-15:eth3"]
+
+    - endpoints: ["h-cstm-relay-15-eth4:eth1", "cstm-relay-15:eth4"]
+
+    - endpoints: ["h-cstm-relay-15-eth5:eth1", "cstm-relay-15:eth5"]
+
+    - endpoints: ["h-cstm-relay-15-eth6:eth1", "cstm-relay-15:eth6"]
+
+    - endpoints: ["h-cstm-relay-15-eth7:eth1", "cstm-relay-15:eth7"]
+
+    - endpoints: ["h-cstm-relay-15-eth8:eth1", "cstm-relay-15:eth8"]
+
+    - endpoints: ["h-cstm-relay-15-eth9:eth1", "cstm-relay-15:eth9"]
+
+    - endpoints: ["h-cstm-relay-15-eth10:eth1", "cstm-relay-15:eth10"]
+
+    - endpoints: ["h-cstm-relay-15-eth11:eth1", "cstm-relay-15:eth11"]
+
+    - endpoints: ["h-cstm-relay-15-eth12:eth1", "cstm-relay-15:eth12"]
 
     - endpoints: ["agg-bng-02:eth6", "bng-02:eth1"]
 
@@ -720,6 +1023,8 @@ topology:
 
     - endpoints: ["backend:eth1", "mgmt:eth12"]
 
-    - endpoints: ["nginx:eth1", "mgmt:eth13"]
+    - endpoints: ["simulator:eth1", "mgmt:eth13"]
+
+    - endpoints: ["nginx:eth1", "mgmt:eth14"]
 
     - endpoints: ["upstream:eth11", "macvlan:enp1s0"]
