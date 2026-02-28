@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import ipaddress
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -276,6 +277,8 @@ def load_and_validate_config(config_path: Path) -> dict[str, Any]:
         "upstream-node-name": str(upstream_shared.get("upstream-node-name", "upstream")),
         "internet-iface": str(upstream_shared.get("internet-iface", "eth11")),
         "internet-macvlan-parent": str(upstream_shared.get("internet-macvlan-parent", "enp1s0")),
+        "internet-ip-cidr": str(upstream_shared.get("internet-ip-cidr", "192.168.122.34/24")),
+        "internet-gw": str(upstream_shared.get("internet-gw", "192.168.122.1")),
         "mgmt-ip-cidr": str(upstream_shared.get("mgmt-ip-cidr", "198.18.0.254/24")),
         "mgmt-nat-source-cidr": str(upstream_shared.get("mgmt-nat-source-cidr", "198.18.0.0/24")),
     }
@@ -521,7 +524,9 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
     )
 
     mgmt_ip_cidr = cfg["shared"]["upstream"]["mgmt-ip-cidr"]
+    is_prod = os.environ.get("ENVIRONMENT") == "prod"
     return {
+        "is_prod": is_prod,
         "bngs": cfg["bngs"],
         "host_nodes": host_nodes,
         "access_nodes": access_nodes,

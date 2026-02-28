@@ -169,15 +169,21 @@ topology:
       mgmt-ipv4: 172.20.20.20
       env:
         SIMULATOR_URL: {{ ("http://" ~ services.simulator_ip ~ ":" ~ services.simulator_port) | tojson }}
+{% if not is_prod %}
       binds:
         - /home/test/lab/client/src:/app/src
+{% endif %}
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
         - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""
         - "ip link set eth1 up"
         - {{ ("ip addr add " ~ services.frontend_ip ~ "/" ~ mgmt_prefix ~ " dev eth1") | tojson }}
         - {{ ("ip route replace default via " ~ mgmt_gw) | tojson }}
+{% if is_prod %}
+        - "sh -c \"HOSTNAME=0.0.0.0 node .next/standalone/server.js >/proc/1/fd/1 2>/proc/1/fd/2 &\""
+{% else %}
         - "sh -c \"pnpm dev --hostname 0.0.0.0 >/proc/1/fd/1 2>/proc/1/fd/2 &\""
+{% endif %}
 
     bng_ingestor:
       kind: linux
@@ -250,10 +256,10 @@ topology:
       kind: linux
       image: alpine:latest
       exec:
-        - "apk add --no-cache iptables dhcpcd curl iperf3 ethtool"
-        - {{ ("dhcpcd " ~ shared.upstream["internet-iface"]) | tojson }}
-        - "sleep 5"
+        - "apk add --no-cache iptables curl iperf3 ethtool"
         - "sysctl -w net.ipv4.ip_forward=1"
+        - {{ ("ip addr add " ~ shared.upstream["internet-ip-cidr"] ~ " dev " ~ shared.upstream["internet-iface"]) | tojson }}
+        - {{ ("ip route add default via " ~ shared.upstream["internet-gw"] ~ " dev " ~ shared.upstream["internet-iface"]) | tojson }}
         - "ip link set eth1 up"
         - "ip link set eth2 up"
         - {{ ("ip addr add " ~ upstream_default_gw ~ "/" ~ upstream_prefix ~ " dev eth1") | tojson }}
@@ -267,6 +273,8 @@ topology:
         - {{ ("ip route replace " ~ node.dhcp_subnet ~ " via " ~ bng.upstream_ip) | tojson }}
 {% endfor %}
 {% endfor %}
+        - {{ ("iptables -t nat -A PREROUTING -i " ~ shared.upstream["internet-iface"] ~ " -p tcp --dport 80 -j DNAT --to-destination " ~ services.nginx_ip ~ ":80") | tojson }}
+        - {{ ("iptables -t nat -A PREROUTING -i " ~ shared.upstream["internet-iface"] ~ " -p tcp --dport 443 -j DNAT --to-destination " ~ services.nginx_ip ~ ":443") | tojson }}
         - "sh -c \"ip link set eth0 down || true\""
         - "sh -c \"iperf3 -s -D\""
 
