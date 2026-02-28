@@ -52,7 +52,7 @@
 /* Default theme styles (used when no data-theme-preset is set or when 'default' is selected).
 These serve as the fallback; there is no separate default.css file. */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.25rem;
   --background: oklch(0.985 0.002 264); /* #F7F8FB - tinted canvas instead of pure white */
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0); /* Pure white for cards to stand out */
@@ -68,7 +68,7 @@ These serve as the fallback; there is no separate default.css file. */
   --accent: oklch(0.967 0.001 286.375);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.141 0.005 285.823 / 8%); /* rgba(15, 23, 42, 0.08) equivalent */
+  --border: oklch(0.141 0.005 285.823 / 15%);
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.809 0.105 251.813);
@@ -85,10 +85,10 @@ These serve as the fallback; there is no separate default.css file. */
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* Light mode elevation system */
-  --shadow-sm: 0 1px 2px oklch(0.141 0.005 285.823 / 6%);
-  --shadow-md: 0 4px 8px oklch(0.141 0.005 285.823 / 8%);
-  --shadow-lg: 0 8px 24px oklch(0.141 0.005 285.823 / 10%);
+  /* Flat elevation system */
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: 0 1px 3px oklch(0.141 0.005 285.823 / 6%);
 
   /* fonts */
   --font-sans: var(--font-inter);
@@ -111,7 +111,7 @@ These serve as the fallback; there is no separate default.css file. */
   --accent: oklch(0.274 0.006 286.033);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 18%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.809 0.105 251.813);
