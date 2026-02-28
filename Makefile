@@ -3,6 +3,7 @@
 
 CONFIG_FILE ?= aether.config.yaml
 MAX_WORKERS ?= 0
+ENVIRONMENT ?= dev
 
 validate:
 	python3 tools/config_pipeline.py validate --config $(CONFIG_FILE)
@@ -11,14 +12,14 @@ generate: validate
 	python3 tools/config_pipeline.py generate --config $(CONFIG_FILE)
 
 apply: generate
-	sudo docker compose build
+	ENVIRONMENT=$(ENVIRONMENT) sudo -E docker compose build
 	-sudo containerlab destroy -t containerlab/topology.yml
 	-sudo docker rm -f $$(docker ps -aq --filter "name=^clab-isp-lab-")
 	sudo containerlab deploy -t containerlab/topology.yml --max-workers $(MAX_WORKERS)
 	$(MAKE) ips
 
 apply-prod: generate
-	sudo docker compose build
+	ENVIRONMENT=prod sudo -E docker compose build
 	-sudo containerlab destroy -t containerlab/topology.yml
 	-sudo docker rm -f $$(docker ps -aq --filter "name=^clab-isp-lab-")
 # 3 workers seemed to not cause concurrency issues during containerlab setup on cloud

@@ -198,7 +198,7 @@ export function SimulateLabEnvironment() {
   return (
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden">
       {/* Header with Illustration */}
-      <div className="relative h-64 w-full bg-linear-to-t from-primary/5 to-emerald-500/10">
+      <div className="relative h-64 w-full bg-linear-to-t from-primary/5 to-gray-500/10">
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-6 z-10">
           <h3 className="text-lg font-semibold">Simulate Lab Environment</h3>
           <Button variant="ghost" size="icon" className="size-6">
