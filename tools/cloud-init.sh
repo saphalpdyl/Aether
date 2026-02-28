@@ -41,7 +41,31 @@ git clone "${REPO_URL}" "${LAB_DIR}"
 echo "==> Installing nginx and certbot"
 apt-get install -y --no-install-recommends nginx certbot python3-certbot-nginx
 
-echo "==> Writing nginx configuration"
+echo "==> Setting up maintenance page"
+mkdir -p /var/www/maintenance
+cp "${LAB_DIR}/cloud/nginx/maintenance/maintenance.html" /var/www/maintenance/maintenance.html
+
+cat > /etc/nginx/sites-available/maintenance <<'EOF'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name aether.saphal.me;
+
+    root /var/www/maintenance;
+
+    location / {
+        return 503;
+    }
+
+    error_page 503 /maintenance.html;
+
+    location = /maintenance.html {
+        internal;
+    }
+}
+EOF
+
+echo "==> Writing nginx aether configuration"
 cat > /etc/nginx/sites-available/aether <<'EOF'
 # Temporary HTTP-only config until cert is provisioned.
 # After running certbot, this file will be updated automatically.
@@ -68,16 +92,8 @@ echo "==> Building and deploying lab"
 cd "${LAB_DIR}"
 ENVIRONMENT=prod make apply MAX_WORKERS=3
 
-echo "==> Done! Lab is running."
-echo ""
-echo "========================================================"
-echo " NEXT STEP: Provision TLS certificate"
-echo " Run: certbot --manual --preferred-challenges dns -d aether.saphal.me"
-echo " Then: systemctl reload nginx"
-echo "========================================================"
-
 echo "==> Setting up certbot for TLS certificate provisioning"
-echo "========================================================"
 certbot --nginx -d aether.saphal.me
 systemctl reload nginx
-echo "========================================================"
+
+echo "==> Done! Lab is running."
