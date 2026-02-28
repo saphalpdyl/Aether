@@ -278,7 +278,7 @@ export function TopologyViewer({
   }, [themeMode]);
 
   useEffect(() => {
-    if ( topo ) {
+    if ( !topo ) {
       setLoading(false);
     }
   }, [topo])

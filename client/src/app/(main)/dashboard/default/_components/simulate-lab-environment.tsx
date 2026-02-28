@@ -349,7 +349,7 @@ export function SimulateLabEnvironment() {
 
         {/* Description */}
         <p className="text-xs text-muted-foreground">
-          Simulate lab subscribers connecting via DHCPv4 and generate traffic directly from
+          Simulate lab subscribers connecting via DHCP / DHCPv6 and generate traffic directly from
           the dashboard without requiring SSH or manual CLI commands.
         </p>
       </div>
