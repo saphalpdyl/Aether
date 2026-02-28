@@ -261,6 +261,8 @@ def load_and_validate_config(config_path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ConfigError("Top-level config must be a mapping")
 
+    lab_root_path = str(raw.get("lab-root-path", "/home/test/lab"))
+
     shared_raw = raw.get("shared") or {}
     if not isinstance(shared_raw, dict):
         raise ConfigError("config.shared must be a mapping when provided")
@@ -356,6 +358,7 @@ def load_and_validate_config(config_path: Path) -> dict[str, Any]:
             )
 
     return {
+        "lab_root_path": lab_root_path,
         "bngs": bngs,
         "upstream_network": str(first_net),
         "upstream_default_gw": first_gw,
@@ -527,6 +530,7 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
     is_prod = os.environ.get("ENVIRONMENT") == "prod"
     return {
         "is_prod": is_prod,
+        "lab_root": cfg["lab_root_path"],
         "bngs": cfg["bngs"],
         "host_nodes": host_nodes,
         "access_nodes": access_nodes,

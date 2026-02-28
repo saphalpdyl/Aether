@@ -171,7 +171,7 @@ topology:
         SIMULATOR_URL: {{ ("http://" ~ services.simulator_ip ~ ":" ~ services.simulator_port) | tojson }}
 {% if not is_prod %}
       binds:
-        - /home/test/lab/client/src:/app/src
+        - {{ lab_root }}/client/src:/app/src
 {% endif %}
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
@@ -242,8 +242,8 @@ topology:
         OSS_BACKEND_HOST: {{ services.backend_ip }}
       binds:
         - /var/run/docker.sock:/var/run/docker.sock
-        - /home/test/lab/simulator.config.json:/opt/simulator/simulator.config.json
-        - /home/test/lab/containerlab/topology.yml:/opt/simulator/topology.yaml
+        - {{ lab_root }}/simulator.config.json:/opt/simulator/simulator.config.json
+        - {{ lab_root }}/containerlab/topology.yml:/opt/simulator/topology.yaml
       exec:
         - "sh -c \"ip addr flush dev eth1 || true\""
         - "sh -c \"ip neigh flush dev eth1 2>/dev/null || true\""

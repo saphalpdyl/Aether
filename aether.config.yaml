@@ -1,3 +1,5 @@
+lab-root-path: /home/test/lab
+
 shared:
   upstream:
     # L2 fan-in node that connects all BNG uplinks before reaching upstream router.

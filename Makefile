@@ -22,10 +22,6 @@ dev:
 clean:
 	sudo containerlab destroy -t containerlab/topology.yml
 
-debug:
-	sudo docker compose build
-	sudo containerlab deploy -t /home/test/lab/containerlab/topology.yml --log-level debug
-
 ips:
 	@printf "%-24s %-60s\n" "Name" "Interfaces"
 	@for c in $$(docker ps --format '{{.Names}}' | grep '^clab-isp-lab-'); do \
