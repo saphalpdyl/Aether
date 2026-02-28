@@ -1,16 +1,14 @@
 import { Info, Server } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { BngHealthCards } from "./_components/bng-health-cards";
 import { ChartAreaInteractive } from "./_components/chart-area-interactive";
 import CustomersTable from "./_components/customers-table";
 import RoutersTable from "./_components/routers-table";
 import { SectionCards } from "./_components/section-cards";
-import SessionsEventsTable from "./_components/sessions-events-table";
-import SessionsHistoryTable from "./_components/sessions-history-table";
-import SessionsTable from "./_components/sessions-table";
+import { SessionsTabs } from "./_components/sessions-tabs";
+import { Shortcuts } from "./_components/shortcuts";
 import { SimulateLabEnvironment } from "./_components/simulate-lab-environment";
 
 export default function Page() {
@@ -27,6 +25,7 @@ export default function Page() {
         </AlertDescription>
       </Alert>
       <SectionCards />
+      <Shortcuts />
       <div className="flex @5xl/main:flex-row flex-col gap-4 items-start">
         {/* Main Content Column */}
         <div className="flex flex-col gap-4 md:gap-6 flex-1 min-w-0">
@@ -48,23 +47,8 @@ export default function Page() {
           <div className="min-w-0">
             <ChartAreaInteractive />
           </div>
-          <Tabs defaultValue="active" className="w-full min-w-0">
-            <TabsList>
-              <TabsTrigger value="active">Active Sessions</TabsTrigger>
-              <TabsTrigger value="history">Session History</TabsTrigger>
-              <TabsTrigger value="events">Events</TabsTrigger>
-            </TabsList>
-            <TabsContent value="active" className="min-w-0">
-              <SessionsTable />
-            </TabsContent>
-            <TabsContent value="history" className="min-w-0">
-              <SessionsHistoryTable />
-            </TabsContent>
-            <TabsContent value="events" className="min-w-0">
-              <SessionsEventsTable />
-            </TabsContent>
-          </Tabs>
-          <div className="min-w-0">
+          <SessionsTabs />
+          <div id="routers-section" className="min-w-0">
             <RoutersTable />
           </div>
         </div>

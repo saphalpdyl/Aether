@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Check, ChevronsUpDown, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -135,7 +136,15 @@ function parseErrorMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
+const VALID_TABS = ["plans", "customers", "services"] as const;
+
 export default function ProvisioningConsole() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const defaultTab = VALID_TABS.includes(tabParam as (typeof VALID_TABS)[number])
+    ? (tabParam as string)
+    : "plans";
+
   const [plans, setPlans] = useState<Plan[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -745,7 +754,7 @@ export default function ProvisioningConsole() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="plans" className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList>
           <TabsTrigger value="plans">Plans</TabsTrigger>
           <TabsTrigger value="customers">Customers</TabsTrigger>
