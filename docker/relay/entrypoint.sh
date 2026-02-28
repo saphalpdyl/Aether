@@ -3,12 +3,12 @@ set -eu
 
 # Wait for interfaces to appear
 ifaces=""
-for i in $(seq 1 30); do
+for i in $(seq 1 150); do
   ifaces=$(ls /sys/class/net | grep '^eth' | grep -v '^eth0$' || true)
   if [ -n "$ifaces" ]; then
     break
   fi
-  sleep 0.2
+  sleep 0.5
 done
 
 # Get all data-plane interfaces (skip mgmt eth0)
