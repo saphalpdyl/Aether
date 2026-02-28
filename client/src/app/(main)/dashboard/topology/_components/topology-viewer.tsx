@@ -219,7 +219,11 @@ interface TooltipState {
   rows: { label: string; value: string }[];
 }
 
-export function TopologyViewer() {
+export function TopologyViewer({
+  initialData
+}: {
+  initialData: TopologyData
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const networkRef = useRef<any>(null);
@@ -227,13 +231,13 @@ export function TopologyViewer() {
   const nodesSetRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const edgesSetRef = useRef<any>(null);
-  const topoRef = useRef<TopologyData | null>(null);
+  const topoRef = useRef<TopologyData | null>(initialData);
   const dashOffsetRef = useRef(0);
   const animFrameRef = useRef<number>(0);
   const physicsOnRef = useRef(true);
   const isDarkRef = useRef(false);
 
-  const [topo, setTopo] = useState<TopologyData | null>(null);
+  const [topo, setTopo] = useState<TopologyData | null>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string>("all");
@@ -273,25 +277,11 @@ export function TopologyViewer() {
     return () => mq.removeEventListener("change", handler);
   }, [themeMode]);
 
-  // ── Fetch topology ───────────────────────────────────────────────────────
   useEffect(() => {
-    fetch("/api/topology")
-      .then((r) => r.json())
-      .then((data: TopologyData & { error?: string }) => {
-        if (data.error) {
-          setError(data.error);
-          setLoading(false);
-          return;
-        }
-        setTopo(data);
-        topoRef.current = data;
-        setLoading(false);
-      })
-      .catch((e) => {
-        setError(String(e));
-        setLoading(false);
-      });
-  }, []);
+    if ( !topo ) {
+      setLoading(false);
+    }
+  }, [topo])
 
   // ── Build hull list from topology ────────────────────────────────────────
 

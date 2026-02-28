@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import type { Plan, Customer, Service, Router, RouterPortDetails, DeleteTarget } from "./provisioning/types";
+import type { Plan, Customer, Service, Router, RouterPortDetails, DeleteTarget, BNG } from "./provisioning/types";
 import { parseErrorMessage, circuitIdToPort } from "./provisioning/utils";
 import { PlanTab } from "./provisioning/plan-tab";
 import { CustomerTab } from "./provisioning/customer-tab";
@@ -21,6 +21,7 @@ export default function ProvisioningConsole() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [routers, setRouters] = useState<Router[]>([]);
+  const [bngs, setBngs] = useState<BNG[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -59,6 +60,7 @@ export default function ProvisioningConsole() {
   const [serviceEdit, setServiceEdit] = useState<Service | null>(null);
   const [serviceSaving, setServiceSaving] = useState(false);
   const [selectedPortName, setSelectedPortName] = useState("");
+  const [selectedBngId, setSelectedBngId] = useState("");
   const [selectedRouterForService, setSelectedRouterForService] = useState("");
   const [routerPortDetails, setRouterPortDetails] = useState<RouterPortDetails | null>(null);
   const [loadingRouterPorts, setLoadingRouterPorts] = useState(false);
@@ -76,29 +78,33 @@ export default function ProvisioningConsole() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [plansRes, customersRes, servicesRes, routersRes] = await Promise.all([
+      const [plansRes, customersRes, servicesRes, routersRes, bngsRes] = await Promise.all([
         fetch("/api/plans", { cache: "no-store" }),
         fetch("/api/customers", { cache: "no-store" }),
         fetch("/api/services", { cache: "no-store" }),
         fetch("/api/routers", { cache: "no-store" }),
+        fetch("/api/bngs", { cache: "no-store" }),
       ]);
 
-      const [plansJson, customersJson, servicesJson, routersJson] = await Promise.all([
+      const [plansJson, customersJson, servicesJson, routersJson, bngsJson] = await Promise.all([
         plansRes.json().catch(() => ({})),
         customersRes.json().catch(() => ({})),
         servicesRes.json().catch(() => ({})),
         routersRes.json().catch(() => ({})),
+        bngsRes.json().catch(() => ({})),
       ]);
 
       if (!plansRes.ok) throw new Error(parseErrorMessage(plansJson, "Failed to fetch plans"));
       if (!customersRes.ok) throw new Error(parseErrorMessage(customersJson, "Failed to fetch customers"));
       if (!servicesRes.ok) throw new Error(parseErrorMessage(servicesJson, "Failed to fetch services"));
       if (!routersRes.ok) throw new Error(parseErrorMessage(routersJson, "Failed to fetch routers"));
+      if (!bngsRes.ok) throw new Error(parseErrorMessage(bngsJson, "Failed to fetch BNGs"));
 
       const plansData = Array.isArray(plansJson?.data) ? plansJson.data : [];
       const customersData = Array.isArray(customersJson?.data) ? customersJson.data : [];
       const servicesData = Array.isArray(servicesJson?.data) ? servicesJson.data : [];
       const routersData = Array.isArray(routersJson?.data) ? routersJson.data : [];
+      const bngsData = Array.isArray(bngsJson?.data) ? bngsJson.data : [];
 
       setPlans(
         plansData.map((p: any) => ({
@@ -153,6 +159,19 @@ export default function ProvisioningConsole() {
           updated_at: String(r.updated_at ?? ""),
         }))
       );
+
+      setBngs(
+        bngsData.map((b: any) => ({
+          bng_id: String(b.bng_id ?? ""),
+          bng_instance_id: String(b.bng_instance_id ?? ""),
+          first_seen: String(b.first_seen ?? ""),
+          last_seen: String(b.last_seen ?? ""),
+          is_alive: String(b.is_alive ?? ""),
+          cpu_usage: b.cpu_usage != null ? Number(b.cpu_usage) : null,
+          mem_usage: b.mem_usage != null ? Number(b.mem_usage) : null,
+          mem_max: b.mem_max != null ? Number(b.mem_max) : null,
+        }))
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load provisioning data");
     } finally {
@@ -193,6 +212,19 @@ export default function ProvisioningConsole() {
       return matchesStatus && matchesQuery;
     });
   }, [services, serviceQuery, serviceStatusFilter]);
+
+  const filteredRouters = useMemo(() => {
+    if (!selectedBngId) return [];
+    return routers.filter((r) => r.bng_id === selectedBngId);
+  }, [routers, selectedBngId]);
+
+  const handleBngChange = (bngId: string) => {
+    setSelectedBngId(bngId);
+    setSelectedRouterForService("");
+    setSelectedPortName("");
+    setServiceForm((s) => ({ ...s, circuit_id: "", remote_id: "" }));
+    setRouterPortDetails(null);
+  };
 
   const openCreatePlan = () => {
     setPlanEdit(null);
@@ -636,8 +668,13 @@ export default function ProvisioningConsole() {
         serviceSaving={serviceSaving}
         plans={plans}
         customers={customers}
+        selectedBngId={selectedBngId}
+        setSelectedBngId={setSelectedBngId}
+        bngs={bngs}
         routers={routers}
+        filteredRouters={filteredRouters}
         onSave={saveService}
+        onBngChange={handleBngChange}
         onRouterChange={handleRouterChange}
       />
 
