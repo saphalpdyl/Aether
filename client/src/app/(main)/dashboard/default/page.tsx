@@ -1,6 +1,6 @@
-import { Server } from "lucide-react";
+import { Info, Server } from "lucide-react";
 
-import Logo from "@/components/logo";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { BngHealthCards } from "./_components/bng-health-cards";
@@ -15,7 +15,15 @@ import { SimulateLabEnvironment } from "./_components/simulate-lab-environment";
 
 export default function Page() {
   return (
-    <div className="@container/main flex flex-col gap-4 md:gap-6">
+    <div id="onborda-welcome" className="@container/main flex flex-col gap-4 md:gap-6">
+      <Alert>
+        <Info />
+        <AlertTitle className="underline">DEMO Environment</AlertTitle>
+        <AlertDescription className="inline-flex gap-1">
+          The database is reset every 12 hours. The traffic simulation is configurable through{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">simulator.config.json</code>
+        </AlertDescription>
+      </Alert>
       <SectionCards />
       <div className="flex @5xl/main:flex-row flex-col gap-4 items-start">
         {/* Main Content Column */}
