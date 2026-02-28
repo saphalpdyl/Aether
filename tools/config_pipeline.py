@@ -518,6 +518,9 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
         links.append({"a": endpoint, "b": f"{shared_mgmt['node-name']}:eth{mgmt_port}"})
         mgmt_port += 1
 
+    mgmt_ip_cidr = cfg["shared"]["upstream"]["mgmt-ip-cidr"]
+    is_prod = os.environ.get("ENVIRONMENT") == "prod"
+
     # upstream internet macvlan (only in dev/VM mode)
     if not is_prod:
         links.append(
@@ -526,9 +529,6 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
                 "b": f"macvlan:{shared_upstream['internet-macvlan-parent']}",
             }
         )
-
-    mgmt_ip_cidr = cfg["shared"]["upstream"]["mgmt-ip-cidr"]
-    is_prod = os.environ.get("ENVIRONMENT") == "prod"
     return {
         "is_prod": is_prod,
         "lab_root": cfg["lab_root_path"],
