@@ -1,110 +1,131 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Aether — Redeploying</title>
-<style>
-body {
-font-family: Georgia, serif;
-display: flex;
-align-items: center;
-justify-content: center;
-min-height: 100vh;
-margin: 0;
-background: #fff;
-}
-div {
-max-width: 480px;
-width: 90%;
-}
-h1 { margin-bottom: 0.25rem; }
-p { color: #555; margin: 0.2rem 0; }
-.meta {
-margin-top: 1.5rem;
-font-size: 0.85rem;
-color: #888;
-border-top: 1px solid #eee;
-padding-top: 1rem;
-}
-.meta span { display: block; margin: 0.2rem 0; }
-.status { font-weight: bold; }
-.in_progress { color: #e6a817; }
-.completed.success { color: green; }
-.completed.failure { color: red; }
-.queued { color: #888; }
-</style>
-</head>
-<body>
-<div>
-<h1>Redeploying Aether.</h1>
-<p>A new build is being applied. This usually takes under two minutes.</p>
-<p>This page will refresh automatically.</p>
-<div class="meta" id="meta">
-<span>Loading deploy status...</span>
-</div>
-</div>
-<script>
-const API = "https://api.github.com/repos/saphalpdyl/Aether/actions/runs?per_page=1";
-function elapsed(since) {
-const s = Math.floor((Date.now() - new Date(since)) / 1000);
-if (s < 60) return `${s}s`;
-return `${Math.floor(s / 60)}m ${s % 60}s`;
-}
-async function load() {
-try {
-const res = await fetch(API);
-const data = await res.json();
-const run = data.workflow_runs[0];
-if (!run) return;
-const status = run.status;
-const conclusion = run.conclusion || "";
-const commit = run.head_commit;
-const sha = run.head_sha.slice(0, 7);
-const started = run.run_started_at;
-const htmlUrl = run.html_url;
-const statusClass = status === "completed" ? `completed ${conclusion}` : status;
-const statusText = status === "completed"
-? conclusion
-: status.replace("_", " ");
-document.getElementById("meta").innerHTML = `
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aether — Redeploying</title>
+    <style>
+      body {
+        font-family: Georgia, serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        background: #fff;
+      }
+      div {
+        max-width: 480px;
+        width: 90%;
+      }
+      h1 {
+        margin-bottom: 0.25rem;
+      }
+      p {
+        color: #555;
+        margin: 0.2rem 0;
+      }
+      .meta {
+        margin-top: 1.5rem;
+        font-size: 0.85rem;
+        color: #888;
+        border-top: 1px solid #eee;
+        padding-top: 1rem;
+      }
+      .meta span {
+        display: block;
+        margin: 0.2rem 0;
+      }
+      .status {
+        font-weight: bold;
+      }
+      .in_progress {
+        color: #e6a817;
+      }
+      .completed.success {
+        color: green;
+      }
+      .completed.failure {
+        color: red;
+      }
+      .queued {
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>Redeploying Aether.</h1>
+      <p>A new build is being applied. This usually takes under two minutes.</p>
+      <p>This page will refresh automatically.</p>
+      <div class="meta" id="meta">
+        <span>Loading deploy status...</span>
+      </div>
+    </div>
+    <script>
+      const API =
+        "https://api.github.com/repos/saphalpdyl/Aether/actions/runs?per_page=1";
+      function elapsed(since) {
+        const s = Math.floor((Date.now() - new Date(since)) / 1000);
+        if (s < 60) return `${s}s`;
+        return `${Math.floor(s / 60)}m ${s % 60}s`;
+      }
+      async function load() {
+        try {
+          const res = await fetch(API);
+          const data = await res.json();
+          const run = data.workflow_runs[0];
+          if (!run) return;
+          const status = run.status;
+          const conclusion = run.conclusion || "";
+          const commit = run.head_commit;
+          const sha = run.head_sha.slice(0, 7);
+          const started = run.run_started_at;
+          const htmlUrl = run.html_url;
+          const statusClass =
+            status === "completed" ? `completed ${conclusion}` : status;
+          const statusText =
+            status === "completed" ? conclusion : status.replace("_", " ");
+          document.getElementById("meta").innerHTML = `
   <span>Commit: <a href="${htmlUrl}" target="_blank">${sha}</a> — ${commit.message}</span>
   <span>Author: ${commit.author.name}</span>
   <span id="elapsed"></span>
   <span>Status: <span class="status ${statusClass}">${statusText}</span></span>
   <span>Logs: <a href="${htmlUrl}" target="_blank">View on GitHub →</a></span>
 `;
-// Live elapsed tick
-setInterval(() => {
-const el = document.getElementById("elapsed");
-if (el) {
-if (!(conclusion == "success" || conclusion == "failed")) {
-el.textContent = `Elapsed: ${elapsed(started)}`;
-} else {
-el.textContent = "Finalized";
-el.style["fontStyle"] = "italic";
-el.style["textDecoration"] = "underline";
-}
-}
-}, 1000);
-if (!(conclusion == "success" || conclusion == "failed")) {
-document.getElementById("elapsed").textContent = `Elapsed: ${elapsed(started)}`;
-} else {
-const elaspedEl = document.getElementById("elapsed");
-if (elaspedEl) {
-elaspedEl.textContent = "Finalized";
-elaspedEl.style["fontStyle"] = "italic";
-elaspedEl.style["textDecoration"] = "underline";
-}
-}
-} catch (e) {
-console.log(e)
-document.getElementById("meta").innerHTML = "<span>Could not load deploy status.</span>";
-}
-}
-load();
-// Auto-refresh page every 15s
-setTimeout(() => location.reload(), 15000);
-</script>
-</body>
+          // Live elapsed tick
+          setInterval(() => {
+            const el = document.getElementById("elapsed");
+            if (el) {
+              if (!(conclusion == "success" || conclusion == "failed")) {
+                el.textContent = `Elapsed: ${elapsed(started)}`;
+              } else {
+                el.textContent = "Finalized";
+                el.style["fontStyle"] = "italic";
+                el.style["textDecoration"] = "underline";
+              }
+            }
+          }, 1000);
+          if (!(conclusion == "success" || conclusion == "failed")) {
+            document.getElementById("elapsed").textContent =
+              `Elapsed: ${elapsed(started)}`;
+          } else {
+            const elaspedEl = document.getElementById("elapsed");
+            if (elaspedEl) {
+              elaspedEl.textContent = "Finalized";
+              elaspedEl.style["fontStyle"] = "italic";
+              elaspedEl.style["textDecoration"] = "underline";
+            }
+          }
+        } catch (e) {
+          console.log(e);
+          document.getElementById("meta").innerHTML =
+            "<span>Could not load deploy status.</span>";
+        }
+      }
+      load();
+      // Auto-refresh page every 15s
+      setTimeout(() => location.reload(), 15000);
+    </script>
+  </body>
 </html>
