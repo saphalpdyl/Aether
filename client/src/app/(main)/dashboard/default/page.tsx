@@ -22,6 +22,8 @@ export default function Page() {
         <AlertDescription className="inline-flex gap-1">
           The database resets every 12 hours or when triggered by a CI. The traffic simulation is configurable through{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">simulator.config.json</code>
+          <br />
+          The lab can also be run locally in the VM using Vagrant.
         </AlertDescription>
       </Alert>
       <SectionCards />

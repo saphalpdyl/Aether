@@ -1,3 +1,5 @@
+# No need to change this!! For prod or vagrant, this is automatically
+#   patched during build to respective directories
 lab-root-path: /home/test/lab
 
 shared:

@@ -47,3 +47,6 @@ yarn-error.log*
 next-env.d.ts
 
 aether.vis.ref.html
+
+# Vagrant
+.vagrant
