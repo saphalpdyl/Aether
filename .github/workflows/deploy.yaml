@@ -23,4 +23,13 @@ jobs:
             git reset --hard origin/master
             git pull origin master
             sed -i 's|^lab-root-path:.*|lab-root-path: /root/lab|' aether.config.yaml
+
+            # Enable maintenance mode to notify that its getting redeployed
+            ln -sf /etc/nginx/sites-available/maintenance /etc/nginx/sites-enabled/aether
+            systemctl reload nginx
+
             ENVIRONMENT=prod make apply-prod
+
+            # Disable maintenance mode
+            ln -sf /etc/nginx/sites-available/aether /etc/nginx/sites-enabled/aether
+            systemctl reload nginx
