@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import Link from "next/link";
 
-import { LayoutDashboard, Network, Settings } from "lucide-react";
+import { GithubIcon, LayoutDashboard, Network, Settings } from "lucide-react";
 
 import Logo from "@/components/logo";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,12 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             </nav>
           </div>
           <div className="flex items-center gap-2">
+            <Button className="bg-black text-white dark:bg-white dark:text-black hover:bg-gray-700">
+              <Link href="https://github.com/saphalpdyl/aether" target="_blank" className="inline-flex items-center font-[monospace] underline">
+                <GithubIcon className="size-4 mr-2" />
+                saphalpdyl/Aether
+              </Link>
+            </Button>
             <LayoutControls />
             <ThemeSwitcher />
             <AccountSwitcher users={users} />
