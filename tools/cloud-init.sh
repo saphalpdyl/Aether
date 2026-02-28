@@ -49,7 +49,14 @@ cat > /etc/nginx/sites-available/maintenance <<'EOF'
 server {
     listen 80;
     listen [::]:80;
+    listen 443 ssl;
+    listen [::]:443 ssl;
     server_name aether.saphal.me;
+
+    ssl_certificate /etc/letsencrypt/live/aether.saphal.me/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/aether.saphal.me/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
     root /var/www/maintenance;
 
