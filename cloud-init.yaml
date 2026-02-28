@@ -1,0 +1,6 @@
+# Hetzner cloud-init
+packages:
+  - git
+
+runcmd:
+  - curl -sL https://raw.githubusercontent.com/saphalpdyl/Aether/master/tools/cloud-init.sh | bash

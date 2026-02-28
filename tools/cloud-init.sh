@@ -21,7 +21,6 @@ export DEBIAN_FRONTEND=noninteractive
 echo "==> Installing system packages"
 apt-get update
 apt-get install -y --no-install-recommends \
-  git \
   python3 \
   python3-pip \
   python3-yaml \
