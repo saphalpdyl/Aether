@@ -3,6 +3,20 @@
 
 A full-stack ISP network lab that emulates broadband subscriber management end-to-end — from raw DHCP packet interception to real-time traffic dashboards. Built on an event-sourced architecture with RADIUS AAA, per-subscriber traffic shaping, passive network discovery, and traffic simulation, all orchestrated via Containerlab.
 
+## Running
+A production build is running on Hetzner Cloud at [aether.saphal.me](https://aether.saphal.me).
+
+The build can also be ran locally using `Vagrant` with configuration in the `Vagrantfile`. 
+
+```bash
+vagrant up # Set up vagrant for the first time: downloads dependencies, builds docker images and runs the system
+```
+
+For incremental updates and testing, only the `deploy` provision can be run so instead of running the whole setup + deploy provision. Run `deploy` using:
+```bash
+vagrant provision --provision-with deploy
+```
+
 ## Architecture
 
 ![System Architecture](docs/architecture.svg)

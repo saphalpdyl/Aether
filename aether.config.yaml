@@ -10,7 +10,7 @@ shared:
     upstream-node-name: upstream
     # Interface on upstream node that reaches host/internet.
     internet-iface: eth11
-    internet-macvlan-parent: enp1s0
+    internet-macvlan-parent: enp1s0 # <--- This is patched for Vagrant to eth1
     # Static IP for upstream node on the host/internet network.
     internet-ip-cidr: 192.168.122.34/24 # <--- This is where the iptables DNAT rules will route to from Hetnzer's public IP
     internet-gw: 192.168.122.1
