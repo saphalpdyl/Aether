@@ -33,10 +33,21 @@
         "type": "warning",
         "text": "Iperf3 might fail because iperf3-server can only handle one client at a time. If you see errors, please wait for a few seconds and try again."
       },
-      "allow_for_demo_simulation": true,
+      "allow_for_demo_simulation": false,
       "commands": [
         { "command": "iperf3 -c 192.0.2.2 -t 3 -P 1", "description": "Upload throughput test" },
         { "command": "iperf3 -c 192.0.2.2 -t 3 -P 1 -R", "description": "Download throughput test" }
+      ],
+      "weight": 2,
+      "sleep_range": [60,90]
+    },
+    "iperf3_demo": {
+      "description": "TCP throughput tests (multi-stream)",
+      "allow_for_demo_simulation": true,
+      "disable_in_automated_simulation": true,
+      "commands": [
+        { "command": "iperf3 -c 192.0.2.2 -t 5 -P 3", "description": "Upload throughput test" },
+        { "command": "iperf3 -c 192.0.2.2 -t 5 -P 3 -R", "description": "Download throughput test" }
       ],
       "weight": 2,
       "sleep_range": [60,90]
