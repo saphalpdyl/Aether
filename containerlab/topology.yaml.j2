@@ -287,7 +287,8 @@ topology:
         - {{ ("iptables -t nat -A PREROUTING -i " ~ shared.upstream["internet-iface"] ~ " -p tcp --dport 443 -j DNAT --to-destination " ~ services.nginx_ip ~ ":443") | tojson }}
         - "sh -c \"ip link set eth0 down || true\""
 {% endif %}
-        - "sh -c \"iperf3 -s -D\""
+        - "sh -c \"iperf3 -s -D\"" # Run iperf3 server on port 5201 by default
+        - "sh -c \"iperf3 -s -D -p 5202\"" # Run another iperf3 server on port 5202 for demo users to connect to
 
   links:
 {% for link in links %}
