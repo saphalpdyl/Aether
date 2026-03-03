@@ -45,9 +45,13 @@
       "description": "TCP throughput tests (multi-stream)",
       "allow_for_demo_simulation": true,
       "disable_in_automated_simulation": true,
+      "note": {
+        "type": "warning",
+        "text": "Iperf3 might fail if other demo users are simulating traffic at the same time. Please wait at least 10 seconds."
+      },
       "commands": [
-        { "command": "iperf3 -c 192.0.2.2 -p 5202 -t 5 -P 3", "description": "Upload throughput test" },
-        { "command": "iperf3 -c 192.0.2.2 -p 5202 -t 5 -P 3 -R", "description": "Download throughput test" }
+        { "command": "iperf3 -c 192.0.2.2 -p 5202 -t 10 -P 3", "description": "Upload throughput test" },
+        { "command": "iperf3 -c 192.0.2.2 -p 5202 -t 10 -P 3 -R", "description": "Download throughput test" }
       ]
     },
     "dhclient_init": {
