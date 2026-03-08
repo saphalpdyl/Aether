@@ -1,4 +1,7 @@
 # @deprecated
+# Initally, the lab used mininet to emualte the network environment which was sufficient for my concerns
+# Later, I moved to containernet, which had its own set of challenges
+# Finally, I landed on containerlab for total container-based emulated without the container networking overhead
 
 #!/usr/bin/env python3
 

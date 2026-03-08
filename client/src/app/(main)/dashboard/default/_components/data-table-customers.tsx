@@ -131,9 +131,9 @@ function CustomerDetailRow({ customer }: { customer: CustomerListing }) {
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">Services ({services.length})</h4>
               <div className="grid gap-2">
-                {services.map((svc) => (
+                {services.map((svc, idx) => (
                   <div
-                    key={svc.service_id}
+                    key={svc.service_id ?? idx}
                     className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"
                   >
                     <div className="space-y-1">

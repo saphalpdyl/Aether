@@ -75,7 +75,7 @@ export const dashboardColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
   },
   {
     accessorKey: "username",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Username" />,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="RADIUS Username" />,
     cell: ({ row }) => <div className="font-medium">{row.getValue("username")}</div>,
   },
   {
