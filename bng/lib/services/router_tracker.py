@@ -17,13 +17,19 @@ class RouterTracker:
     def load_routers(self):
         """Fetch pre-configured routers assigned to this BNG from the OSS API."""
         url = f"{self.oss_api_url}/api/routers?bng_id={self.bng_id}"
-        try:
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                body = json.loads(resp.read().decode())
-        except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
-            print(f"RouterTracker: failed to load routers from {url}: {e}")
-            return
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    body = json.loads(resp.read().decode())
+                break
+            except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+                print(f"RouterTracker: failed to load routers from {url}: {e}")
+                if attempt >= 2:
+                    return
+                print(f"Retrying in 2 seconds... (attempt {attempt + 1}/3)")
+                time.sleep(2)
+
 
         api_routers = {r["router_name"]: r for r in body.get("data", [])}
 
