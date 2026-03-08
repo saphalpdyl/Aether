@@ -59,6 +59,9 @@ def startup():
     container_by_name = {c.name: c for c in all_host_containers}
 
     for container_name in host_container_names:
+        if not container_name:
+            continue
+        
         access_node_name, access_node_iface = get_host_access_node_name_and_iface_from_container_name(container_name)
         connected_bng_id = routers_hmap.get(access_node_name, None)
 

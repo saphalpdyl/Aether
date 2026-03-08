@@ -1,7 +1,7 @@
 {
   "simulation": {
-    "container_fraction": 0.6,
-    "customer_fraction": 0.7
+    "container_fraction": 0.2,
+    "customer_fraction": 0.3
   },
   "traffic_commands": {
     "curl": {
