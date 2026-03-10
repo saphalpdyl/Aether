@@ -262,5 +262,9 @@ MIT License. See [LICENSE](./LICENSE)
 <img width="2483" height="1372" alt="image" src="https://github.com/user-attachments/assets/618bb68a-a28a-407c-a84e-7a74754f8894" />
 <img width="1650" height="1323" alt="image" src="https://github.com/user-attachments/assets/718f963e-8b9e-4187-ad20-7b7ea0767b16" />
 
+## Declaration of use of AI
+- Frontend/Backend/Meta-configuration: Since, I am more focused on understanding the internals of the BNG itself, the frontend, backend, and configuration were written by Claude.
+- BNG/Dockerfiles: These were initally written by me. At first, the whole code was in a single file. I later used AI to help me split up and refactor the codebase.
+
 ### Tech Stack
 [![Tech Stack](https://skillicons.dev/icons?i=next,python,go)]()
