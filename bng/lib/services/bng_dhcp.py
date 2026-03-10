@@ -64,6 +64,8 @@ def dhcp_lease_handler(
     kea_lease_service = KeaLeaseService(kea_client, bng_relay_id=bng_id)
 
     async def handle_dhcp_request(circuit_id: str, remote_id: str, chaddr: str, event: dict):
+        # Creates an initial session so that we can correlated to corresponding DHCP ACK/NAK
+        
         _ = event
         key = (bng_id, circuit_id, remote_id)
         existing_sess = sessions.get(key)
@@ -105,6 +107,8 @@ def dhcp_lease_handler(
         ...
 
     async def handle_dhcp_ack(circuit_id: str, remote_id: str, chaddr: str, event: dict):
+        # We actually create the session here, authenticate, and install nftables and htb qdisc rules
+        
         key = (bng_id, circuit_id, remote_id)
         now = time.time()
 
@@ -130,12 +134,16 @@ def dhcp_lease_handler(
                 s.mac = format_mac(chaddr)
 
                 if leased_ip == "0.0.0.0":
+                    # Messed up DHCP ACK without valid leased IP
+                    # Have to reauth on next try
+                    
                     s.ip = None
                     s.status = "PENDING"
                     s.last_status_change_ts = now
                     return
 
                 if leased_ip == s.ip:
+                    # RENEW with same IP
                     s.expiry = expiry
                     s.last_seen = now
                     s.status = "ACTIVE"
@@ -145,6 +153,8 @@ def dhcp_lease_handler(
                     return
 
                 if s.ip is not None and s.auth_state == "AUTHORIZED":
+                    # IP change for an active authed session - terminated and recreate
+                    
                     if s.nft_up_handle is not None:
                         await nft_delete_rule_by_handle(s.nft_up_handle)
                     if s.nft_down_handle is not None:
@@ -177,6 +187,7 @@ def dhcp_lease_handler(
                 print(f"DHCP SESSION START mac={s.mac} ip={s.ip} iface={iface} hostname={s.hostname}")
 
                 try:
+                    # Authentication for both new session and renewed session with diff IP
                     result = await authorize_session(
                         s,
                         leased_ip,

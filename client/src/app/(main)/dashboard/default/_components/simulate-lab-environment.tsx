@@ -109,7 +109,7 @@ export function SimulateLabEnvironment() {
       try {
         const response = await fetch("/api/simulation/get_simulate_options");
         if (!response.ok) {
-          throw new Error("Failed to fetch simulation options");
+          throw new Error(`Failed to fetch simulation options: ${response.status} ${response.statusText}`);
         }
         const data: SimulateOptionsResponse = await response.json();
         setSimulateOptions(data.options || []);

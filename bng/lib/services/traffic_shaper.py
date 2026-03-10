@@ -12,11 +12,15 @@ class BNGTrafficShaperConfig:
     debug_mode: bool = False
 
 class BNGTrafficShaper:
+    # Handles all traffic shaping related operations through Linux's tc utility.
+    
     def __init__(self, config: BNGTrafficShaperConfig):
         self.config = config
 
     def _generate_handle_with_ip(self, ip: str) -> Tuple[bool, int, str]:
         # a.b.c.d, handle = c * 256 + d
+        # ISSUE: this means we can only use 65535 unique handles per BNG. For a lab and small-scale ISPs
+        #       this is more than enough. Might have to change the handling for larget scale BNGs though
         octets = ip.split('.')
         if len(octets) != 4:
             return False, -1, "invalid IP address format"

@@ -66,6 +66,14 @@ def parse_radius_reply_result(response_text: str) -> RadiusReplyResult | None:
       - OSS-Upload-Speed := 30000
       - OSS-Download-Burst := 500
       - OSS-Upload-Burst := 150
+
+        I later learned that a RADIUS library like pyrad would parse this automatically given that the
+        dictionary.oss is provided. This is what I am parsing in the code below.
+
+        Attr-26.43242.1 = 0x00002710
+        Attr-26.43242.2 = 0x00001388
+        Attr-26.43242.3 = 0x000001f4
+        Attr-26.43242.4 = 0x000000fa
     """
     download_kbit: int | None = None
     upload_kbit: int | None = None
@@ -113,8 +121,8 @@ def parse_radius_reply_result(response_text: str) -> RadiusReplyResult | None:
     return RadiusReplyResult(
         download_speed_kbit=download_kbit,
         upload_speed_kbit=upload_kbit,
-        download_burst_kbit=download_burst_kbit,
-        upload_burst_kbit=upload_burst_kbit,
+        download_burst_kbit=download_burst_kbit or 0,
+        upload_burst_kbit=upload_burst_kbit or 0,
     )
 
 def decode_bytes(value):
@@ -181,6 +189,7 @@ async def authorize_session(
             await install_rules_and_baseline(s, ip, mac, iface)
 
         # QoS
+        # Installs `tc`-based traffic shaping
         parsed_policy = parse_radius_reply_result(response_text)
         if parsed_policy:
             print(
@@ -205,6 +214,7 @@ async def authorize_session(
         s.auth_state = "AUTHORIZED"
         if ip:
             try:
+                # Install nftable rules
                 ip_clean = str(ip).replace("\x00", "")
                 ipaddress.ip_address(ip_clean)
                 await nft_allow_ip(ip_clean)
