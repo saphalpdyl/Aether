@@ -249,7 +249,7 @@ The roadmaps for this projects are discussed in the [ROADMAP.md](./ROADMAP.md)
 
 - Handle collision at /8 boundaries — The HTB class handle is derived from the 3rd and 4th IP octets (c * 256 + d). This is collision-free within a /16 but would collide across subnets if subscriber IPs from different /16 blocks are assigned to the same BNG instance. It's also limited to ~65000 handles, which really isn't an issue for this lab.
 
-- This lab is strictly for IPoE IPv4 networks. There's will be no support for IPv6.
+- This lab is strictly for IPoE IPv4 networks. There will be no support for IPv6.
 - No Rate limiting and only basic security on frontend and backend.
 
 ## License
