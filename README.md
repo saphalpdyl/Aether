@@ -62,7 +62,7 @@ For a packet egressing out to the internet, the general path looks like this:
 host -> access node (relay_switch.py) -> aggregation switch (agg-bng-*) -> BNG -> WAN -> Upstream
 ```
 
-![System Architecture](docs/architecture.svg)
+![System Architecture](docs/aether_architecture.svg)
 
 ## How to run
 A production build is running on Hetzner Cloud at [aether.saphal.me](https://aether.saphal.me).
