@@ -51,7 +51,7 @@ Three years ago I was an intern assigned to build an entire ISP management conso
 This repository is meant to serve as a potential learning reference for anyone who's been in that same position: staring at closed-source vendor stacks with no foothold. _If you're just getting started, I hope this gives you one :)_
 
 #### DISCLAIMER
-This is my first project in the networking space, built over roughly a month. Some conventions are intentionally simplified or non-standard — this is a learning lab, not a standard production reference implementation.
+This is my first project in the networking space, built over roughly a month. Some conventions are intentionally simplified or non-standard — this is a learning lab, not a standard production reference implementation. I would greatly apperciate feedbacks.
 
 ## Architecture Overview
 The core component, the BNG, runs on an event-driven architecture where state changes are passed around as messages — no mutexes, no locks. To keep session state clean and predictable, the BNG never accepts external input directly. The one exception is the Go RADIUS CoA daemon, which passes CoA messages in via IPC sockets. Everything the BNG produces — events, session snapshots — gets pushed to Redis Streams, where the bng-ingestor picks them up, processes them, and persists them.
@@ -103,6 +103,18 @@ DHCP Release | Although not sent by every host, this graceful unauthenticates, d
 In real scenarios, DHCP Release might not be sent due to reasons ( sudden disconnect, host doesn't send DHCP Release ). If the lease expires, it creates zombie session. The reconciler is responsible for cleaning up zombie sessions.
 
 A **tombstone** is a short-lived in-memory record that marks a recently terminated session, preventing the reconciler from accidentally re-creating it when it sees the lease still active in Kea.
+
+#### Periodic events
+| Command | Trigger | Handler |
+  |---|---|---|
+  | `interim` | Every `interim_interval`s (default 30s) | Sends RADIUS Interim-Update for all active sessions with current traffic counters |
+  | `reconcile` | Every `reconciler_interval`s (default 15s) or after every DHCP event | Queries Kea for authoritative lease state, recovers missed sessions, cleans up zombie sessions via tombstone checks |
+  | `auth_retry` | Every `auth_retry_interval`s (default 10s) | Retries RADIUS authentication for sessions stuck in `PENDING_AUTH` with a valid IP |
+  | `disconnection_check` | Every `disconnection_check_interval`s (default 5s) | No-op unless `ENABLE_IDLE_DISCONNECT=True`. Terminates sessions that have been `IDLE` longer than `MARK_DISCONNECT_GRACE_SECONDS` |
+  | `router_config_refresh` | Every 60s | Reloads access router list from the OSS API |
+  | `router_ping` | Every `router_ping_interval`s (default 30s) | Pings all known access routers and dispatches a `ROUTER_UPDATE` event on state change |
+  | `bng_health` | Every `bng_health_check_interval`s (default 5s) | Reads cgroup CPU/memory metrics and dispatches a `BNG_HEALTH_UPDATE` event |
+  | `coad_request` | On incoming CoA IPC connection | Handles `disconnect` (terminates session + tombstones) or `policy_change` (no-op, not yet implemented) |
 
 ### Data Plane
 
