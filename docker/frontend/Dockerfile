@@ -8,7 +8,8 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 COPY client/package.json client/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts && \
+    pnpm rebuild sharp
 
 COPY client/ .
 RUN if [ "$ENVIRONMENT" = "prod" ]; then \
