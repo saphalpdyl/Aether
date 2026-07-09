@@ -78,6 +78,24 @@ def rebuild_options(opts: list[tuple[int, bytes]], opt82: bytes) -> bytes:
     return bytes(out)
 
 
+def strip_option82(payload: bytes) -> bytes:
+    # RFC 3046 2.1: drop the Relay Agent Information option from a server reply
+    # before forwarding it down to the client.
+    magic_end = BOOTP_FIXED_LEN + len(DHCP_MAGIC)
+    if len(payload) < magic_end or payload[BOOTP_FIXED_LEN:magic_end] != DHCP_MAGIC:
+        return payload
+    opts = parse_options(payload[magic_end:])
+    if not any(code == DHCP_OPTION_RELAY_AGENT for code, _ in opts):
+        return payload
+    out = bytearray()
+    for code, data in opts:
+        if code == DHCP_OPTION_RELAY_AGENT:
+            continue
+        out.extend(bytes([code, len(data)]) + data)
+    out.append(DHCP_OPTION_END)
+    return payload[:magic_end] + bytes(out)
+
+
 def build_relay_payload(
     pkt: bytes,
     iface: str,
@@ -175,6 +193,7 @@ def main():
                 if len(data) < BOOTP_CHADDR_OFFSET + 6:
                     continue
                 chaddr = data[BOOTP_CHADDR_OFFSET : BOOTP_CHADDR_OFFSET + 6]
+                data = strip_option82(data)
                 iface = client_iface.get(chaddr)
                 targets = [down_socks[iface]] if iface in down_socks else down_socks.values()
                 for d in targets:
