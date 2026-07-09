@@ -259,7 +259,7 @@ topology:
       exec:
         - "apk add --no-cache iptables curl iperf3 ethtool"
         - "sysctl -w net.ipv4.ip_forward=1"
-{% if not is_prod %}
+{% if not egress_via_mgmt %}
         - {{ ("ip addr add " ~ shared.upstream["internet-ip-cidr"] ~ " dev " ~ shared.upstream["internet-iface"]) | tojson }}
         - {{ ("ip route add default via " ~ shared.upstream["internet-gw"] ~ " dev " ~ shared.upstream["internet-iface"]) | tojson }}
 {% endif %}
@@ -267,7 +267,7 @@ topology:
         - "ip link set eth2 up"
         - {{ ("ip addr add " ~ upstream_default_gw ~ "/" ~ upstream_prefix ~ " dev eth1") | tojson }}
         - {{ ("ip addr add " ~ shared.upstream["mgmt-ip-cidr"] ~ " dev eth2") | tojson }}
-{% if is_prod %}
+{% if egress_via_mgmt %}
         - {{ ("iptables -t nat -A POSTROUTING -s " ~ shared.upstream["mgmt-nat-source-cidr"] ~ " -o eth0 -j MASQUERADE") | tojson }}
 {% for node in all_access_nodes %}
         - {{ ("iptables -t nat -A POSTROUTING -s " ~ node.dhcp_subnet ~ " -o eth0 -j MASQUERADE") | tojson }}
@@ -283,7 +283,7 @@ topology:
         - {{ ("ip route replace " ~ node.dhcp_subnet ~ " via " ~ bng.upstream_ip) | tojson }}
 {% endfor %}
 {% endfor %}
-{% if not is_prod %}
+{% if not egress_via_mgmt %}
         - {{ ("iptables -t nat -A PREROUTING -i " ~ shared.upstream["internet-iface"] ~ " -p tcp --dport 80 -j DNAT --to-destination " ~ services.nginx_ip ~ ":80") | tojson }}
         - {{ ("iptables -t nat -A PREROUTING -i " ~ shared.upstream["internet-iface"] ~ " -p tcp --dport 443 -j DNAT --to-destination " ~ services.nginx_ip ~ ":443") | tojson }}
         - "sh -c \"ip link set eth0 down || true\""

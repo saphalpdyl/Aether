@@ -521,9 +521,12 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
 
     mgmt_ip_cidr = cfg["shared"]["upstream"]["mgmt-ip-cidr"]
     is_prod = os.environ.get("ENVIRONMENT") == "prod"
+    # Egress out the containerlab mgmt bridge instead of a host macvlan. Implied by prod,
+    # and opt-in via EGRESS_VIA_MGMT for local runs whose host NIC/LAN differ from deploy.
+    egress_via_mgmt = is_prod or os.environ.get("EGRESS_VIA_MGMT") == "1"
 
-    # upstream internet macvlan (only in dev/VM mode)
-    if not is_prod:
+    # Host macvlan for internet egress; skipped when egressing via the mgmt bridge.
+    if not egress_via_mgmt:
         links.append(
             {
                 "a": f"{shared_upstream['upstream-node-name']}:{shared_upstream['internet-iface']}",
@@ -532,6 +535,7 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
         )
     return {
         "is_prod": is_prod,
+        "egress_via_mgmt": egress_via_mgmt,
         "lab_root": cfg["lab_root_path"],
         "bngs": cfg["bngs"],
         "host_nodes": host_nodes,
