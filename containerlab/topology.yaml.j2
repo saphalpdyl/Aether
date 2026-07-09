@@ -17,6 +17,7 @@ topology:
       env:
         REMOTE_ID: {{ node.remote_id | tojson }}
         GIADDR: {{ node.dhcp_addr | tojson }}
+        DHCP_SERVER_IP: {{ node.dhcp_server_ip | tojson }}
         RELAY_UPLINK_IFACE: {{ node.uplink_iface | tojson }}
         RELAY_ACCESS_IFACES: {{ (node.subscriber_ifaces | join(',')) | tojson }}
         CIRCUIT_ID_MAP: {{ node.circuit_id_map | tojson }}

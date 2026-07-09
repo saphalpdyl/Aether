@@ -52,8 +52,13 @@ set -- python3 /opt/relay/relay_switch.py
 for iface in $access_ifaces; do
   set -- "$@" --access "$iface"
 done
+if [ -z "${DHCP_SERVER_IP:-}" ]; then
+  echo "DHCP_SERVER_IP not set; refusing to start relay"
+  exec sleep infinity
+fi
+
 remote_id="${REMOTE_ID:-OLT-1}"
-set -- "$@" --uplink "$uplink" --remote-id "$remote_id"
+set -- "$@" --uplink "$uplink" --remote-id "$remote_id" --server-ip "$DHCP_SERVER_IP"
 
 if [ -n "${GIADDR:-}" ]; then
   set -- "$@" --giaddr "$GIADDR"

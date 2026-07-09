@@ -311,6 +311,7 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-01"
         GIADDR: "10.0.1.1"
+        DHCP_SERVER_IP: "198.18.0.3"
         RELAY_UPLINK_IFACE: "eth6"
         RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4,eth5"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4,eth5=1/0/5"
@@ -338,6 +339,7 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-02"
         GIADDR: "10.0.1.65"
+        DHCP_SERVER_IP: "198.18.0.3"
         RELAY_UPLINK_IFACE: "eth5"
         RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4"
@@ -365,6 +367,7 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-11"
         GIADDR: "10.0.3.1"
+        DHCP_SERVER_IP: "198.18.0.3"
         RELAY_UPLINK_IFACE: "eth4"
         RELAY_ACCESS_IFACES: "eth1,eth2,eth3"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3"
@@ -392,6 +395,7 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-12"
         GIADDR: "10.0.3.65"
+        DHCP_SERVER_IP: "198.18.0.3"
         RELAY_UPLINK_IFACE: "eth10"
         RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8,eth9"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4,eth5=1/0/5,eth6=1/0/6,eth7=1/0/7,eth8=1/0/8,eth9=1/0/9"
@@ -419,6 +423,7 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-13"
         GIADDR: "10.0.4.1"
+        DHCP_SERVER_IP: "198.18.0.3"
         RELAY_UPLINK_IFACE: "eth7"
         RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4,eth5,eth6"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4,eth5=1/0/5,eth6=1/0/6"
@@ -446,6 +451,7 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-14"
         GIADDR: "10.0.4.65"
+        DHCP_SERVER_IP: "198.18.0.3"
         RELAY_UPLINK_IFACE: "eth5"
         RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4"
@@ -473,6 +479,7 @@ topology:
       env:
         REMOTE_ID: "cstm-relay-15"
         GIADDR: "10.0.4.129"
+        DHCP_SERVER_IP: "198.18.0.3"
         RELAY_UPLINK_IFACE: "eth13"
         RELAY_ACCESS_IFACES: "eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8,eth9,eth10,eth11,eth12"
         CIRCUIT_ID_MAP: "eth1=1/0/1,eth2=1/0/2,eth3=1/0/3,eth4=1/0/4,eth5=1/0/5,eth6=1/0/6,eth7=1/0/7,eth8=1/0/8,eth9=1/0/9,eth10=1/0/10,eth11=1/0/11,eth12=1/0/12"

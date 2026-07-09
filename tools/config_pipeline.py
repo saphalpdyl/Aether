@@ -396,6 +396,7 @@ def build_render_context(cfg: dict[str, Any]) -> dict[str, Any]:
             node_ctx = dict(node)
             node_ctx["agg_name"] = agg_name
             node_ctx["agg_iface"] = f"eth{access_idx}"
+            node_ctx["dhcp_server_ip"] = bng["services"]["dhcp-server-ip"]
             node_ctx["wait_clause"] = " && ".join(
                 f"ip link show eth{i} >/dev/null 2>&1" for i in range(1, node["iface_count"] + 1)
             )
